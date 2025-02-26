@@ -596,7 +596,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             and isinstance(value, str)
             and not value.replace(".", "", 1).replace("-", "", 1).isdigit()
         ):
-            return STATE_UNKNOWN
+            return None
 
         # Special handling for specific keys
         if self.entity_description.key == "on_off_grid_status":
