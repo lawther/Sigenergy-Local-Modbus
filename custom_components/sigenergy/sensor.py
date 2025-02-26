@@ -55,14 +55,12 @@ PLANT_SENSORS = [
         name="EMS Work Mode",
         icon="mdi:cog",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: data["plant"].get("ems_work_mode"),
     ),
     SensorEntityDescription(
         key="grid_sensor_status",
         name="Grid Sensor Status",
         icon="mdi:power-plug",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: "Connected" if data["plant"].get("grid_sensor_status") == 1 else "Not Connected",
     ),
     SensorEntityDescription(
         key="grid_sensor_active_power",
@@ -70,25 +68,18 @@ PLANT_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, _: data["plant"].get("grid_sensor_active_power"),
     ),
     SensorEntityDescription(
         key="grid_sensor_reactive_power",
         name="Grid Reactive Power",
         native_unit_of_measurement="kVar",
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, _: data["plant"].get("grid_sensor_reactive_power"),
     ),
     SensorEntityDescription(
         key="on_off_grid_status",
         name="Grid Connection Status",
         icon="mdi:transmission-tower",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: {
-            0: "On Grid",
-            1: "Off Grid (Auto)",
-            2: "Off Grid (Manual)",
-        }.get(data["plant"].get("on_off_grid_status"), STATE_UNKNOWN),
     ),
     SensorEntityDescription(
         key="ess_soc",
@@ -96,7 +87,6 @@ PLANT_SENSORS = [
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, _: data["plant"].get("ess_soc"),
     ),
     SensorEntityDescription(
         key="ess_soh",
@@ -104,7 +94,6 @@ PLANT_SENSORS = [
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: data["plant"].get("ess_soh"),
     ),
     SensorEntityDescription(
         key="plant_active_power",
@@ -112,14 +101,12 @@ PLANT_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, _: data["plant"].get("plant_active_power"),
     ),
     SensorEntityDescription(
         key="plant_reactive_power",
         name="Plant Reactive Power",
         native_unit_of_measurement="kVar",
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, _: data["plant"].get("plant_reactive_power"),
     ),
     SensorEntityDescription(
         key="photovoltaic_power",
@@ -127,7 +114,6 @@ PLANT_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, _: data["plant"].get("photovoltaic_power"),
     ),
     SensorEntityDescription(
         key="ess_power",
@@ -135,7 +121,6 @@ PLANT_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, _: data["plant"].get("ess_power"),
     ),
     SensorEntityDescription(
         key="ess_available_max_charging_power",
@@ -144,7 +129,6 @@ PLANT_SENSORS = [
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: data["plant"].get("ess_available_max_charging_power"),
     ),
     SensorEntityDescription(
         key="ess_available_max_discharging_power",
@@ -153,19 +137,12 @@ PLANT_SENSORS = [
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: data["plant"].get("ess_available_max_discharging_power"),
     ),
     SensorEntityDescription(
         key="plant_running_state",
         name="Plant Running State",
         icon="mdi:power",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: {
-            RunningState.STANDBY: "Standby",
-            RunningState.RUNNING: "Running",
-            RunningState.FAULT: "Fault",
-            RunningState.SHUTDOWN: "Shutdown",
-        }.get(data["plant"].get("plant_running_state"), STATE_UNKNOWN),
     ),
     SensorEntityDescription(
         key="ess_available_max_charging_capacity",
@@ -174,7 +151,6 @@ PLANT_SENSORS = [
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: data["plant"].get("ess_available_max_charging_capacity"),
     ),
     SensorEntityDescription(
         key="ess_available_max_discharging_capacity",
@@ -183,7 +159,6 @@ PLANT_SENSORS = [
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: data["plant"].get("ess_available_max_discharging_capacity"),
     ),
     SensorEntityDescription(
         key="ess_rated_energy_capacity",
@@ -192,21 +167,18 @@ PLANT_SENSORS = [
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: data["plant"].get("ess_rated_energy_capacity"),
     ),
     SensorEntityDescription(
         key="ess_charge_cut_off_soc",
         name="Charge Cut-Off SOC",
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: data["plant"].get("ess_charge_cut_off_soc"),
     ),
     SensorEntityDescription(
         key="ess_discharge_cut_off_soc",
         name="Discharge Cut-Off SOC",
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, _: data["plant"].get("ess_discharge_cut_off_soc"),
     ),
 ]
 
@@ -215,19 +187,16 @@ INVERTER_SENSORS = [
         key="model_type",
         name="Model Type",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("model_type"),
     ),
     SensorEntityDescription(
         key="serial_number",
         name="Serial Number",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("serial_number"),
     ),
     SensorEntityDescription(
         key="machine_firmware_version",
         name="Firmware Version",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("machine_firmware_version"),
     ),
     SensorEntityDescription(
         key="rated_active_power",
@@ -235,7 +204,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("rated_active_power"),
     ),
     SensorEntityDescription(
         key="ess_daily_charge_energy",
@@ -243,7 +211,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_daily_charge_energy"),
     ),
     SensorEntityDescription(
         key="ess_accumulated_charge_energy",
@@ -251,7 +218,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_accumulated_charge_energy"),
     ),
     SensorEntityDescription(
         key="ess_daily_discharge_energy",
@@ -259,7 +225,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_daily_discharge_energy"),
     ),
     SensorEntityDescription(
         key="ess_accumulated_discharge_energy",
@@ -267,19 +232,12 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_accumulated_discharge_energy"),
     ),
     SensorEntityDescription(
         key="running_state",
         name="Running State",
         icon="mdi:power",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: {
-            RunningState.STANDBY: "Standby",
-            RunningState.RUNNING: "Running",
-            RunningState.FAULT: "Fault",
-            RunningState.SHUTDOWN: "Shutdown",
-        }.get(data["inverters"].get(inverter_id, {}).get("running_state"), STATE_UNKNOWN),
     ),
     SensorEntityDescription(
         key="active_power",
@@ -287,14 +245,12 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("active_power"),
     ),
     SensorEntityDescription(
         key="reactive_power",
         name="Reactive Power",
         native_unit_of_measurement="kVar",
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("reactive_power"),
     ),
     SensorEntityDescription(
         key="ess_charge_discharge_power",
@@ -302,7 +258,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_charge_discharge_power"),
     ),
     SensorEntityDescription(
         key="ess_battery_soc",
@@ -310,7 +265,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_battery_soc"),
     ),
     SensorEntityDescription(
         key="ess_battery_soh",
@@ -318,7 +272,6 @@ INVERTER_SENSORS = [
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_battery_soh"),
     ),
     SensorEntityDescription(
         key="ess_average_cell_temperature",
@@ -326,7 +279,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_average_cell_temperature"),
     ),
     SensorEntityDescription(
         key="ess_average_cell_voltage",
@@ -335,7 +287,6 @@ INVERTER_SENSORS = [
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_average_cell_voltage"),
     ),
     SensorEntityDescription(
         key="ess_maximum_battery_temperature",
@@ -344,7 +295,6 @@ INVERTER_SENSORS = [
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_maximum_battery_temperature"),
     ),
     SensorEntityDescription(
         key="ess_minimum_battery_temperature",
@@ -353,7 +303,6 @@ INVERTER_SENSORS = [
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_minimum_battery_temperature"),
     ),
     SensorEntityDescription(
         key="ess_maximum_battery_cell_voltage",
@@ -362,7 +311,6 @@ INVERTER_SENSORS = [
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_maximum_battery_cell_voltage"),
     ),
     SensorEntityDescription(
         key="ess_minimum_battery_cell_voltage",
@@ -371,7 +319,6 @@ INVERTER_SENSORS = [
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_minimum_battery_cell_voltage"),
     ),
     SensorEntityDescription(
         key="grid_frequency",
@@ -380,7 +327,6 @@ INVERTER_SENSORS = [
         native_unit_of_measurement=UnitOfFrequency.HERTZ,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("grid_frequency"),
     ),
     SensorEntityDescription(
         key="pcs_internal_temperature",
@@ -389,18 +335,11 @@ INVERTER_SENSORS = [
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("pcs_internal_temperature"),
     ),
     SensorEntityDescription(
         key="output_type",
         name="Output Type",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: {
-            0: "L/N",
-            1: "L1/L2/L3",
-            2: "L1/L2/L3/N",
-            3: "L1/L2/N",
-        }.get(data["inverters"].get(inverter_id, {}).get("output_type"), STATE_UNKNOWN),
     ),
     SensorEntityDescription(
         key="phase_a_voltage",
@@ -408,7 +347,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_a_voltage"),
     ),
     SensorEntityDescription(
         key="phase_b_voltage",
@@ -416,7 +354,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_b_voltage"),
     ),
     SensorEntityDescription(
         key="phase_c_voltage",
@@ -424,7 +361,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_c_voltage"),
     ),
     SensorEntityDescription(
         key="phase_a_current",
@@ -432,7 +368,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.CURRENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_a_current"),
     ),
     SensorEntityDescription(
         key="phase_b_current",
@@ -440,7 +375,6 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.CURRENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_b_current"),
     ),
     SensorEntityDescription(
         key="phase_c_current",
@@ -448,13 +382,11 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.CURRENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_c_current"),
     ),
     SensorEntityDescription(
         key="power_factor",
         name="Power Factor",
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("power_factor"),
     ),
     SensorEntityDescription(
         key="pv_power",
@@ -462,14 +394,12 @@ INVERTER_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("pv_power"),
     ),
     SensorEntityDescription(
         key="insulation_resistance",
         name="Insulation Resistance",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("insulation_resistance"),
     ),
 ]
 
@@ -478,16 +408,6 @@ AC_CHARGER_SENSORS = [
         key="system_state",
         name="System State",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, ac_charger_id: {
-            0: "System Init",
-            1: "A1/A2",
-            2: "B1",
-            3: "B2",
-            4: "C1",
-            5: "C2",
-            6: "F",
-            7: "E",
-        }.get(data["ac_chargers"].get(ac_charger_id, {}).get("system_state"), STATE_UNKNOWN),
     ),
     SensorEntityDescription(
         key="total_energy_consumed",
@@ -495,7 +415,6 @@ AC_CHARGER_SENSORS = [
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("total_energy_consumed"),
     ),
     SensorEntityDescription(
         key="charging_power",
@@ -503,7 +422,6 @@ AC_CHARGER_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("charging_power"),
     ),
     SensorEntityDescription(
         key="rated_power",
@@ -511,7 +429,6 @@ AC_CHARGER_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("rated_power"),
     ),
     SensorEntityDescription(
         key="rated_current",
@@ -519,7 +436,6 @@ AC_CHARGER_SENSORS = [
         device_class=SensorDeviceClass.CURRENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("rated_current"),
     ),
     SensorEntityDescription(
         key="rated_voltage",
@@ -527,7 +443,6 @@ AC_CHARGER_SENSORS = [
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("rated_voltage"),
     ),
 ]
 
@@ -650,32 +565,81 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
         if self.coordinator.data is None:
             return STATE_UNKNOWN
             
-        value = None
         if self._device_type == DEVICE_TYPE_PLANT:
-            value = self.entity_description.value_fn(self.coordinator.data, None)
+            value = self.coordinator.data["plant"].get(self.entity_description.key)
+        elif self._device_type == DEVICE_TYPE_INVERTER:
+            value = self.coordinator.data["inverters"].get(self._device_id, {}).get(
+                self.entity_description.key
+            )
+        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
+            value = self.coordinator.data["ac_chargers"].get(self._device_id, {}).get(
+                self.entity_description.key
+            )
         else:
-            value = self.entity_description.value_fn(self.coordinator.data, self._device_id)
-            
-        # Handle None, "Unknown", or other non-numeric values for numeric sensors
+            value = None
+
         if value is None:
             return STATE_UNKNOWN
-            
-        # If this is a numeric sensor (with device_class) and the value is a string like "Unknown"
-        if (hasattr(self.entity_description, "device_class") and 
-            self.entity_description.device_class in [
-                SensorDeviceClass.POWER, 
+
+        if (
+            hasattr(self.entity_description, "device_class")
+            and self.entity_description.device_class
+            in [
+                SensorDeviceClass.POWER,
                 SensorDeviceClass.ENERGY,
                 SensorDeviceClass.TEMPERATURE,
                 SensorDeviceClass.VOLTAGE,
                 SensorDeviceClass.CURRENT,
                 SensorDeviceClass.BATTERY,
                 SensorDeviceClass.FREQUENCY,
-            ] and
-            isinstance(value, str) and
-            not value.replace('.', '', 1).replace('-', '', 1).isdigit()
+            ]
+            and isinstance(value, str)
+            and not value.replace(".", "", 1).replace("-", "", 1).isdigit()
         ):
             return STATE_UNKNOWN
-            
+
+        # Special handling for specific keys
+        if self.entity_description.key == "on_off_grid_status":
+            return {
+                0: "On Grid",
+                1: "Off Grid (Auto)",
+                2: "Off Grid (Manual)",
+            }.get(value, STATE_UNKNOWN)
+        if self.entity_description.key == "plant_running_state":
+            return {
+                RunningState.STANDBY: "Standby",
+                RunningState.RUNNING: "Running",
+                RunningState.FAULT: "Fault",
+                RunningState.SHUTDOWN: "Shutdown",
+            }.get(value, STATE_UNKNOWN)
+        if self.entity_description.key == "running_state":
+            return {
+                RunningState.STANDBY: "Standby",
+                RunningState.RUNNING: "Running",
+                RunningState.FAULT: "Fault",
+                RunningState.SHUTDOWN: "Shutdown",
+            }.get(value, STATE_UNKNOWN)
+        if self.entity_description.key == "system_state":
+            return {
+                0: "System Init",
+                1: "A1/A2",
+                2: "B1",
+                3: "B2",
+                4: "C1",
+                5: "C2",
+                6: "F",
+                7: "E",
+            }.get(value, STATE_UNKNOWN)
+        if self.entity_description.key == "output_type":
+            return {
+                0: "L/N",
+                1: "L1/L2/L3",
+                2: "L1/L2/L3/N",
+                3: "L1/L2/N",
+            }.get(value, STATE_UNKNOWN)
+        if self.entity_description.key == "grid_sensor_status":
+            return "Connected" if value == 1 else "Not Connected"
+
         return value
 
     @property
