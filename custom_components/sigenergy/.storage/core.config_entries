@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "minor_version": 1,
+  "key": "core.config_entries",
+  "data": {
+    "entries": [
+      {
+        "entry_id": "1234567890abcdef1234567890abcdef",
+        "version": 1,
+        "domain": "sigenergy",
+        "title": "Sigenergy Energy Storage System",
+        "data": {
+          "host": "192.168.1.100",
+          "port": 502,
+          "name": "Sigenergy Energy Storage System",
+          "plant_id": 247,
+          "inverter_count": 1,
+          "ac_charger_count": 0,
+          "inverter_slave_ids": [1],
+          "ac_charger_slave_ids": []
+        },
+        "options": {
+          "scan_interval": 30
+        },
+        "pref_disable_new_entities": false,
+        "pref_disable_polling": false,
+        "source": "user",
+        "unique_id": "sigenergy_192.168.1.100",
+        "disabled_by": null
+      }
+    ]
+  }
+}
