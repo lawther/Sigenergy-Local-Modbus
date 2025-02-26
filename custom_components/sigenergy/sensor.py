@@ -149,7 +149,7 @@ PLANT_SENSORS = [
         name="Available Max Charging Capacity",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        state_class=SensorStateClass.MEASUREMENT,
+        state_class=SensorStateClass.TOTAL,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
@@ -157,7 +157,7 @@ PLANT_SENSORS = [
         name="Available Max Discharging Capacity",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        state_class=SensorStateClass.MEASUREMENT,
+        state_class=SensorStateClass.TOTAL,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
@@ -165,7 +165,7 @@ PLANT_SENSORS = [
         name="Rated Energy Capacity",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        state_class=SensorStateClass.MEASUREMENT,
+        state_class=SensorStateClass.TOTAL,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
@@ -578,25 +578,12 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
         else:
             value = None
 
-        if value is None:
-            return STATE_UNKNOWN
-
-        if (
-            hasattr(self.entity_description, "device_class")
-            and self.entity_description.device_class
-            in [
-                SensorDeviceClass.POWER,
-                SensorDeviceClass.ENERGY,
-                SensorDeviceClass.TEMPERATURE,
-                SensorDeviceClass.VOLTAGE,
-                SensorDeviceClass.CURRENT,
-                SensorDeviceClass.BATTERY,
-                SensorDeviceClass.FREQUENCY,
-            ]
-            and isinstance(value, str)
-            and not value.replace(".", "", 1).replace("-", "", 1).isdigit()
-        ):
-            return None
+        if value is None or str(value).lower() == "unknown":
+            if (self.entity_description.native_unit_of_measurement is not None
+                or self.entity_description.state_class == SensorStateClass.MEASUREMENT):
+                return None
+            else:
+                return STATE_UNKNOWN
 
         # Special handling for specific keys
         if self.entity_description.key == "on_off_grid_status":
