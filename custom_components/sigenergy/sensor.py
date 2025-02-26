@@ -659,9 +659,8 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             return STATE_UNKNOWN
             
         # If this is a numeric sensor (with device_class) and the value is a string like "Unknown"
-        if (
-            hasattr(self.entity_description, "device_class") 
-            and self.entity_description.device_class in [
+        if (hasattr(self.entity_description, "device_class") and 
+            self.entity_description.device_class in [
                 SensorDeviceClass.POWER, 
                 SensorDeviceClass.ENERGY,
                 SensorDeviceClass.TEMPERATURE,
@@ -670,9 +669,9 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 SensorDeviceClass.BATTERY,
                 SensorDeviceClass.FREQUENCY,
                 SensorDeviceClass.RESISTANCE
-            ]
-            and isinstance(value, str)
-            and not value.replace('.', '', 1).replace('-', '', 1).isdigit()
+            ] and
+            isinstance(value, str) and
+            not value.replace('.', '', 1).replace('-', '', 1).isdigit()
         ):
             return STATE_UNKNOWN
             

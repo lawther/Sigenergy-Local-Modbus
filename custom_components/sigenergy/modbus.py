@@ -86,7 +86,7 @@ class SigenergyModbusHub:
                     port=self.port,
                     timeout=10,
                     retries=3,
-                    retry_on_empty=True,
+                    # Removed retry_on_empty parameter as it's not supported
                 )
                 
                 connected = await self.client.connect()
