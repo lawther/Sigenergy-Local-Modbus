@@ -23,6 +23,8 @@ from homeassistant.const import (
     UnitOfPower,
     UnitOfTemperature,
     UnitOfElectricResistance,
+    STATE_UNKNOWN,
+    STATE_UNAVAILABLE,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -89,7 +91,7 @@ PLANT_SENSORS = [
             0: "On Grid",
             1: "Off Grid (Auto)",
             2: "Off Grid (Manual)",
-        }.get(data["plant"].get("on_off_grid_status"), "Unknown"),
+        }.get(data["plant"].get("on_off_grid_status"), STATE_UNKNOWN),
     ),
     SigenergySensorEntityDescription(
         key="ess_soc",
@@ -166,7 +168,7 @@ PLANT_SENSORS = [
             RunningState.RUNNING: "Running",
             RunningState.FAULT: "Fault",
             RunningState.SHUTDOWN: "Shutdown",
-        }.get(data["plant"].get("plant_running_state"), "Unknown"),
+        }.get(data["plant"].get("plant_running_state"), STATE_UNKNOWN),
     ),
     SigenergySensorEntityDescription(
         key="ess_available_max_charging_capacity",
@@ -280,7 +282,7 @@ INVERTER_SENSORS = [
             RunningState.RUNNING: "Running",
             RunningState.FAULT: "Fault",
             RunningState.SHUTDOWN: "Shutdown",
-        }.get(data["inverters"].get(inverter_id, {}).get("running_state"), "Unknown"),
+        }.get(data["inverters"].get(inverter_id, {}).get("running_state"), STATE_UNKNOWN),
     ),
     SigenergySensorEntityDescription(
         key="active_power",
@@ -394,7 +396,7 @@ INVERTER_SENSORS = [
             1: "L1/L2/L3",
             2: "L1/L2/L3/N",
             3: "L1/L2/N",
-        }.get(data["inverters"].get(inverter_id, {}).get("output_type"), "Unknown"),
+        }.get(data["inverters"].get(inverter_id, {}).get("output_type"), STATE_UNKNOWN),
     ),
     SigenergySensorEntityDescription(
         key="phase_a_voltage",
@@ -483,7 +485,7 @@ AC_CHARGER_SENSORS = [
             5: "C2",
             6: "F",
             7: "E",
-        }.get(data["ac_chargers"].get(ac_charger_id, {}).get("system_state"), "Unknown"),
+        }.get(data["ac_chargers"].get(ac_charger_id, {}).get("system_state"), STATE_UNKNOWN),
     ),
     SigenergySensorEntityDescription(
         key="total_energy_consumed",
@@ -644,12 +646,37 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
     def native_value(self) -> Any:
         """Return the state of the sensor."""
         if self.coordinator.data is None:
-            return None
+            return STATE_UNKNOWN
             
+        value = None
         if self._device_type == DEVICE_TYPE_PLANT:
-            return self.entity_description.value_fn(self.coordinator.data, None)
+            value = self.entity_description.value_fn(self.coordinator.data, None)
         else:
-            return self.entity_description.value_fn(self.coordinator.data, self._device_id)
+            value = self.entity_description.value_fn(self.coordinator.data, self._device_id)
+            
+        # Handle None, "Unknown", or other non-numeric values for numeric sensors
+        if value is None:
+            return STATE_UNKNOWN
+            
+        # If this is a numeric sensor (with device_class) and the value is a string like "Unknown"
+        if (
+            hasattr(self.entity_description, "device_class") 
+            and self.entity_description.device_class in [
+                SensorDeviceClass.POWER, 
+                SensorDeviceClass.ENERGY,
+                SensorDeviceClass.TEMPERATURE,
+                SensorDeviceClass.VOLTAGE,
+                SensorDeviceClass.CURRENT,
+                SensorDeviceClass.BATTERY,
+                SensorDeviceClass.FREQUENCY,
+                SensorDeviceClass.RESISTANCE
+            ]
+            and isinstance(value, str)
+            and not value.replace('.', '', 1).replace('-', '', 1).isdigit()
+        ):
+            return STATE_UNKNOWN
+            
+        return value
 
     @property
     def available(self) -> bool:
