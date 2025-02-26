@@ -22,7 +22,6 @@ from homeassistant.const import (
     UnitOfFrequency,
     UnitOfPower,
     UnitOfTemperature,
-    UnitOfElectricResistance,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
 )
@@ -47,27 +46,25 @@ _LOGGER = logging.getLogger(__name__)
 class SigenergySensorEntityDescription(SensorEntityDescription):
     """Class describing Sigenergy sensor entities."""
 
-    value_fn: Callable[[Dict[str, Any], str], Any] = None
-    available_fn: Callable[[Dict[str, Any]], bool] = lambda data: True
     entity_registry_enabled_default: bool = True
 
 
 PLANT_SENSORS = [
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ems_work_mode",
         name="EMS Work Mode",
         icon="mdi:cog",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, _: data["plant"].get("ems_work_mode"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="grid_sensor_status",
         name="Grid Sensor Status",
         icon="mdi:power-plug",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, _: "Connected" if data["plant"].get("grid_sensor_status") == 1 else "Not Connected",
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="grid_sensor_active_power",
         name="Grid Active Power",
         device_class=SensorDeviceClass.POWER,
@@ -75,14 +72,14 @@ PLANT_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, _: data["plant"].get("grid_sensor_active_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="grid_sensor_reactive_power",
         name="Grid Reactive Power",
         native_unit_of_measurement="kVar",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, _: data["plant"].get("grid_sensor_reactive_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="on_off_grid_status",
         name="Grid Connection Status",
         icon="mdi:transmission-tower",
@@ -93,7 +90,7 @@ PLANT_SENSORS = [
             2: "Off Grid (Manual)",
         }.get(data["plant"].get("on_off_grid_status"), STATE_UNKNOWN),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_soc",
         name="Battery State of Charge",
         device_class=SensorDeviceClass.BATTERY,
@@ -101,7 +98,7 @@ PLANT_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, _: data["plant"].get("ess_soc"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_soh",
         name="Battery State of Health",
         native_unit_of_measurement=PERCENTAGE,
@@ -109,7 +106,7 @@ PLANT_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, _: data["plant"].get("ess_soh"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="plant_active_power",
         name="Plant Active Power",
         device_class=SensorDeviceClass.POWER,
@@ -117,14 +114,14 @@ PLANT_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, _: data["plant"].get("plant_active_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="plant_reactive_power",
         name="Plant Reactive Power",
         native_unit_of_measurement="kVar",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, _: data["plant"].get("plant_reactive_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="photovoltaic_power",
         name="PV Power",
         device_class=SensorDeviceClass.POWER,
@@ -132,7 +129,7 @@ PLANT_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, _: data["plant"].get("photovoltaic_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_power",
         name="Battery Power",
         device_class=SensorDeviceClass.POWER,
@@ -140,7 +137,7 @@ PLANT_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, _: data["plant"].get("ess_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_available_max_charging_power",
         name="Available Max Charging Power",
         device_class=SensorDeviceClass.POWER,
@@ -149,7 +146,7 @@ PLANT_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, _: data["plant"].get("ess_available_max_charging_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_available_max_discharging_power",
         name="Available Max Discharging Power",
         device_class=SensorDeviceClass.POWER,
@@ -158,7 +155,7 @@ PLANT_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, _: data["plant"].get("ess_available_max_discharging_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="plant_running_state",
         name="Plant Running State",
         icon="mdi:power",
@@ -170,7 +167,7 @@ PLANT_SENSORS = [
             RunningState.SHUTDOWN: "Shutdown",
         }.get(data["plant"].get("plant_running_state"), STATE_UNKNOWN),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_available_max_charging_capacity",
         name="Available Max Charging Capacity",
         device_class=SensorDeviceClass.ENERGY,
@@ -179,7 +176,7 @@ PLANT_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, _: data["plant"].get("ess_available_max_charging_capacity"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_available_max_discharging_capacity",
         name="Available Max Discharging Capacity",
         device_class=SensorDeviceClass.ENERGY,
@@ -188,7 +185,7 @@ PLANT_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, _: data["plant"].get("ess_available_max_discharging_capacity"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_rated_energy_capacity",
         name="Rated Energy Capacity",
         device_class=SensorDeviceClass.ENERGY,
@@ -197,14 +194,14 @@ PLANT_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, _: data["plant"].get("ess_rated_energy_capacity"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_charge_cut_off_soc",
         name="Charge Cut-Off SOC",
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, _: data["plant"].get("ess_charge_cut_off_soc"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_discharge_cut_off_soc",
         name="Discharge Cut-Off SOC",
         native_unit_of_measurement=PERCENTAGE,
@@ -214,25 +211,25 @@ PLANT_SENSORS = [
 ]
 
 INVERTER_SENSORS = [
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="model_type",
         name="Model Type",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("model_type"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="serial_number",
         name="Serial Number",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("serial_number"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="machine_firmware_version",
         name="Firmware Version",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("machine_firmware_version"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="rated_active_power",
         name="Rated Active Power",
         device_class=SensorDeviceClass.POWER,
@@ -240,7 +237,7 @@ INVERTER_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("rated_active_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_daily_charge_energy",
         name="Daily Charge Energy",
         device_class=SensorDeviceClass.ENERGY,
@@ -248,7 +245,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_daily_charge_energy"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_accumulated_charge_energy",
         name="Total Charge Energy",
         device_class=SensorDeviceClass.ENERGY,
@@ -256,7 +253,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_accumulated_charge_energy"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_daily_discharge_energy",
         name="Daily Discharge Energy",
         device_class=SensorDeviceClass.ENERGY,
@@ -264,7 +261,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_daily_discharge_energy"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_accumulated_discharge_energy",
         name="Total Discharge Energy",
         device_class=SensorDeviceClass.ENERGY,
@@ -272,7 +269,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_accumulated_discharge_energy"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="running_state",
         name="Running State",
         icon="mdi:power",
@@ -284,7 +281,7 @@ INVERTER_SENSORS = [
             RunningState.SHUTDOWN: "Shutdown",
         }.get(data["inverters"].get(inverter_id, {}).get("running_state"), STATE_UNKNOWN),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="active_power",
         name="Active Power",
         device_class=SensorDeviceClass.POWER,
@@ -292,14 +289,14 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("active_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="reactive_power",
         name="Reactive Power",
         native_unit_of_measurement="kVar",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("reactive_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_charge_discharge_power",
         name="Battery Power",
         device_class=SensorDeviceClass.POWER,
@@ -307,7 +304,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_charge_discharge_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_battery_soc",
         name="Battery State of Charge",
         device_class=SensorDeviceClass.BATTERY,
@@ -315,7 +312,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_battery_soc"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_battery_soh",
         name="Battery State of Health",
         native_unit_of_measurement=PERCENTAGE,
@@ -323,7 +320,7 @@ INVERTER_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_battery_soh"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_average_cell_temperature",
         name="Battery Average Cell Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -331,63 +328,70 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_average_cell_temperature"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_average_cell_voltage",
         name="Battery Average Cell Voltage",
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_average_cell_voltage"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_maximum_battery_temperature",
         name="Battery Maximum Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_maximum_battery_temperature"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_minimum_battery_temperature",
         name="Battery Minimum Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_minimum_battery_temperature"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_maximum_battery_cell_voltage",
         name="Battery Maximum Cell Voltage",
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_maximum_battery_cell_voltage"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="ess_minimum_battery_cell_voltage",
         name="Battery Minimum Cell Voltage",
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("ess_minimum_battery_cell_voltage"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="grid_frequency",
         name="Grid Frequency",
         device_class=SensorDeviceClass.FREQUENCY,
         native_unit_of_measurement=UnitOfFrequency.HERTZ,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("grid_frequency"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="pcs_internal_temperature",
         name="PCS Internal Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("pcs_internal_temperature"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="output_type",
         name="Output Type",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -398,7 +402,7 @@ INVERTER_SENSORS = [
             3: "L1/L2/N",
         }.get(data["inverters"].get(inverter_id, {}).get("output_type"), STATE_UNKNOWN),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="phase_a_voltage",
         name="Phase A Voltage",
         device_class=SensorDeviceClass.VOLTAGE,
@@ -406,7 +410,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_a_voltage"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="phase_b_voltage",
         name="Phase B Voltage",
         device_class=SensorDeviceClass.VOLTAGE,
@@ -414,7 +418,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_b_voltage"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="phase_c_voltage",
         name="Phase C Voltage",
         device_class=SensorDeviceClass.VOLTAGE,
@@ -422,7 +426,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_c_voltage"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="phase_a_current",
         name="Phase A Current",
         device_class=SensorDeviceClass.CURRENT,
@@ -430,7 +434,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_a_current"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="phase_b_current",
         name="Phase B Current",
         device_class=SensorDeviceClass.CURRENT,
@@ -438,7 +442,7 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_b_current"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="phase_c_current",
         name="Phase C Current",
         device_class=SensorDeviceClass.CURRENT,
@@ -446,13 +450,13 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("phase_c_current"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="power_factor",
         name="Power Factor",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("power_factor"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="pv_power",
         name="PV Power",
         device_class=SensorDeviceClass.POWER,
@@ -460,11 +464,9 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("pv_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="insulation_resistance",
         name="Insulation Resistance",
-        device_class=SensorDeviceClass.RESISTANCE,
-        native_unit_of_measurement=UnitOfElectricResistance.OHM,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("insulation_resistance"),
@@ -472,7 +474,7 @@ INVERTER_SENSORS = [
 ]
 
 AC_CHARGER_SENSORS = [
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="system_state",
         name="System State",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -487,7 +489,7 @@ AC_CHARGER_SENSORS = [
             7: "E",
         }.get(data["ac_chargers"].get(ac_charger_id, {}).get("system_state"), STATE_UNKNOWN),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="total_energy_consumed",
         name="Total Energy Consumed",
         device_class=SensorDeviceClass.ENERGY,
@@ -495,7 +497,7 @@ AC_CHARGER_SENSORS = [
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("total_energy_consumed"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="charging_power",
         name="Charging Power",
         device_class=SensorDeviceClass.POWER,
@@ -503,7 +505,7 @@ AC_CHARGER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("charging_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="rated_power",
         name="Rated Power",
         device_class=SensorDeviceClass.POWER,
@@ -511,7 +513,7 @@ AC_CHARGER_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("rated_power"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="rated_current",
         name="Rated Current",
         device_class=SensorDeviceClass.CURRENT,
@@ -519,7 +521,7 @@ AC_CHARGER_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("rated_current"),
     ),
-    SigenergySensorEntityDescription(
+    SensorEntityDescription(
         key="rated_voltage",
         name="Rated Voltage",
         device_class=SensorDeviceClass.VOLTAGE,
@@ -668,7 +670,6 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 SensorDeviceClass.CURRENT,
                 SensorDeviceClass.BATTERY,
                 SensorDeviceClass.FREQUENCY,
-                SensorDeviceClass.RESISTANCE
             ] and
             isinstance(value, str) and
             not value.replace('.', '', 1).replace('-', '', 1).isdigit()
