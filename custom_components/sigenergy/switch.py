@@ -195,7 +195,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
                 name=name.split(" ", 1)[0],  # Use plant name as device name
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
-                via_device=(DOMAIN, f"{coordinator.hub.host}"),
+                via_device=(DOMAIN, f"{coordinator.hub.host}_plant"),
             )
         elif device_type == DEVICE_TYPE_INVERTER:
             # Get model and serial number if available
@@ -205,7 +205,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
                 inverter_data = coordinator.data["inverters"].get(device_id, {})
                 model = inverter_data.get("model_type")
                 serial_number = inverter_data.get("serial_number")
-            
+
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.host}_inverter_{device_id}")},
                 name=f"Inverter {device_id}",
