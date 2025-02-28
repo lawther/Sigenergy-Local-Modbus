@@ -1,4 +1,4 @@
-"""Number platform for Sigenergy Energy Storage System integration."""
+"""Number platform for Sigenergy ESS integration."""
 from __future__ import annotations
 
 import logging

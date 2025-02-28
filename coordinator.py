@@ -1,4 +1,4 @@
-"""Data update coordinator for Sigenergy Energy Storage System."""
+"""Data update coordinator for Sigenergy ESS."""
 from __future__ import annotations
 
 import asyncio
@@ -18,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching data from the Sigenergy Energy Storage System."""
+    """Class to manage fetching data from the Sigenergy ESS."""
 
     def __init__(
         self,

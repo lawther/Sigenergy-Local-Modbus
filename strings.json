@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Sigenergy Energy Storage System",
-        "description": "Set up a Sigenergy Energy Storage System to monitor and control it through Home Assistant.",
+        "title": "Connect to Sigenergy ESS",
+        "description": "Set up a Sigenergy ESS to monitor and control it through Home Assistant.",
         "data": {
           "host": "Host",
           "port": "Port",

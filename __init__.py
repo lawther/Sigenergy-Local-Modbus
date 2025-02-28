@@ -1,4 +1,4 @@
-"""The Sigenergy Energy Storage System integration."""
+"""The Sigenergy ESS integration."""
 from __future__ import annotations
 
 import logging
@@ -23,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Sigenergy Energy Storage System from a config entry."""
+    """Set up Sigenergy ESS from a config entry."""
     _LOGGER.debug("async_setup_entry: Starting setup for entry: %s", entry.title)
     host = entry.data[CONF_HOST]
     port = entry.data[CONF_PORT]

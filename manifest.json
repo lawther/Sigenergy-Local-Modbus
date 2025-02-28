@@ -1,6 +1,6 @@
 {
   "domain": "sigenergy",
-  "name": "Sigenergy Energy Storage System",
+  "name": "Sigenergy ESS",
   "documentation": "https://github.com/custom-components/sigenergy",
   "issue_tracker": "https://github.com/custom-components/sigenergy/issues",
   "dependencies": ["modbus"],

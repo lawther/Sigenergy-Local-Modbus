@@ -1,13 +1,16 @@
-"""Constants for the Sigenergy Energy Storage System integration."""
+"""Constants for the Sigenergy ESS integration."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Final, Optional
 
+# Import needed Home Assistant constants
+from homeassistant.const import PERCENTAGE
+
 # Integration domain
 DOMAIN = "sigenergy"
-DEFAULT_NAME = "Sigenergy Energy Storage System"
+DEFAULT_NAME = "Sigenergy ESS"
 
 # Configuration keys
 CONF_HOST = "host"
@@ -130,9 +133,36 @@ class ModbusRegisterDefinition:
     applicable_to: Optional[list[str]] = None
 
 # Define empty dictionaries for register definitions
-PLANT_RUNNING_INFO_REGISTERS = {}
+PLANT_RUNNING_INFO_REGISTERS = {
+    "plant_running_state": ModbusRegisterDefinition(
+        address=30051,  # Example address
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U16,
+        gain=1,
+        unit=None,
+        description="Plant running state",
+    ),
+    "ess_soc": ModbusRegisterDefinition(
+        address=30014,  # Example address
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U16,
+        gain=10,  # If SOC is stored as 0-1000 representing 0-100%
+        unit=PERCENTAGE,
+        description="Battery State of Charge",
+    )
+}
 PLANT_PARAMETER_REGISTERS = {}
-INVERTER_RUNNING_INFO_REGISTERS = {}
+INVERTER_RUNNING_INFO_REGISTERS = {
+    "running_state": ModbusRegisterDefinition(
+        address=30578,  # Example address
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U16,
+        gain=1,
+    )
+}
 INVERTER_PARAMETER_REGISTERS = {}
 AC_CHARGER_RUNNING_INFO_REGISTERS = {}
 AC_CHARGER_PARAMETER_REGISTERS = {}

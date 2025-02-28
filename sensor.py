@@ -1,4 +1,4 @@
-"""Sensor platform for Sigenergy Energy Storage System integration."""
+"""Sensor platform for Sigenergy ESS integration."""
 from __future__ import annotations
 
 import logging

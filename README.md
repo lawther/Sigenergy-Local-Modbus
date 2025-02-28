@@ -1,6 +1,6 @@
-# Sigenergy Energy Storage System Integration for Home Assistant
+# Sigenergy ESS Integration for Home Assistant
 
-This integration allows you to monitor and control your Sigenergy Energy Storage System through Home Assistant.
+This integration allows you to monitor and control your Sigenergy ESS through Home Assistant.
 
 ## Features
 
@@ -16,7 +16,7 @@ This integration allows you to monitor and control your Sigenergy Energy Storage
 ## Requirements
 
 - Home Assistant 2023.8.0 or newer
-- Sigenergy Energy Storage System with ModbusTCP access
+- Sigenergy ESS with ModbusTCP access
 - Network connectivity between Home Assistant and the Sigenergy system
 
 ## Installation

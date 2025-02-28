@@ -1,4 +1,4 @@
-"""Modbus communication for Sigenergy Energy Storage System."""
+"""Modbus communication for Sigenergy ESS."""
 from __future__ import annotations
 
 import asyncio
@@ -43,7 +43,7 @@ class SigenergyModbusError(HomeAssistantError):
 
 
 class SigenergyModbusHub:
-    """Modbus hub for Sigenergy Energy Storage System."""
+    """Modbus hub for Sigenergy ESS."""
 
     def __init__(
         self,

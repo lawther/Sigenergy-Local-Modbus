@@ -1,4 +1,4 @@
-"""Config flow for Sigenergy Energy Storage System integration."""
+"""Config flow for Sigenergy ESS integration."""
 from __future__ import annotations
 
 import logging
@@ -39,7 +39,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 
 class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Sigenergy Energy Storage System."""
+    """Handle a config flow for Sigenergy ESS."""
 
     VERSION = 1
 

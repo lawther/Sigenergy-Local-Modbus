@@ -1,4 +1,4 @@
-"""Diagnostics support for Sigenergy Energy Storage System."""
+"""Diagnostics support for Sigenergy ESS."""
 from __future__ import annotations
 
 from typing import Any, Dict
