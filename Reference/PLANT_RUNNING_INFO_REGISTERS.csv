@@ -1,0 +1,48 @@
+No.,Name,Add.,QTY,Perm.,Data Type,Gain,Unit,Hybrid Inv, PV inv.,Comment
+1,System time,30000,2,RO,U32,1,s,√,√,Epoch seconds
+2,System timezone,30002,1,RO,S16,1,min,√,√,
+3,EMS work mode,30003,1,RO,U16,N/A,N/A,√,√,0: Max self consumption; 1: AI Mode; 2: TOU 7: Remote EMS mode
+4,[Grid Sensor] Status,30004,1,RO,U16,N/A,N/A,√,√,(gateway or meter connection status) 0: not connected 1: connected
+5,[Grid sensor] Active power,30005,2,RO,S32,1000,kW,√,√,Data collected from grid sensor at grid to system checkpoint; >0 buy from grid; <0 sell to grid
+6,[Grid sensor] reactive power,30007,2,RO,S32,1000,kVar,√,√,Data collected from grid sensor at grid to system checkpoint;
+7,On/Off Grid status,30009,1,RO,U16,N/A,N/A,√,0: ongrid 1: offgrid(auto) 2: offgrid(manual)
+8,Max active power,30010,2,RO,U32,1000,kW,√,√,This is should be the base value of all active power adjustment actions
+9,Max apparent power,30012,2,RO,U32,1000,kVar,√,√,This is should be the base value of all reactive power adjustment actions
+10,[ESS] SOC,30014,1,RO,U16,10,%,√,,
+11,Plant phase A active power,30015,2,RO,S32,1000,kW,√,√,
+12,Plant phase B active power,30017,2,RO,S32,1000,kW,√,√,
+13,Plant phase C active power,30019,2,RO,S32,1000,kW,√,√,
+14,Plant phase A reactive power,30021,2,RO,S32,1000,kVar,√,√,
+15,Plant phase B reactive power,30023,2,RO,S32,1000,kVar,√,√,
+16,Plant phase C reactive power,30025,2,RO,S32,1000,kVar,√,√,
+17,General Alarm1,30027,1,RO,U16,N/A,N/A,√,√,If any hybrid inverter has alarm, then this alarm will be set accordingly. Refer to Appendix2
+18,General Alarm2,30028,1,RO,U16,N/A,N/A,√,√,If any hybrid inverter has alarm, then this alarm will be set accordingly. Refer to Appendix3
+19,General Alarm3,30029,1,RO,U16,N/A,N/A,√,,If any hybrid inverter has alarm, then this alarm will be set accordingly. Refer to Appendix4
+20,General Alarm4,30030,1,RO,U16,N/A,N/A,√,√,If any hybrid inverter has alarm, then this alarm will be set accordingly. Refer to Appendix5
+21,Plant active power,30031,2,RO,S32,1000,kW,√,√,
+22,Plant reactive power,30033,2,RO,S32,1000,kVar,√,√,
+23,Photovoltaic power,30035,2,RO,S32,1000,kW,√,√,
+24,[ESS] power,30037,2,RO,S32,1000,kW,√,,<0: discharging >0: charging
+25,Available max active power,30039,2,RO,U32,1000,kW,√,√,Feed to the ac terminal. Count only the running inverters
+26,Available min active power,30041,2,RO,U32,1000,kW,√,√,Absorb from the ac terminal. Count only the running inverters
+27,Available max reactive power,30043,2,RO,U32,1000,kVar,√,√,Feed to the ac terminal. Count only the running inverters
+28,Available min reactive power,30045,2,RO,U32,1000,kVar,√,√,Absorb from the ac terminal. Count only the running inverters
+29,[ESS] Available max charging power,30047,2,RO,U32,1000,kW,√,,Count only the running inverters
+30,[ESS] Available max discharging power,30049,2,RO,U32,1000,kW,√,,Count only the running inverters
+31,Plant running state,30051,1,RO,U16,N/A,N/A,√,√,Refer to Appendix1
+32,[Grid sensor] Phase A active power,30052,2,RO,S32,1000,kW,√,√,Data collected from grid sensor at grid to system checkpoint; >0 buy from grid; <0 sell to grid
+33,[Grid sensor] Phase B active power,30054,2,RO,S32,1000,kW,√,√,Data collected from grid sensor at grid to system checkpoint; >0 buy from grid; <0 sell to grid
+34,[Grid sensor] Phase C active power,30056,2,RO,S32,1000,kW,√,√,Data collected from grid sensor at grid to system checkpoint; >0 buy from grid; <0 sell to grid
+35,[Grid sensor] Phase A reactive power,30058,2,RO,S32,1000,kVar,√,√,Data collected from grid sensor at grid to system checkpoint;
+36,[Grid sensor] Phase B reactive power,30060,2,RO,S32,1000,kVar,√,√,Data collected from grid sensor at grid to system checkpoint;
+37,[Grid sensor] Phase C reactive power,30062,2,RO,S32,1000,kVar,√,√,Data collected from grid sensor at grid to system checkpoint;
+38,[ESS] Available max charging capacity,30064,2,RO,U32,100,kWh,√,,Count only the running inverters
+39,[ESS] Available max discharging capacity,30066,2,RO,U32,100,kWh,√,,Count only the running inverters
+40,[ESS] Rated charging power,30068,2,RO,U32,1000,kW,√,,
+41,[ESS] Rated discharging power,30070,2,RO,U32,1000,kW,√,,
+42,General Alarm5,30072,1,RO,U16,N/A,N/A,√,,If any hybrid inverter has alarm, then this alarm will be set accordingly. Refer to Appendix11
+43,Reserved,30073,10,RO,N/A,N/A,N/A,N/A,
+44,[ESS] rated energy capacity,30083,2,RO,U32,100,kWh,√,,
+45,[ESS] charge Cut-Off SOC,30085,1,RO,U16,10,%,√,,
+46,[ESS] discharge Cut-Off SOC,30086,1,RO,U16,10,%,√,,
+47,[ESS] SOH,30087,1,RO,U16,10,%,√,,This value is the weighted average of the SOH of all ESS devices in the power plant, with each rated capacity as the weight.

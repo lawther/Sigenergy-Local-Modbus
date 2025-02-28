@@ -1,0 +1,11 @@
+No.,Name,Add.,QTY,Perm.,Data Type,Gain,Unit,Comment
+1,System state,32000,1,RO,U16,N/A,N/A,System states according to IEC61851-1 definition. Refer to Appendix 7.
+2,Total energy consumed,32001,2,RO,U32,100,kWh,
+3,Charging power,32003,2,RO,S32,1000,kW,
+4,Rated power,32005,2,RO,U32,1000,kW,
+5,Rated current,32007,2,RO,S32,100,A,
+6,Rated voltage,32009,1,RO,U16,10,V,
+7,AC-Charger input breaker rated current,32010,2,RO,S32,100,A,
+8,Alarm1,32012,1,RO,U16,N/A,N/A,Refer to Appendix 8
+9,Alarm2,32013,1,RO,U16,N/A,N/A,Refer to Appendix 9
+10,Alarm3,32014,1,RO,U16,N/A,N/A,Refer to Appendix 10

@@ -1,0 +1,30 @@
+No.,Name,Add.,QTY,Perm.,Data Type,Gain,Unit,Hybrid Inv, PV inv.,Comment
+1,Start/Stop,40000,1,WO,U16,N/A,N/A,√,√,"0: Stop 1: Start"
+2,Active power fixed adjustment target value,40001,2,RW,S32,1000,kW,√,√,
+3,Reactive power fixed adjustment target value,40003,2,RW,S32,1000,kVar,√,√,"Range: [-60.00 * base value, 60.00 * base value]. Takes effect globally regardless of the EMS operating mode."
+4,Active power percentage adjustment target value,40005,1,RW,S16,100,%,√,√,Range: [-100.00, 100.00]
+5,Q/S adjustment target value,40006,1,RW,S16,100,%,√,√,"Range: [-60.00, 60.00]. Takes effect globally regardless of the EMS operating mode."
+6,Power factor adjustment target value,40007,1,RW,S16,1000,N/A,√,√,"Range: (-1, -0.8] U [0.8, 1]. Grid Sensor needed. Takes effect globally regardless of the EMS operating mode."
+7,Phase A active power fixed adjustment target value,40008,2,RW,S32,1000,kW,√,Valid only when output type is L1/L2/L3/N
+8,Phase B active power fixed adjustment target value,40010,2,RW,S32,1000,kW,√,Valid only when output type is L1/L2/L3/N
+9,Phase C active power fixed adjustment target value,40012,2,RW,S32,1000,kW,√,Valid only when output type is L1/L2/L3/N
+10,Phase A reactive power fixed adjustment target value,40014,2,RW,S32,1000,kVar,√,Valid only when output type is L1/L2/L3/N
+11,Phase B reactive power fixed adjustment target value,40016,2,RW,S32,1000,kVar,√,Valid only when output type is L1/L2/L3/N
+12,Phase C reactive power fixed adjustment target value,40018,2,RW,S32,1000,kVar,√,Valid only when output type is L1/L2/L3/N
+13,Phase A Active power percentage adjustment target value,40020,1,RW,S16,100,%,√,Valid only when output type is L1/L2/L3/N. Range: [-100.00, 100.00]
+14,Phase B Active power percentage adjustment target value,40021,1,RW,S16,100,%,√,Valid only when output type is L1/L2/L3/N. Range: [-100.00, 100.00]
+15,Phase C Active power percentage adjustment target value,40022,1,RW,S16,100,%,√,Valid only when output type is L1/L2/L3/N. Range: [-100.00, 100.00]
+16,Phase A Q/S fixed adjustment target value,40023,1,RW,S16,100,%,√,Valid only when output type is L1/L2/L3/N. Range: [-60.00, 60.00]
+17,Phase B Q/S fixed adjustment target value,40024,1,RW,S16,100,%,√,Valid only when output type is L1/L2/L3/N. Range: [-60.00, 60.00]
+18,Phase C Q/S fixed adjustment target value,40025,1,RW,S16,100,%,√,Valid only when output type is L1/L2/L3/N. Range: [-60.00, 60.00]
+19,Reserved,40026,3,RW,N/A,N/A,N/A,N/A,
+20,Remote EMS enable,40029,1,RW,U16,N/A,N/A,√,√,"0: disabled 1: enabled When needed to control EMS remotely, this register needs to be enabled. When enabled, the plant’s EMS work mode (30003) will switch to remote EMS."
+21,Independent phase power control enable,40030,1,RW,U16,N/A,N/A,√,Valid only when output type is L1/L2/L3/N. To enable independent phase control, this parameter must be enabled. 0: disabled 1: enabled
+22,Remote EMS control mode,40031,1,RW,U16,N/A,N/A,√,√,Mode values’ definition refer to Appendix 6
+23,ESS max charging limit,40032,2,RW,U32,1000,kW,√,[0, Rated ESS charging power]. Takes effect when Remote EMS control mode (40031) is 3 or 4.
+24,ESS max discharging limit,40034,2,RW,U32,1000,kW,√,[0, Rated ESS discharging power]. Takes effect when Remote EMS control mode (40031) is 5 or 6.
+25,PV max power limit,40036,2,RW,U32,1000,kW,√,Takes effect when Remote EMS control mode (40031) is 3, 4, 5 or 6.
+26,[Grid Point] Maximum export limitation,40038,2,RW,U32,1000,kW,√,√,Grid Sensor needed. Takes effect globally regardless of the EMS operating mode.
+27,[Grid Point] Maximum import limitation,40040,2,RW,U32,1000,kW,√,√,Grid Sensor needed. Takes effect globally regardless of the EMS operating mode.
+28,PCS maximum export limitation,40042,2,RW,U32,1000,kW,√,√,"Range: [0, 0xFFFFFFFE]. With value 0xFFFFFFFF, register is not valid. In all other cases, Takes effect globally."
+29,PCS maximum import limitation,40044,2,RW,U32,1000,kW,√,√,"Range: [0, 0xFFFFFFFE]. With value 0xFFFFFFFF, register is not valid. In all other cases, Takes effect globally."
