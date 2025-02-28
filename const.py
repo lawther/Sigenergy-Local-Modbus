@@ -1304,6 +1304,6 @@ AC_CHARGER_PARAMETER_REGISTERS = {
         data_type=DataType.U32,
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
-        description="Charger output current",
+        description="Charger output current ([6, X] X is the smaller value between the rated current and the AC-Charger input breaker rated current.)",
     ),
 }
