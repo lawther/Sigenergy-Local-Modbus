@@ -576,7 +576,7 @@ PLANT_PARAMETER_REGISTERS = {
         data_type=DataType.S32,
         gain=1000,
         unit="kVar",
-        description="Reactive power fixed adjustment target value",
+        description="Reactive power fixed adjustment target value. Range: [-60.00 * base value, 60.00 * base value]. Takes effect globally regardless of the EMS operating mode.",
         applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     "active_power_percentage_target": ModbusRegisterDefinition(
@@ -586,7 +586,7 @@ PLANT_PARAMETER_REGISTERS = {
         data_type=DataType.S16,
         gain=100,
         unit=PERCENTAGE,
-        description="Active power percentage adjustment target value",
+        description="Active power percentage adjustment target value. Range: [-100.00, 100.00]",
         applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     "qs_ratio_target": ModbusRegisterDefinition(
@@ -734,7 +734,7 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.U16,
         gain=1,
-        description="Remote EMS enable (0: disabled 1: enabled)",
+        description="Remote EMS enable (0: disabled 1: enabled). When enabled, the plant's EMS work mode (30003) will switch to remote EMS.",
         applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     "independent_phase_power_control_enable": ModbusRegisterDefinition(
@@ -812,7 +812,7 @@ PLANT_PARAMETER_REGISTERS = {
         data_type=DataType.U32,
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
-        description="PCS maximum export limitation",
+        description="PCS maximum export limitation. Range: [0, 0xFFFFFFFE]. With value 0xFFFFFFFF, register is not valid. Takes effect globally.",
         applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     "pcs_maximum_import_limitation": ModbusRegisterDefinition(
@@ -822,7 +822,7 @@ PLANT_PARAMETER_REGISTERS = {
         data_type=DataType.U32,
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
-        description="PCS maximum import limitation",
+        description="PCS maximum import limitation. Range: [0, 0xFFFFFFFE]. With value 0xFFFFFFFF, register is not valid. Takes effect globally.",
         applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
 }
