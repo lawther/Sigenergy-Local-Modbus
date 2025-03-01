@@ -79,18 +79,21 @@ STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
 
 STEP_INVERTER_CONFIG_SCHEMA = vol.Schema(
     {
+        vol.Required(CONF_NAME, default="Inverter"): str,
         vol.Required(CONF_INVERTER_COUNT, default=1): vol.All(vol.Coerce(int), vol.Range(min=1)),
     }
 )
 
 STEP_AC_CHARGER_CONFIG_SCHEMA = vol.Schema(
     {
+        vol.Required(CONF_NAME, default="AC Charger"): str,
         vol.Required(CONF_AC_CHARGER_COUNT, default=1): vol.All(vol.Coerce(int), vol.Range(min=1)),
     }
 )
 
 STEP_DC_CHARGER_CONFIG_SCHEMA = vol.Schema(
     {
+        vol.Required(CONF_NAME, default="DC Charger"): str,
         vol.Required(CONF_DC_CHARGER_COUNT, default=1): vol.All(vol.Coerce(int), vol.Range(min=1)),
     }
 )
@@ -263,7 +266,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         # Find the next available slave ID after existing inverters
         existing_slave_ids = []
-        for entry_id, entry in self.hass.config_entries.async_entries(DOMAIN):
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
             if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT, DEVICE_TYPE_NEW_PLANT]:
                 existing_slave_ids.extend(entry.data.get(CONF_INVERTER_SLAVE_IDS, []))
             elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER:
@@ -300,7 +303,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         # Find the next available slave ID after existing AC chargers
         existing_slave_ids = []
-        for entry_id, entry in self.hass.config_entries.async_entries(DOMAIN):
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
             if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT, DEVICE_TYPE_NEW_PLANT]:
                 existing_slave_ids.extend(entry.data.get(CONF_AC_CHARGER_SLAVE_IDS, []))
             elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_AC_CHARGER:
@@ -337,7 +340,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         # Find the next available slave ID after existing DC chargers
         existing_slave_ids = []
-        for entry_id, entry in self.hass.config_entries.async_entries(DOMAIN):
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
             if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT, DEVICE_TYPE_NEW_PLANT]:
                 existing_slave_ids.extend(entry.data.get(CONF_DC_CHARGER_SLAVE_IDS, []))
             elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_DC_CHARGER:
@@ -381,7 +384,19 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         # Store the selected plant
-        self._data[CONF_PARENT_DEVICE_ID] = user_input[CONF_PARENT_DEVICE_ID]
+        parent_id = user_input[CONF_PARENT_DEVICE_ID]
+        self._data[CONF_PARENT_DEVICE_ID] = parent_id
+        
+        # Fetch the parent plant's info and set defaults based on it
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.entry_id == parent_id:
+                plant_name = entry.data.get(CONF_NAME, "Plant")
+                # Set default name for child devices
+                if self._data[CONF_DEVICE_TYPE] == DEVICE_TYPE_INVERTER:
+                    self._data[CONF_NAME] = f"{plant_name} Inverter"
+                elif self._data[CONF_DEVICE_TYPE] == DEVICE_TYPE_AC_CHARGER:
+                    self._data[CONF_NAME] = f"{plant_name} AC Charger"
+                break
         
         # Route to appropriate next step based on device type
         if self._data[CONF_DEVICE_TYPE] == DEVICE_TYPE_INVERTER:
@@ -414,7 +429,16 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         # Store the selected inverter
-        self._data[CONF_PARENT_DEVICE_ID] = user_input[CONF_PARENT_DEVICE_ID]
+        parent_id = user_input[CONF_PARENT_DEVICE_ID]
+        self._data[CONF_PARENT_DEVICE_ID] = parent_id
+        
+        # Fetch the parent inverter's info and set defaults based on it
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.entry_id == parent_id:
+                inverter_name = entry.data.get(CONF_NAME, "Inverter")
+                # Set default name for DC chargers
+                self._data[CONF_NAME] = f"{inverter_name} DC Charger"
+                break
         
         # Proceed to DC charger configuration
         return await self.async_step_dc_charger_config()
