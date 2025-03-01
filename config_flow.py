@@ -187,13 +187,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if device_type == DEVICE_TYPE_NEW_PLANT:
             return await self.async_step_plant_config()
         elif device_type == DEVICE_TYPE_INVERTER:
-            if len(self._plants) > 1:
-                return await self.async_step_select_plant()
-            elif len(self._plants) == 1:
-                # Auto-connect to the only plant
-                plant_id = list(self._plants.keys())[0]
-                self._data[CONF_PARENT_DEVICE_ID] = plant_id
-                return await self.async_step_inverter_config()
+            # Go directly to inverter config (which now includes plant selection)
+            return await self.async_step_inverter_config()
         elif device_type == DEVICE_TYPE_AC_CHARGER:
             if len(self._plants) > 1:
                 return await self.async_step_select_plant()
@@ -252,6 +247,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle inverter configuration."""
+        errors = {}
+        
         if user_input is None:
             # Find the next available slave ID after existing inverters to suggest as default
             existing_slave_ids = []
@@ -264,14 +261,28 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Start from the highest existing slave ID + 1
             next_slave_id = max(existing_slave_ids, default=0) + 1
             
-            # Create a schema with the suggested slave ID
-            schema = STEP_INVERTER_CONFIG_SCHEMA.extend({
+            # Load plants for selection
+            await self._async_load_plants()
+            
+            # Create dynamic schema with plants dropdown and other fields
+            schema = vol.Schema({
+                vol.Required(CONF_NAME, default="Inverter"): str,
                 vol.Required(CONF_SLAVE_ID, default=next_slave_id): int,
+                vol.Required(CONF_PARENT_DEVICE_ID): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": plant_id, "label": plant_name}
+                            for plant_id, plant_name in self._plants.items()
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                )
             })
             
             return self.async_show_form(
                 step_id=STEP_INVERTER_CONFIG,
-                data_schema=schema
+                data_schema=schema,
+                errors=errors
             )
 
         # Store inverter configuration
@@ -284,6 +295,22 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data[CONF_AC_CHARGER_SLAVE_IDS] = []
         self._data[CONF_DC_CHARGER_COUNT] = DEFAULT_DC_CHARGER_COUNT
         self._data[CONF_DC_CHARGER_SLAVE_IDS] = []
+        
+        # Get plant configuration for the inverter
+        parent_id = user_input[CONF_PARENT_DEVICE_ID]
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.entry_id == parent_id:
+                # Copy network configuration from parent plant
+                self._data[CONF_HOST] = entry.data.get(CONF_HOST)
+                self._data[CONF_PORT] = entry.data.get(CONF_PORT)
+                
+                # THIS IS THE IMPORTANT ADDITION
+                # Store the plant's modbus ID - crucial for association
+                self._data[CONF_PLANT_ID] = entry.data.get(CONF_PLANT_ID)
+                
+                # Also, mark the device type as specific to child inverters
+                self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_INVERTER
+                break
         
         # Create the configuration entry
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
@@ -400,6 +427,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         for entry in self.hass.config_entries.async_entries(DOMAIN):
             if entry.entry_id == parent_id:
                 plant_name = entry.data.get(CONF_NAME, "Plant")
+                self._data[CONF_HOST] = entry.data.get(CONF_HOST)
+                self._data[CONF_PORT] = entry.data.get(CONF_PORT)
                 # Set default name for child devices
                 if self._data[CONF_DEVICE_TYPE] == DEVICE_TYPE_INVERTER:
                     self._data[CONF_NAME] = f"{plant_name} Inverter"
