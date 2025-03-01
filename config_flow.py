@@ -80,21 +80,21 @@ STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
 STEP_INVERTER_CONFIG_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME, default="Inverter"): str,
-        vol.Required(CONF_INVERTER_COUNT, default=1): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): int,
     }
 )
 
 STEP_AC_CHARGER_CONFIG_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME, default="AC Charger"): str,
-        vol.Required(CONF_AC_CHARGER_COUNT, default=1): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): int,
     }
 )
 
 STEP_DC_CHARGER_CONFIG_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME, default="DC Charger"): str,
-        vol.Required(CONF_DC_CHARGER_COUNT, default=1): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): int,
     }
 )
 
@@ -253,30 +253,33 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle inverter configuration."""
         if user_input is None:
+            # Find the next available slave ID after existing inverters to suggest as default
+            existing_slave_ids = []
+            for entry in self.hass.config_entries.async_entries(DOMAIN):
+                if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT, DEVICE_TYPE_NEW_PLANT]:
+                    existing_slave_ids.extend(entry.data.get(CONF_INVERTER_SLAVE_IDS, []))
+                elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER:
+                    existing_slave_ids.append(entry.data.get(CONF_SLAVE_ID, 0))
+            
+            # Start from the highest existing slave ID + 1
+            next_slave_id = max(existing_slave_ids, default=0) + 1
+            
+            # Create a schema with the suggested slave ID
+            schema = STEP_INVERTER_CONFIG_SCHEMA.extend({
+                vol.Required(CONF_SLAVE_ID, default=next_slave_id): int,
+            })
+            
             return self.async_show_form(
                 step_id=STEP_INVERTER_CONFIG,
-                data_schema=STEP_INVERTER_CONFIG_SCHEMA
+                data_schema=schema
             )
 
         # Store inverter configuration
         self._data.update(user_input)
         
-        # Generate inverter slave IDs
-        inverter_count = user_input[CONF_INVERTER_COUNT]
-        
-        # Find the next available slave ID after existing inverters
-        existing_slave_ids = []
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT, DEVICE_TYPE_NEW_PLANT]:
-                existing_slave_ids.extend(entry.data.get(CONF_INVERTER_SLAVE_IDS, []))
-            elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER:
-                existing_slave_ids.append(entry.data.get(CONF_SLAVE_ID, 0))
-        
-        # Start from the highest existing slave ID + 1
-        start_slave_id = max(existing_slave_ids, default=0) + 1
-        inverter_slave_ids = list(range(start_slave_id, start_slave_id + inverter_count))
-        
-        self._data[CONF_INVERTER_SLAVE_IDS] = inverter_slave_ids
+        # Store the slave ID in the inverter_slave_ids list as well (for compatibility)
+        self._data[CONF_INVERTER_SLAVE_IDS] = [user_input[CONF_SLAVE_ID]]
+        self._data[CONF_INVERTER_COUNT] = 1  # Always 1 inverter
         self._data[CONF_AC_CHARGER_COUNT] = DEFAULT_AC_CHARGER_COUNT
         self._data[CONF_AC_CHARGER_SLAVE_IDS] = []
         self._data[CONF_DC_CHARGER_COUNT] = DEFAULT_DC_CHARGER_COUNT
@@ -290,30 +293,33 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle AC charger configuration."""
         if user_input is None:
+            # Find the next available slave ID after existing AC chargers to suggest as default
+            existing_slave_ids = []
+            for entry in self.hass.config_entries.async_entries(DOMAIN):
+                if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT, DEVICE_TYPE_NEW_PLANT]:
+                    existing_slave_ids.extend(entry.data.get(CONF_AC_CHARGER_SLAVE_IDS, []))
+                elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_AC_CHARGER:
+                    existing_slave_ids.append(entry.data.get(CONF_SLAVE_ID, 0))
+            
+            # Start from the highest existing slave ID + 1
+            next_slave_id = max(existing_slave_ids, default=0) + 1
+            
+            # Create a schema with the suggested slave ID
+            schema = STEP_AC_CHARGER_CONFIG_SCHEMA.extend({
+                vol.Required(CONF_SLAVE_ID, default=next_slave_id): int,
+            })
+            
             return self.async_show_form(
                 step_id=STEP_AC_CHARGER_CONFIG,
-                data_schema=STEP_AC_CHARGER_CONFIG_SCHEMA
+                data_schema=schema
             )
 
         # Store AC charger configuration
         self._data.update(user_input)
         
-        # Generate AC charger slave IDs
-        ac_charger_count = user_input[CONF_AC_CHARGER_COUNT]
-        
-        # Find the next available slave ID after existing AC chargers
-        existing_slave_ids = []
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT, DEVICE_TYPE_NEW_PLANT]:
-                existing_slave_ids.extend(entry.data.get(CONF_AC_CHARGER_SLAVE_IDS, []))
-            elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_AC_CHARGER:
-                existing_slave_ids.append(entry.data.get(CONF_SLAVE_ID, 0))
-        
-        # Start from the highest existing slave ID + 1
-        start_slave_id = max(existing_slave_ids, default=0) + 1
-        ac_charger_slave_ids = list(range(start_slave_id, start_slave_id + ac_charger_count))
-        
-        self._data[CONF_AC_CHARGER_SLAVE_IDS] = ac_charger_slave_ids
+        # Store the slave ID in the ac_charger_slave_ids list as well (for compatibility)
+        self._data[CONF_AC_CHARGER_SLAVE_IDS] = [user_input[CONF_SLAVE_ID]]
+        self._data[CONF_AC_CHARGER_COUNT] = 1  # Always 1 AC charger
         self._data[CONF_INVERTER_COUNT] = DEFAULT_INVERTER_COUNT
         self._data[CONF_INVERTER_SLAVE_IDS] = []
         self._data[CONF_DC_CHARGER_COUNT] = DEFAULT_DC_CHARGER_COUNT
@@ -327,30 +333,33 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle DC charger configuration."""
         if user_input is None:
+            # Find the next available slave ID after existing DC chargers to suggest as default
+            existing_slave_ids = []
+            for entry in self.hass.config_entries.async_entries(DOMAIN):
+                if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT, DEVICE_TYPE_NEW_PLANT]:
+                    existing_slave_ids.extend(entry.data.get(CONF_DC_CHARGER_SLAVE_IDS, []))
+                elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_DC_CHARGER:
+                    existing_slave_ids.append(entry.data.get(CONF_SLAVE_ID, 0))
+            
+            # Start from the highest existing slave ID + 1
+            next_slave_id = max(existing_slave_ids, default=0) + 1
+            
+            # Create a schema with the suggested slave ID
+            schema = STEP_DC_CHARGER_CONFIG_SCHEMA.extend({
+                vol.Required(CONF_SLAVE_ID, default=next_slave_id): int,
+            })
+            
             return self.async_show_form(
                 step_id=STEP_DC_CHARGER_CONFIG,
-                data_schema=STEP_DC_CHARGER_CONFIG_SCHEMA
+                data_schema=schema
             )
 
         # Store DC charger configuration
         self._data.update(user_input)
         
-        # Generate DC charger slave IDs
-        dc_charger_count = user_input[CONF_DC_CHARGER_COUNT]
-        
-        # Find the next available slave ID after existing DC chargers
-        existing_slave_ids = []
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT, DEVICE_TYPE_NEW_PLANT]:
-                existing_slave_ids.extend(entry.data.get(CONF_DC_CHARGER_SLAVE_IDS, []))
-            elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_DC_CHARGER:
-                existing_slave_ids.append(entry.data.get(CONF_SLAVE_ID, 0))
-        
-        # Start from the highest existing slave ID + 1
-        start_slave_id = max(existing_slave_ids, default=0) + 1
-        dc_charger_slave_ids = list(range(start_slave_id, start_slave_id + dc_charger_count))
-        
-        self._data[CONF_DC_CHARGER_SLAVE_IDS] = dc_charger_slave_ids
+        # Store the slave ID in the dc_charger_slave_ids list as well (for compatibility)
+        self._data[CONF_DC_CHARGER_SLAVE_IDS] = [user_input[CONF_SLAVE_ID]]
+        self._data[CONF_DC_CHARGER_COUNT] = 1  # Always 1 DC charger
         self._data[CONF_INVERTER_COUNT] = DEFAULT_INVERTER_COUNT
         self._data[CONF_INVERTER_SLAVE_IDS] = []
         self._data[CONF_AC_CHARGER_COUNT] = DEFAULT_AC_CHARGER_COUNT

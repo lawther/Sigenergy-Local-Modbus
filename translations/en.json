@@ -33,21 +33,24 @@
         "title": "Inverter Configuration",
         "description": "Configure the inverter settings.",
         "data": {
-          "inverter_count": "Number of inverters"
+          "name": "Inverter Name",
+          "slave_id": "Device ID (Slave ID)"
         }
       },
       "ac_charger_config": {
         "title": "AC Charger Configuration",
         "description": "Configure the AC charger settings.",
         "data": {
-          "ac_charger_count": "Number of AC chargers"
+          "name": "AC Charger Name",
+          "slave_id": "Device ID (Slave ID)"
         }
       },
       "dc_charger_config": {
         "title": "DC Charger Configuration",
         "description": "Configure the DC charger settings.",
         "data": {
-          "dc_charger_count": "Number of DC chargers"
+          "name": "DC Charger Name",
+          "slave_id": "Device ID (Slave ID)"
         }
       },
       "select_plant": {
