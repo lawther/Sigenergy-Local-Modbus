@@ -7,7 +7,7 @@
       {
         "entry_id": "1234567890abcdef1234567890abcdef",
         "version": 1,
-        "domain": "sigenergy",
+        "domain": "sigen",
         "title": "Sigenergy ESS",
         "data": {
           "host": "192.168.1.100",
@@ -25,7 +25,7 @@
         "pref_disable_new_entities": false,
         "pref_disable_polling": false,
         "source": "user",
-        "unique_id": "sigenergy_192.168.1.100",
+        "unique_id": "sigen_192.168.1.100",
         "disabled_by": null
       }
     ]

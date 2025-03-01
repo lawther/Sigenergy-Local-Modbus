@@ -17,7 +17,7 @@ from homeassistant.const import (
 )
 
 # Integration domain
-DOMAIN = "sigenergy"
+DOMAIN = "sigen"
 DEFAULT_NAME = "Sigenergy ESS"
 
 # Configuration keys

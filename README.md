@@ -36,8 +36,8 @@ This integration allows you to monitor and control your Sigenergy ESS through Ho
 ### Manual Installation
 
 1. Download the latest release from the GitHub repository
-2. Create a `custom_components/sigenergy` directory in your Home Assistant configuration directory
-3. Extract the contents of the release into the `custom_components/sigenergy` directory
+2. Create a `custom_components/sigen` directory in your Home Assistant configuration directory
+3. Extract the contents of the release into the `custom_components/sigen` directory
 4. Restart Home Assistant
 
 ## Configuration

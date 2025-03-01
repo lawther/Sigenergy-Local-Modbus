@@ -3,7 +3,7 @@ set_operation_mode:
   description: Set the operation mode of the Sigenergy system.
   target:
     entity:
-      integration: sigenergy
+      integration: sigen
       domain: select
   fields:
     mode:
@@ -24,7 +24,7 @@ set_remote_ems_control_mode:
   description: Set the remote EMS control mode of the Sigenergy system.
   target:
     entity:
-      integration: sigenergy
+      integration: sigen
       domain: select
   fields:
     mode:
@@ -48,7 +48,7 @@ set_power_limit:
   description: Set a power limit for the Sigenergy system.
   target:
     entity:
-      integration: sigenergy
+      integration: sigen
       domain: number
   fields:
     value:
