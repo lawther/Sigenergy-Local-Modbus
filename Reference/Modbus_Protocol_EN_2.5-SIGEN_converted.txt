@@ -1,0 +1,1142 @@
+Sigenergy ModbusProtocol
+Version: V2.5
+Release date: 2025-02-19
+
+ModbusProtocol
+
+Copyright Notice
+
+Copyright © 2023 Sigenergy Technology Co., Ltd. All Rights Reserved.
+
+Description in this document may contain predictive statements
+regarding financial and operating results, product portfolio, new
+technology, configurations and features of product. Several factors
+could cause difference between actual results and those expressed
+or implied in the predictive statements. Therefore, description in this
+document is provided for reference purpose only and constitutes
+neither an offer nor an acceptance. Sigenergy Technology Co., Ltd.
+may change the information at any time without notice.
+
+and other Sigenergy trademarks are owned by Sigenergy
+Technology Co., Ltd.
+
+All trademarks and registered trademarks in this document belong
+to their owners.
+
+Contents
+
+1.  Introduction .........................................................................................................................1
+2.  Applicable Model ..............................................................................................................2
+3.  Communication Interface .............................................................................................3
+    3.1  RS485...........................................................................................................................3
+    3.2  Fast Ethernet/WLAN/Optical fiber/4G............................................................3
+    3.3  Fast Ethernet/WLAN/Optical fiber/4G*..........................................................4
+4.  Technical Terms...............................................................................................................5
+    4.1  Technical item name specification:................................................................5
+    4.2  Interaction timeout...............................................................................................6
+    4.3  Alarm severity level definition...........................................................................7
+5.  Register Address Definition..........................................................................................7
+    5.1  Plant running information address definition (read-only register).....7
+    5.2  Plant parameter setting address definition (holding register)..........11
+    5.3  Hybrid inverter running information address definition (read-only
+        register).........................................................................................................................14
+    5.4  Hybrid inverter parameter setting address definition (holding
+        register).........................................................................................................................19
+    5.5  AC-Charger running information address definition (read-only
+        register).........................................................................................................................20
+    5.6  AC-Charger parameter setting address definition (holding register)21
+6.  Modbus Protocol Command Overview..................................................................21
+
+ModbusProtocol
+
+6.1  Function code........................................................................................................22
+    6.1.1  Read Read-only Register.................................................................................22
+    6.1.2  Read Holding Register.....................................................................................23
+    6.1.3  Write a single Register.....................................................................................24
+    6.1.4  Write multiple Registers..................................................................................25
+6.2  Exception code.....................................................................................................26
+Appendix 1 Running state.............................................................................................28
+Appendix 2 PCS alarm code--1................................................................................28
+Appendix 3 PCS alarm code--2...............................................................................29
+Appendix 4 ESS alarm code.........................................................................................30
+Appendix 5 Gateway alarm code.............................................................................30
+Appendix 6 Remote EMS control mode...................................................................31
+Appendix 7 AC-Charger system state.....................................................................32
+Appendix 8 AC-Charger alarm code--1...............................................................32
+Appendix 9 AC-Charger alarm code--2..............................................................33
+Appendix 10 AC-Charger alarm code--3............................................................34
+Appendix 11 DC-Charger alarm code.......................................................................34
+
+ModbusProtocol
+
+Version     Date            Change Description
+V1.0-V1.8   2023-08-15      Added description for interaction timeout.
+            to              Supporting plant-wide power control.
+            2024-08-05      Added definition for alarm severity.
+                            Added a few phase power related registers and
+                            mode controlling registers.
+                            Added DC Charger related registers.
+                            Modified and added a few remote EMS and ESS
+                            control related registers.
+                            Added description of using different Modbus slave
+                            address querying different devices or power plant.
+V2.0        2024-10-14      Added AC-Charger model and it’s related registers.
+                            Added AC-Charger related system state and
+                            alarm appendix.
+                            Added DC-Charger related alarm appendix.
+                            Modified appendix names.
+                            Modified descriptions of RTU frame and PDU
+                            examples in chapter 6.
+V2.1        2024-10-30      Added “Applicable model abbreviation” definition.
+                            Added applicable model columns in chapter 5.
+                            Added descriptions for communication interfaces.
+                            Added PV related registers. Modified alarm code
+                            names.
+V2.2        2024-11-28    Added description for plant broadcast address.
+                          Added inverter level power control related registers.
+                          Modified plant parameter registers.
+V2.3      2024-12-09  Added new applicable models.
+V2.4      2025-02-05  Modified a few inverter’s registers.
+ModbusProtocol
+
+V2.5 2025-02-19 Added a few plant ESS related registers, two grid
+                  point and two PCS power control registers.
+                  Modified comments of a few holding registers.
+                  Added a few hybrid inverter battery temperature
+                  and voltage-related registers.
+
+ModbusProtocol 1/34
+
+1. Introduction
+
+This Modbus protocol complies the standard Modbus Application protocol
+specification. The physical media is multiple, such as RS485, Fast Ethernet, WLAN,
+Optical fiber and 4G. The figure below shows a simple host-slave mode in
+Modbus protocol.
+
+Specifically, in a inverter-consisted power plant, to request information or
+control an individual devices, Modbus frames should be sent to the
+corresponding device’s Modbus slave address, which must be set to a unique
+value among a inverter-consisted power plant in App. To request plant
+information or control plant behavior, Modbus frames should be sent to Modbus
+slave address 247, known as the “plant address”. To control plant behavior and
+to not receive Modbus reply, Modbus frames should be sent to Modbus slave
+address 0, known as the “plant broadcast address”.
+
+ModbusProtocol 2/34
+
+2. Applicable Model
+
+Table 2-1 lists the machine models applicable to this protocol. Each applicable
+model abbreviation in the table represents all the machine models listed to its
+right. In Chapter 5, "Register Address Definition," each register corresponds to a
+specific applicable model abbreviation, indicating that the register can only be
+read or written by the machine models the abbreviation represents.
+
+Table 2-1 Applicable models
+
+| Applicable model abbreviation | Model                                                                        | Note                                     |
+| :---------------------------- | :--------------------------------------------------------------------------- | :--------------------------------------- |
+| HybridInv.                    | SigenStor EC (3.0,3.6,4.0,4.6,5.0,6.0,8.0,10.0,12.0) SP series             | MPPT count: 2-4  PV count: 2-4        |
+|                               | Sigen Hybrid (3.0,3.6,4.0,4.6,5.0,6.0) SP                                  | MPPT count: 2-4  PV count: 2-4        |
+|                               | Sigen Hybrid (5.0,6.0,8.0,10.0,12.0,15.0,17.0,20.0,25.0,30.0) TP series     | MPPT count: 2-4  PV count: 2-4        |
+|                               | SigenStor EC (5.0,6.0,8.0,10.0,12.0,15.0,17.0,20.0,25.0,30.0) TP/TPLV series | MPPT count: 2-4  PV count: 2-4        |
+|                               | Sigen PV (50,60,80,100,110,125) M1-HYA series                             | MPPT count: 4-8  PV count: 8-16       |
+|                               | PG Controller (3.8,4.8,5.7,7.6,9.6,11.4) series                            | MPPT count: 2-4  PV count: 2-4        |
+| EVAC                          | Sigen EVAC (7,11,22) 4GT2WH/                                                 |                                          |
+|                               | Sigen EVAC (7,11,22) 4GT2SHWH/                                                |                                          |
+|                               | PG EVAC (9.6,11.5) series/                                                   |                                          |
+| PVInv.                        | Sigen PV Max (3.0,3.6,4.0,4.6,5.0,6.0) SP                                   | MPPT count: 2-4  PV count: 2-4        |
+|                               | Sigen PV Max (5.0,6.0,8.0,10.0,12.0,15.0,17.0,20.0,25.0) TP                  | MPPT count: 2-4  PV count: 2-4        |
+|                               | Sigen PV (50,60,75,80,99.9,100,110,125) M1 series                         | MPPT count: 4-8  PV count: 8-16       |
+
+ModbusProtocol 3/34
+
+3. Communication Interface
+
+3.1 RS485
+
+For applicable model abbreviation type "EVAC" devices, the interface described
+in this section is not supported.
+
+For applicable model abbreviation type "HybridInv." and “PVInv.” devices,
+third-party controllers only need to connect to one device in the power plant
+through the interface (RS485) described in this section and can read or write
+registers of all devices within the power plant (with different modbus slave
+addresses). The power plant can consist of multiple parallel-connected "Hybrid
+Inv." or “PVInv.” devices.
+
+Table 3-1 RS485 interface description
+
+| Parameter       | Description                      |
+| --------------- | -------------------------------- |
+| Transfer mode   | RTU mode                         |
+| Communication mode | Half duplex                      |
+| Baud rate       | 9600 bps (default)               |
+| Start bit       | 1                                |
+| Data bit        | 8                                |
+| Check bit       | None                             |
+| Stop bit        | 1                                |
+
+3.2 Fast Ethernet/WLAN/Optical fiber/4G
+
+For applicable model abbreviation type "HybridInv." and “PVInv.” devices,
+
+ModbusProtocol 4/34
+
+third-party controllers only need to connect to one device in the power plant
+through the interface described in this section and can read or write registers of
+all devices within the power plant (with different modbus slave addresses). The
+power plant can consist of multiple parallel-connected "HybridInv." or “PV
+Inv.” devices.
+
+For applicable model abbreviation type “EVAC” device, it must be connected to
+a "HybridInv." or “PVInv.” device. Third-party controllers have to connect to the
+"HybridInv." or “PVInv.” device using the interface described in this section to
+access registers of the “EVAC” device.
+
+Table 3-2 Fast Ethernet/WLAN/Optical fiber/4G interface description
+
+| Parameter          | Description       |
+| ------------------ | ----------------- |
+| Transfer mode      | TCP mode          |
+| Communication mode | Full duplex       |
+| Link layer Mode    | TCP Server        |
+| Application layer Mode | Slave           |
+| Port               | 502               |
+
+3.3 Fast Ethernet/WLAN/Optical fiber/4G*
+
+For applicable model abbreviation type "HybridInv." and “PVInv.” devices,
+third-party controllers only need to connect to one device in the power plant
+through the interface described in this section and can read or write registers of
+all devices within the power plant (with different modbus slave addresses). The
+power plant can consist of multiple parallel-connected "HybridInv." or “PV
+
+ModbusProtocol 5/34
+
+Inv.” devices.
+
+For applicable model abbreviation type “EVAC” device, it must be connected to
+a "HybridInv." or “PVInv.” device. Third-party controllers have to connect to the
+"HybridInv." or “PVInv.” device using the interface described in this section to
+access registers of the “EVAC” device.
+
+Table 3-3 Fast Ethernet/WLAN/Optical fiber/4G interface description
+
+| Parameter          | Description                  |
+| ------------------ | ----------------------------- |
+| Transfer mode      | TCP mode                   |
+| Communication mode  | Full duplex       |
+| Link layer Mode        | TCP Client                 |
+| Application layer Mode     | Slave                    |
+| Port               | custom                |
+
+*Note: To be specific, if 4G is the only physical communication media, the protocol then only
+supports one inverter device to connect the third party cloud as a client.
+
+4. Technical Terms
+
+4.1 Technical item name specification:
+
+Table 4-1 Technical item description
+
+| Item                     | Description                                                                      |
+| :----------------------- | :------------------------------------------------------------------------------- |
+| Host                     | The one that initiates an application request is referred to the host            |
+| Slave                    | The one that responds to an application request is referred to the slave       |
+| Access plant address    | 247                                                                            |
+| Plant broadcast address| 0                                                                              |
+
+ModbusProtocol 6/34
+
+| Slave address range        | 1-246                                      |
+| U16                        | Unsigned integer of 16-bit                 |
+| U32                        | Unsigned integer of 32-bit                 |
+| U64                        | Unsigned integer of 64-bit                 |
+| S16                        | Signed integer of 16-bit                   |
+| S32                        | Signed integer of 32-bit                   |
+| STRING                   | Character string in ASCII                |
+| RO                        | Read only, only support 0x04 command     |
+| WO                         | Write only, only support 0x06 command    |
+| RW                        | Read and write, support 0x04、0x06、0x10 command |
+
+4.2 Interaction timeout
+
+A communication process following the Modbus protocol should always be
+stared by a host.
+
+Minimum Request period: 1000ms
+
+After sending a unicast request, before receiving a respond from the slave
+device, the host should wait for up to 1000ms to send a new unicast request to
+the slave device. If no respond is received from the slave device after waiting for
+1000ms, the host should regard this request as a timeout. In poor network
+conditions or when using extra-long RS485 connections, it may be necessary to
+appropriately increase the minimum request period.
+
+Plant broadcast address:
+
+ModbusProtocol 7/34
+
+When the host sends a broadcast request to Modbus slave address 0, the
+devices will perform but will not reply Modbus frame.
+
+4.3 Alarm severity level definition
+
+There are only two levels of alarms, and their definitions are as follows:
+
+Critical Alarm: The external environment does not meet the operating
+conditions for the device, or a serious device fault has occurred. The device will
+enter fault mode and stop operating. The alarm can be automatically cleared
+once the external conditions or the device fault is resolved.
+
+General Alarm: Due to minor faults either in the external environment or within
+the device, the device can still operate normally or at a reduced capacity. The
+alarm can be automatically cleared once the external conditions or the device
+fault is resolved.
+
+5. Register Address Definition
+
+5.1 Plant running information address definition (read-only
+register)
+
+The registers below can only be accessed by slave address 247, namely “plant
+address”. To obtain power plant data, inquiries should be send to address 247.
+
+Table 5-1 Plant running information address definition
+
+| No. | Name                       | Add.  | QTY | Perm. | Data Type | Gain | Unit  | Hybrid Inv, PV inv. | Comment                                                                                                                        |
+|-----|----------------------------|-------|-----|-------|-----------|------|-------|-------------------|--------------------------------------------------------------------------------------------------------------------------------|
+| 1   | System time                | 30000 | 2   | RO    | U32       | 1    | s     | √                 | √                                                                                                                   | Epoch seconds                                                                                                             |
+| 2   | System time zone           | 30002 | 1   | RO    | S16       | 1    | min   | √                 | √                                                                                                                   |                                                                                                                                |
+| 3   | EMS work mode              | 30003 | 1   | RO    | U16       | N/A  | N/A   | √                 | √                                                                                                                   | 0: Max self consumption; 1: AI Mode;  2: TOU 7: Remote EMS mode                                                                 |
+| 4   | [Grid Sensor] Status       | 30004 | 1   | RO    | U16       | N/A  | N/A   | √                 | √                                                                                                                   | (gateway or meter connection status)  0: not connected 1: connected                                                           |
+| 5   | [Grid sensor] Active power | 30005 | 2   | RO    | S32       | 1000 | kW    | √                 | √                                                                                                                   | Data collected from grid sensor at grid to system  checkpoint;  >0 buy from grid; <0 sell to grid                                  |
+| 6   | [Grid sensor] reactive power| 30007 | 2  | RO    |S32		|1000| kVar	|√	| √ | Data collected from grid sensor at grid to system checkpoint;|
+| 7   | On/Off Grid status	|30009|	1|	RO|	U16|	N/A|	N/A|	√||	0: ongrid 1: offgrid (auto) 2: offgrid (manual)|
+| 8   |	Max active power|	30010|	2|	RO|	U32|	1000	|kW	|√|	√|	This is should be the base value of all active power adjustment actions|
+|9|	Max apparent power|	30012|	2|	RO	|U32|	1000|	kVar	|√	|√	|This is should be the base value of all reactive power adjustment actions|
+|10|	[ESS] SOC|	30014|	1|	RO|	U16|	10|	%|	√|||
+|11|	Plant phase A active power|	30015|	2|	RO	|S32	|1000	|kW	|√|	√|
+|12|	Plant phase B  active power	|30017|	2|	RO	|S32|	1000	|kW	|√|	√|
+|13|	Plant  phase C active power|	30019|	2	|RO|	S32	|1000	|kW	|√|	√|
+|14|	Plant phase A  reactive  power	|30021	|2|	RO|	S32|	1000|	kVar|	√|	√|
+|15|	Plant phase B reactive power	|30023	|2|	RO|	S32|	1000|	kVar|	√|	√|
+|16|	Plant  phase C  reactive  power|	30025|	2|	RO	|S32	|1000|	kVar	|√	|√|
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ModbusProtocol 8/34
+----------------------------------------------------------------------------------------------------------
+|17|	General Alarm1|	30027|	1	|RO	|U16	|N/A	|N/A|	√	|√|	If any hybrid inverter has alarm, then this alarm will be set accordingly. Refer to Appendix 2|
+|18	|General Alarm2|	30028	|1|	RO	|U16|	N/A	|N/A	|√	|√|	If any hybrid inverter has alarm, then this alarm will be set accordingly. Refer to Appendix 3|
+|19|	General Alarm3	|30029|	1|	RO	|U16|	N/A|		N/A	|√|	If any hybrid inverter has alarm, then this alarm will be set accordingly. Refer to Appendix 4|
+|20|	General Alarm4	|30030	|1	|RO	|U16	|N/A|	N/A|	√|	√|	If any hybrid inverter has alarm, then this alarm will be set accordingly. Refer to Appendix 5|
+|21|	Plant active power|	30031	|2	|RO|	S32	|1000|	kW|	√	|√|
+|22	|Plant reactive power|	30033	|2	|RO	|S32	|1000|	kVar|	√|	√|
+|23	|Photovoltaic power	|30035	|2	|RO	|S32|	1000	|kW|	√|√|
+|24|	[ESS] power|	30037	|2|	RO|	S32|	1000	|kW	|√||	<0: discharging >0: charging|
+|25	|Available max active power|	30039	|2	|RO	|U32	|1000	|kW	|√|	√	|Feed to the ac terminal. Count only the running inverters|
+|26	|Available min  active  power	|30041|	2	|RO|	U32|	1000	|kW	|√	|√|	Absorb from the ac terminal. Count only the running inverters|
+|27|	Available  max reactive power	|30043|	2|	RO	|U32	|1000|	kVar|	√	|√|	Feed to the ac terminal. Count only the running inverters|
+|28|	Available min  reactive  power|	30045|	2	|RO	|U32|	1000	|kVar	|√	|√	|Absorb from the ac terminal. Count only the running inverters|
+|29|	[ESS] Available max charging power|	30047|	2	|RO	|U32|	1000	|kW	|√||	Count only the running inverters|
+|30	|[ESS] Available max discharging power	|30049	|2	|RO	|U32	|1000	|kW	|√||	Count only the running inverters|
+-----------------------------------------------------------------------------------------------------------
+
+ModbusProtocol 9/34
+
+|31|[Plant running state](http://30051)|	1|	RO|	U16|	N/A|	N/A	|√|	√|	Refer to Appendix 1|
+|:-|:-|:-|:-|:-|:-|:-|:-|:-|
+|32|[Grid sensor] Phase A  active power](http://30052)|2|	RO	|S32	|1000|kW|√|√|Data	collected	from	grid sensor at grid to system checkpoint;  >0	buy	from	grid;	<0	sell	to grid|
+|33|[Grid sensor] Phase B active power](http://30054)|2|	RO	|S32|	1000|kW|	√|√|Data	collected	from	grid sensor at grid to system checkpoint;
+>0	buy	from	grid;	<0	sell	to grid	|
+    |34|[Grid sensor]	Phase C active power](http://30056)|	2	|RO	|S32|	1000	|kW	|√	|√	|Data	collected	from	grid
+sensor at grid to system
+checkpoint;
+>0	buy	from	grid;	<0	sell	to
+grid|	
+|35|[Grid sensor] Phase A  reactive power](http://30058)|2|	RO	|S32	|1000|kVar	|√	|√	|Data	collected	from	grid
+sensor at grid to system
+checkpoint;|		
+|36|[Grid sensor] Phase B reactive power](http://30060)|2|	RO	|S32	|1000|	kVar|√|√|	Data	collected	from	grid
+sensor at grid to system
+checkpoint;|			
+|37|[Grid sensor] Phase C reactive power](http://30062)|	2	|RO	|S32	|1000|kVar	|√|	√	|Data	collected	from	grid sensor at grid to system checkpoint;|		
+|38|[ESS]Available max charging capacity](http://30064)|2|	RO|	U32|	100	|kWh|	√||	Count only the running inverters|
+|39|[ESS]Available max discharging capacity](http://30066)|2|	RO	|U32	|100	|kWh|	√||	Count only the running inverters|
+|40|[ESS]Rated charging	power](http://30068)|2|	RO|	U32	|1000|	kW|	√||
+|41|[ESS]Rated discharging power](http://30070)|2|	RO|	U32|	1000	|kW	|√||
+|42|General Alarm5](http://30072)|	1	|RO	|U16	|N/A|	N/A	    |√||	If any hybrid inverter has alarm, then this	alarm	will be set accordingly. Refer to Appendix 11|
+|43|Reserved](http://30073)|	10	|RO|	N/A|		N/A|	N/A|||
+-------------------------------------------------------------------------------------
+
+ModbusProtocol 10/34
+
+|44|[ESS] rated energy capacity](http://30083)|2|	RO	|U32	|100	|kWh	|√||
+|:-|:-|:-|:-|:-|:-|:-|:-|:-|
+|45|[ESS] charge Cut-Off SOC](http://30085)|	1|RO	|U16	|10	|%	|√|||
+|46|[ESS] discharge Cut-Off SOC](http://30086)|1|RO	|U16|	10|	%	|√|||
+|47|[ESS] SOH](http://30087)|	1	|RO|	U16|	10	|%	|√||This	value	is	the	weighted average	of	the	SOH	of	all ESS	devices	in	the	power plant,	with	each	rated capacity	as	the	weight.|
+
+5.  2 Plant parameter setting address definition (holding register)
+    Theregistersbelowcanonlybeaccessedbyslaveaddress0or247.Tomodify
+    plant-levelregisters,sendcommandstoaddress0or247.Whensending
+    commandstoaddress0,thedevicewillonlyexecuteandwillnotreply.When
+    sendingcommandstoaddress247,thedevicewillbothexecuteandrespond.
+
+Note: Power control related registers not explicitly mentioned in the "Comment" will take effect
+only when the remote EMS control mode value is 0.
+
+Table 5-2 Plant parameter setting address definition
+
+| No.  | Name                                                           | Add.  | QTY | Perm. | Data  Type | Gain | Unit  | Hybrid Inv,   PV inv. | Comment                                                                                                                                                                                                                                                  |
+| :--- | :------------------------------------------------------------- | :---- | :-- | :---- | :-------- | :--- | :---- | :--------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Start/Stop                                                     | 40000 | 1   | WO    | U16       | N/A  | N/A   | √                      | √                                                                                                                                                                                                                                                        | 0: Stop  1: Start                                                                                                                                                                                                                                             |
+| 2    | Active power fixed  adjustment target value                   | 40001 | 2   | RW    | S32       | 1000 | kW    | √                      | √                                                                                                                                                                                                                                                        |                                                                                                                                                                                                                                                              |
+| 3    | Reactive power  fixed  adjustment target value              | 40003 | 2   | RW    | S32       | 1000 | kVar  | √                      | √                                                                                                                                                                                                                                                        | Range: [-60.00 \* base  value, 60.00 \*  base value].  Takes effect globally  regardless of the EMS  operating mode.                                                                                                                                      |
+| 4    | Active power  percentage adjustment  target value             | 40005 | 1   | RW    | S16       | 100  | %     | √                      | √                                                                                                                                                                                                                                                        | Range: \[-100.00, 100.00]                                                                                                                                                                                                                                  |
+| 5    | Q/S adjustment  target value                                 | 40006 | 1   | RW    | S16       | 100  | %     | √                      | √                                                                                                                                                                                                                                                        | Range: \[-60.00, 60.00].  Takes effect globally  regardless of the EMS  operating mode.                                                                                                                                                      |
+| 6    | Power factor  adjustment  target value                          | 40007 | 1   | RW    | S16       | 1000 | N/A   | √                      | √                                                                                                                                                                                                                                                        | Range:  (-1, -0.8] U \[0.8, 1].  Grid Sensor needed.  Takes effect globally  regardless of the EMS  operating mode.                                                                                                                            |
+| 7    | Phase A active power  fixed adjustment target  value            | 40008 | 2   | RW    | S32       | 1000 | kW    | √                      | Valid only when output  type is L1/L2/L3/N                                                                                                                                                                                                          |
+| 8    | Phase  B active power fixed  adjustment target value            | 40010 | 2   | RW    | S32       | 1000 | kW    | √                      | Valid only when output  type is L1/L2/L3/N                                                                                                                                                                                                          |
+| 9    | Phase C active power fixed adjustment target value             | 40012 | 2   | RW    | S32       | 1000 | kW    | √                      | Valid only when output type is L1/L2/L3/N                                                                                                                                                                                                        |
+| 10   | Phase A reactive power fixed adjustment target value           | 40014 | 2   | RW    | S32       | 1000 | kVar  | √                      | Valid only when output  type is L1/L2/L3/N                                                                                                                                                                                                          |
+| 11   | Phase B reactive power  fixed adjustment target  value          | 40016 | 2   | RW    | S32       | 1000 | kVar  | √                      | Valid only when output type is L1/L2/L3/N                                                                                                                                                                                                        |
+| 12   | Phase C reactive power  fixed adjustment target  value          | 40018 | 2   | RW    | S32       | 1000 | kVar  | √                      | Valid only when output  type is L1/L2/L3/N                                                                                                                                                                                                          |
+| 13   | Phase A Active power  percentage adjustment  target value       | 40020 | 1   | RW    | S16       | 100  | %     | √                      | Valid only when output  type is L1/L2/L3/N.  Range: \[-100.00, 100.00]                                                                                                                                                                      |
+| 14   | Phase B Active power percentage adjustment target value        | 40021 | 1   | RW    | S16       | 100  | %     | √                      | Valid only when output  type is L1/L2/L3/N.  Range: \[-100.00, 100.00]                                                                                                                                                                      |
+| 15   | Phase C Active power  percentage adjustment  target value       | 40022 | 1   | RW    | S16       | 100  | %     | √                      | Valid only when output type is L1/L2/L3/N.  Range: \[-100.00, 100.00]                                                                                                                                                                      |
+| 16   | Phase A Q/S fixed  adjustment  target value                    | 40023 | 1   | RW    | S16       | 100  | %     | √                      | Valid only when output type is L1/L2/L3/N.                                                                                                                                                                                                    |
+          |                                                   |       |     |          |       |        |        |      |      Range:\
+          |[-60.00,	60.00              |
+
+ModbusProtocol                                                       11/34
+
+44 [ESS] rated energy     30083 2   RO  U32   100 kWh √
+   capacity
+45 [ESS] charge           30085 1   RO  U16    10 %   √
+   Cut-Off SOC
+46 [ESS] discharge        30086 1   RO  U16    10 %   √
+   Cut-Off SOC
+47 [ESS] SOH              30087 1   RO  U16    10 %   √   This value is the weighted
+                                                        average of the SOH of all
+                                                        ESS devices in the power
+                                                        plant, with each rated
+                                                        capacity as the weight.
+
+5.2 Plant parameter setting address definition (holding register)
+
+The registers below can only be accessed by slave address 0 or 247. To modify
+plant-level registers, send commands to address 0 or 247. When sending
+commands to address 0, the device will only execute and will not reply. When
+sending commands to address 247, the device will both execute and respond.
+
+Note: Power control related registers not explicitly mentioned in the "Comment" will take effect
+only when the remote EMS control mode value is 0.
+
+Table 5-2 Plant parameter setting address definition
+
+| No. | Name                                                        | Add.  | QTY | Perm. | Data  Type | Gain | Unit  | Hybrid Inv, PV inv. | Comment                                                                                                                                                                                       |
+|-----|-------------------------------------------------------------|-------|-----|-------|-----------|------|-------|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1   | Start/Stop                                                  | 40000 | 1   | WO    | U16       | N/A  | N/A   | √                 | √                                                                                                                                                                                         | 0: Stop  1: Start                                                                                                                                                                     |
+| 2   | Active power fixed  adjustment target value                 | 40001 | 2   | RW    | S32       | 1000 | kW    | √                 | √                                                                                                                                                                                         |                                                                                                                                                                                       |
+| 3   | Reactive power  fixed  adjustment target value            | 40003 | 2   | RW    | S32       | 1000 | kVar  | √                 | √                                                                                                                                                                                         | Range: [-60.00 * base value, 60.00 * base value].  Takes effect globally regardless of the EMS operating mode.                                                                  |
+| 4   | Active power  percentage adjustment  target value           | 40005 | 1   | RW    | S16       | 100  | %     | √                 | √                                                                                                                                                                                         | Range: [-100.00, 100.00]                                                                                                                                                       |
+| 5   | Q/S adjustment  target value                               | 40006 | 1   | RW    | S16       | 100  | %     | √                 | √                                                                                                                                                                                         | Range: [-60.00, 60.00].  Takes effect globally regardless of the EMS       operating mode.                                                                                           |
+| 6   | Power factor  adjustment  target value                      | 40007 | 1   | RW    | S16       | 1000 | N/A   | √                 | √                                                                                                                                                                                         | Range:  (-1, -0.8] U [0.8, 1].    Grid Sensor needed.   Takes effect globally  regardless of the EMS  operating mode.                                                           |
+| 7   | Phase A active power  fixed adjustment target  value        | 40008 | 2   | RW    | S32       | 1000 | kW    | √                 | Valid only when output type is L1/L2/L3/N                                                                                                                                                     |
+| 8   | Phase  B active power fixed  adjustment target value        | 40010 | 2   | RW    | S32       | 1000 | kW    | √                 | Valid only when output type is L1/L2/L3/N                                                                                                                                                     |
+| 9   | Phase C active power  fixed adjustment target  value        | 40012 | 2   | RW    | S32       | 1000 | kW    | √                 | Valid only when output type is L1/L2/L3/N                                                                                                                                                     |
+| 10  | Phase A reactive power  fixed adjustment target  value      | 40014 | 2   | RW    | S32       | 1000 | kVar  | √                 | Valid only when output type is L1/L2/L3/N                                                                                                                                                     |
+| 11  | Phase B reactive power  fixed adjustment target  value      | 40016 | 2   | RW    | S32       | 1000 | kVar  | √                 | Valid only when output  type is L1/L2/L3/N                                                                                                                                                     |
+| 12  | Phase C reactive power  fixed adjustment target  value      | 40018 | 2   | RW    | S32       | 1000 | kVar  | √                 | Valid only when output type is L1/L2/L3/N                                                                                                                                                     |
+| 13  | Phase A Active power  percentage adjustment  target value | 40020 | 1   | RW    | S16       | 100  | %     | √                 | Valid only when output  type is L1/L2/L3/N.  Range: [-100.00,  100.00]                                                                                                                  |
+| 14  | Phase B Active power   percentage adjustment  target value | 40021 | 1   | RW    | S16       | 100  | %     | √                 | Valid only when output type is L1/L2/L3/N.       Range: [-100.00,  100.00]                                                                                                                 |
+| 15  | Phase C Active power   percentage adjustment  target value | 40022 | 1   | RW    | S16       | 100  | %     | √                 | Valid only when output  type is L1/L2/L3/N.       Range: [-100.00,  100.00]                                                                                                                 |
+| 16  | Phase A Q/S fixed adjustment target value                  | 40023 | 1   | RW    | S16       | 100  | %     | √                 | Valid only when output  type is L1/L2/L3/N.   Range: [-60.00, 60.00]                                                                                                                       |
+| 17  | Phase B Q/S fixed  adjustment  target value                  | 40024 | 1   | RW    | S16       | 100  | %     | √                 | Valid only when output type is L1/L2/L3/N.   Range:  [-60.00, 60.00]                                                                                                                       |
+| 18  | Phase C Q/S fixed  adjustment  target value                  | 40025 | 1   | RW    | S16       | 100  | %     | √                 | Valid only when output       type is L1/L2/L3/N.   Range: [-60.00,  60.00]                                                                                                                  |
+
+---------------------------------------------------------------------------------------------------
+
+ModbusProtocol	12/34
+19	Reserved	40026	3	RW	N/A	N/A	N/A	N/A
+20	Remote EMS enable	40029	1	RW	U16	N/A	N/A	√	√	0: disabled
+1: enabled
+When needed to control
+EMS remotely, this register
+needs to be enabled.
+When enabled, the plant’s
+EMS work mode (30003)
+will switch to remote EMS.
+21	Independent phase power control enable	40030	1	RW	U16	N/A	N/A	√	Valid only when output
+type is L1/L2/L3/N.
+To enable independent
+phase control, this
+parameter must be
+enabled.
+0: disabled
+1: enabled
+22	Remote EMS control mode	40031	1	RW	U16	N/A	N/A	√	√	Mode values’ definition
+refer to Appendix 6
+23	ESS max charging limit	40032	2	RW	U32	1000	kW	√	[0, Rated ESS charging
+power].
+Takes effect when Remote
+EMS control mode (40031)
+is 3 or 4.
+24	ESS max discharging limit	40034	2	RW	U32	1000	kW	√	[0, Rated ESS discharging
+power].
+Takes effect when Remote
+EMS control mode (40031)
+is 5 or 6.
+25	PV max power limit	40036	2	RW	U32	1000	kW	√	Takes effect when Remote
+EMS control mode (40031)
+is 3, 4, 5 or 6.
+26	[Grid Point] Maximum export limitation	40038	2	RW	U32	1000	kW	√	√	Grid Sensor needed.
+ Takes effect globally
+regardless of the EMS
+operating mode.
+27	[Grid Point] Maximum import limitation	40040	2	RW	U32	1000	kW	√	√	Grid Sensor needed.
+Takes effect globally
+regardless of the EMS
+operating mode.
+28	PCS maximum export limitation	40042	2	RW	U32	1000	kW	√	√	Range: [0, 0xFFFFFFFE]. With
+value 0xFFFFFFFF, register is
+--------------------------------------------------------------------------------------------------------------------------------
+
+ModbusProtocol 13/34
+not valid. In all other cases,
+Takes effect globally.
+29	PCS maximum import limitation	40044	2	RW	U32	1000	kW	√	√	Range: [0, 0xFFFFFFFE]. With
+value 0xFFFFFFFF, register is
+not valid. In all other cases,
+Takes effect globally.
+
+5.  3 Hybrid inverter running information address definition
+    (read-only register)
+
+The registers below can only be accessed with a valid Hybrid inverter’s Modbus
+slave address (1-246). When using PV string related registers, please refer to the
+PV count listed in Tabel2-1 in Chapter 2, to ensure if the register is available.
+
+Table 5-3 Hybrid inverter running information address definition
+
+| No. | Name                                                     | Add.  | QTY | Perm. | Data   Type | Gain | Unit  | Hybrid Inv,   PV inv. | Comment                                                                               |
+| :-- | :------------------------------------------------------- | :---- | :-- | :---- | :--------- | :--- | :---- | :--------------------- | :------------------------------------------------------------------------------------ |
+| 1   | 8Model type                                                  | 30500 | 15  | RO    | STRING     | N/A  | N/A   | √                      | √                                                                                     |
+| 2   | 9Serial number                                               | 30515 | 10  | RO    | STRING     | N/A  | N/A   | √                      | √                                                                                     |
+| 3   | 1 0Machine firmware      version                             | 30525 | 15  | RO    | STRING     | N/A  | N/A   | √                      | √                                                                                     |
+| 4   | 1 1Rated active power                                        | 30540 | 2   | RO    | U32        | 1000 | kW    | √                      | √                                                                                     |
+| 5   | 1 2Max.  apparent power                                      | 30542 | 2   | RO    | U32        | 1000 | kVA   | √                      | √                                                                                     |
+| 6   | 1 3Max. active power                                         | 30544 | 2   | RO    | U32        | 1000 | kW    | √                      | √                                                                                     |
+| 7   | 1 4Max.  absorption power                                     | 30546 | 2   | RO    | U32        | 1000 | kW    | √                      |                                                                                       |
+| 8   | 1 5Rated battery capacity                                    | 30548 | 2   | RO    | U32        | 100  | kWh   | √                      |                                                                                       |
+| 9   | 1 6[ESS] Rated charge      power                             | 30550 | 2   | RO    | U32        | 1000 | kW    | √                      |                                                                                       |
+| 10  | 1 7[ESS] Rated discharge     power                             | 30552 | 2   | RO    | U32        | 1000 | kW    | √                      |                                                                                       |
+| 11  | 1Reserved                                                 | 30554 | 12  | RO    | N/A	     |N/A	 |N/A    |                        |                                                                                       |
+-------------------------------------------------------------------------
+
+ModbusProtocol 14/34
+12	2	2	[ESS] Daily charge energy	30566	2	RO	U32	100	kWh	√
+13	2	3	[ESS] Accumulated charge energy	30568	4	RO	U64	100	kWh	√
+14	2	4	[ESS] Daily discharge energy	30572	2	RO	U32	100	kWh	√
+15	2	5	[ESS] Accumulated discharge energy	30574	4	RO	U64	100	kWh	√
+16	2	6	Running state	30578	1	RO	U16	N/A	N/A	√	√	Refer to Appendix 1
+17	2	7	Max. active power adjustment value	30579	2	RO	S32	1000	kW	√	√
+18	2	8	Min. active power adjustment value	30581	2	RO	S32	1000	kW	√
+19	2	9	Max. reactive power adjustment value fed to the ac terminal	30583	2	RO	U32	1000	kVar	√	√
+20	3	0	Max. reactive power adjustment value absorbed from the ac
+terminal	30585	2	RO	U32	1000	kVar	√	√
+21	3	1	Active power	30587	2	RO	S32	1000	kW	√	√
+22	3	2	Reactive power	30589	2	RO	S32	1000	kVar	√	√
+23	3	3	[ESS] Max. battery charge power	30591	2	RO	U32	1000	kW	√
+24	3	4	[ESS] Max. battery discharge power	30593	2	RO	U32	1000	kW	√
+25	3	5	[ESS] Available battery charge Energy	30595	2	RO	U32	100	kWh	√
+26	3	6	[ESS] Available battery discharge Energy	30597	2	RO	U32	100	kWh	√
+27	3	7	[ESS] Charge/      discharge power	30599	2	RO	S32	1000	kW	√
+28	3	8	[ESS] Battery SOC	30601	1	RO	U16	10	%	√
+29	3	9	[ESS] Battery SOH	30602	1	RO	U16	10	%	√
+30	4	0	[ESS] Average cell      temperature	30603	1	RO	S16	10	°C	√
+------------------------------------------------------------------------------
+
+ModbusProtocol	15/34
+31	4	1	[ESS] Average cell voltage	30604	1	RO	U16	1000	V	√
+32	4	2	Alarm1	30605	1	RO	U16	N/A	N/A	√	√	Refer	to	Appendix	2
+33	4	3	Alarm2	30606	1	RO	U16	N/A	N/A	√	√	Refer	to	Appendix	3
+34	4	4	Alarm3	30607	1	RO	U16	N/A	N/A	√	Refer	to	Appendix	4
+35	4	5	Alarm4	30608	1	RO	U16	N/A	N/A	√	√	Refer	to	Appendix	5
+36	Alarm5	30609	1	RO	U16	N/A	N/A	√	Refer	to	Appendix	11
+37	Reserved	30610	10	RO	N/A	N/A	N/A
+38	[ESS] Maximum battery (cluster) temperature	30620	1	RO	S16	10	°C	√
+39	[ESS] Minimum battery (cluster) temperature	30621	1	RO	S16	10	°C	√
+40	[ESS] Maximum battery (cluster) cell voltage	30622	1	RO	U16	1000	V	√
+41	[ESS] Minimum battery (cluster) cell voltage	30623	1	RO	U16	1000	V	√
+42	4	6	Rated grid voltage	31000	1	RO	U16	10	V	√	√
+43	4	7	Rated grid frequency	31001	1	RO	U16	100	Hz	√	√
+44	4	8	Grid frequency	31002	1	RO	U16	100	Hz	√	√
+45	4	9	[PCS] Internal      temperature	31003	1	RO	S16	10	°C	√	√
+46	5	0	Output type	31004	1	RO	U16	N/A	N/A	√	√	0:L/N
+1:L1/L2/L3
+2:L1/L2/L3/N
+3:L1/L2/N
+47	5	1	A-B line voltage	31005	2	RO	U32	100	V	√	√	Invalid	when	output
+type	is	L/N,	L1/L2/N,	or
+L1/L2/N48
+5	2	B-C line voltage	31007	2	RO	U32	100	V	√	√
+49	5	3	C-A line voltage	31009	2	RO	U32	100	V	√	√
+50	5	4	Phase A	voltage    	31011	2	RO	U32	100	V	√	√	Whenoutputtypeis
+L/N,	refers	to	“Phase
+voltage”
+
+---------------------------------------------------------------------------
+ModbusProtocol 16/34
+
+51	5	5	Phase B voltage	31013	2	RO	U32	100	V	√	√	Invalid	when	output type	is	L/N,	L1/L2/N,	or L1/L2/N
+52	5	6	Phase C voltage	31015	2	RO	U32	100	V	√	√
+53	5	7	Phase  A	current	31017	2	RO	S32	100	A	√	√	When	output	type	is L/N,	refers	to	“Phase current”
+54	5	8	Phase	B	current	31019	2	RO	S32	100	A	√	√	Invalid	when	output type	is	L/N,	L1/L2/N,	or L1/L2/N
+55	5	9	Phase	C	current	31021	2	RO	S32	100	A	√	√
+56	6	0	Power factor	31023	1	RO	U16	1000	N/A	√	√
+57	6	1	PACK count	31024	1	RO	U16	1	N/A	√
+58	6	2	PV	string	 count	31025	1	RO	U16	1	N/A	√	√
+59	6	3	MPPT count	31026	1	RO	U16	1	N/A	√	√
+60	6	4	PV1	voltage	31027	1	RO	S16	10	V	√	√	Please	refer	to	the	PV count	listed	in	Tabel2-1 in	chapter	2,	to	ensure if	the	register	is available.
+61	6	5	PV1 current	31028	1	RO	S16	100	A	√	√
+62	6	6	PV2	voltage	31029	1	RO	S16	10	V	√	√
+63	6	7	PV2	current	31030	1	RO	S16	100	A	√	√
+64	6	8	PV3	voltage	31031	1	RO	S16	10	V	√	√
+65	6	9	PV3	current	31032	1	RO	S16	100	A	√	√
+66	7	0	PV4	voltage	31033	1	RO	S16	10	V	√	√
+67	7	1	PV4	current	31034	1	RO	S16	100	A	√	√
+68	7	2	PV	power	31035	2	RO	S32	1000	kW	√	√
+69	7	3	Insulation resistance	31037	1	RO	U16	1000	MΩ	√	√
+-----------------------------------------------------------------------------------
+ModbusProtocol 17/34
+
+70	7	4	Startup	time	31038	2	RO	U32	1	s	√	√
+71	7	5	Shutdown time	31040	2	RO	U32	1	s	√	√
+72	PV5	voltage	31042	1	RO	S16	10	V	√	√	Please	refer	to	the	PV count	listed	in	Tabel2-1 in	chapter	2,	to	ensure if	the	register	is available.
+73	PV5	current	31043	1	RO	S16	100	A	√	√
+74	PV6	voltage	31044	1	RO	S16	10	V	√	√
+75	PV6	current	31045	1	RO	S16	100	A	√	√
+76	PV7	voltage	31046	1	RO	S16	10	V	√	√
+77	PV7	current	31047	1	RO	S16	100	A	√	√
+78	PV8	voltage	31048	1	RO	S16	10	V	√	√
+79	PV8	current	31049	1	RO	S16	100	A	√	√
+80	PV8	current	31050	1	RO	S16	10	V	√	√
+81		PV9 current	31051	1	RO	S16	100	A	√	√
+82		PV10 voltage	31052	1	RO	S16	10	V	√	√
+83		PV10 current	31053	1	RO	S16	100	A	√	√
+84		PV11 voltage	31054	1	RO	S16	10	V	√	√
+85		PV11 current	31055	1	RO	S16	100	A	√	√
+86		PV12 voltage	31056	1	RO	S16	10	V	√	√
+87		PV12 current	31057	1	RO	S16	100	A	√	√
+88	PV13 voltage	31058	1	RO	S16	10	V	√	√
+89	PV13	current	31059	1	RO	S16	100	A	√	√
+--------------------------------------------------------------------------
+ModbusProtocol                                                        18/34
+
+70 7 4 Startup time                                31038 2   RO U32 1     s   √   √
+71 7 5 Shutdown time                               31040 2   RO U32 1     s   √   √
+72 PV5 voltage                                   31042 1   RO S16 10    V   √   √   Please refer to the PV
+                                                                                    count listed in Tabel2-1
+                                                                                    in chapter 2, to ensure
+                                                                                    if the register is
+                                                                                    available.
+73 PV5 current                                   31043 1   RO S16 100   A   √   √
+74 PV6 voltage                                   31044 1   RO S16 10    V   √   √
+75 PV6 current                                   31045 1   RO S16 100   A   √   √
+76 PV7 voltage                                   31046 1   RO S16 10    V   √   √
+77 PV7 current                                   31047 1   RO S16 100   A   √   √
+78 PV8 voltage                                   31048 1   RO S16 10    V   √   √
+79 PV8 current                                   31049 1   RO S16 100   A   √   √
+80 PV8 current                                   31050 1   RO S16 10   V    √   √
+81 PV9 current                                    31051 1   RO S16 100   A   √   √
+82 PV10 voltage                                  31052 1   RO S16 10    V   √   √
+83 PV10 current                                  31053 1   RO S16 100   A   √   √
+84 PV11 voltage                                  31054 1   RO S16 10    V   √   √
+85 PV11 current                                  31055 1   RO S16 100   A   √   √
+86 PV12 voltage                                  31056 1   RO S16 10    V   √   √
+87 PV12 current                                  31057 1   RO S16 100   A   √   √
+88 PV13 voltage                                  31058 1   RO S16 10    V   √   √
+89 PV13 current                                  31059 1   RO S16 100   A   √   √
+
+------------------------------------------------------------------------------
+ModbusProtocol                                                        19/34
+90	PV14 voltage	31060	1	RO	S16	10	V	√	√
+91	PV14 current	31061	1	RO	S16	100	A	√	√
+92	PV15 voltage	31062	1	RO	S16	10	V	√	√
+93	PV15 current	31063	1	RO	S16	100	A	√	√
+94	PV16 voltage	31064	1	RO	S16	10	V	√	√
+95	PV16 current	31065	1	RO	S16	100	A	√	√
+96	[DC Charger] Vehicle battery voltage	31500	1	RO	U16	10	V	√
+97	[DC Charger]  Charging current	31501	1	RO	U16	10	A	√
+98	[DC Charger]  Output power	31502	2	RO	S32	1000	kW	√
+99	[DC Charger]  Vehicle SOC	31504	1	RO	U16	10	%	√
+100	[DC Charger]  Current charging capacity	31505	2	RO	U32	100	kWh	√	Single time
+101	[DC Charger] Current charging duration	31507	2	RO	U32	1	s	√	Single time
+
+5.4 Hybrid inverter parameter setting address definition (holding
+register)
+
+The registers below can only be accessed with a valid Hybrid inverter’s Modbus
+slave address (1-246).
+
+Table 5-4 Hybrid inverter parameter setting address definition
+
+|No.|	Name	|Add.|	QTY|	Perm.|	Data Type|	Gain|	Unit|	Hybrid Inv, PV inv.|	Comment|
+|----|-------------------------------|-------|-----|--------|------------|------|-------|-----------------------|------------------------|
+|1|		Start/Stop|	40500|	1|	WO|	U16	|N/A|	N/A|√|	√	|0: Stop 1: Start|
+|2	|	Grid code|	40501|	1|	RW|	U16|	N/A|	N/A|	√	|√|
+---------------------------------------------------------------------------------
+ModbusProtocol 20/34
+3	[DC Charger] Start/Stop	41000	1	WO	U16	N/A	N/A	√	0: Start
+1: Stop
+4	Remote EMS dispatch enable	41500	1	RW	U16	N/A	N/A	√	0: disabled
+1: enabled
+The enabled inverter
+only reacts on power
+control command from
+register: 41501, 41503,
+41505, 41506, 40507。
+5	Active power fixed value adjustment	41501	2	RW	S32	1000	kW	√
+6	Reactive powerfixed value adjustment	41503	2	RW	S32	1000	kVar	√
+7	Active power percentage adjustment	41505	1	RW	S16	100	%	√
+8	Reactive powerQ/S adjustment	41506	1	RW	S16	100	%	√
+9	Power factor adjustment	41507	1	RW	S16	1000	N/A	√
+
+5.  5 AC-Charger running information address definition (read-only
+    register)
+
+The registers below can only be accessed with a valid AC-Charger’s Modbus
+slave address (1-246). And are only applicable for “EVAC” devices.
+
+Table 5-5 AC-Charger running information address definition
+
+|No.|	Name	|Add.|QTY	|Perm.|	Data Type|	Gain|	Unit|	Comment|
+|----|-------------------|-----|-----|------|----------|------|--------|----------|
+|1|	System state|32000	|1	|RO	|U16	|N/A	|N/A      |System states according to  IEC61851-1 definition.   Refer to Appendix 7.|
+|2|	Total energy consumed|	32001|	2|	RO|	U32|	100	|kWh||
+|3|Charging	power|	32003|	2	|RO	|S32	|1000	|kW||
+|4	|Rated power|	32005|	2	|RO|	U32|	1000|	kW||
+|5	|Rated current	|32007	|2	|RO|	S32	|100|	A||
+|6	|Rated voltage	|32009	|1	|RO	|U16	|10|	V||
+|7|AC-Charger input breaker rated current	|32010	|2	|RO	|S32	|100	|A||
+|8	|Alarm1|	32012	|1	|RO|	U16|	N/A|	N/A|	Refer to Appendix 8|
+|9|	Alarm2	|32013	|1	|RO	|U16|	N/A	|N/A	|Refer to Appendix 9|
+|10	|Alarm3	|32014	|1	|RO	|U16	|N/A	|N/A	|Refer to Appendix 10|
+--------------------------------------------------------------------------------
+
+ModbusProtocol 21/34
+
+5.  6 AC-Charger parameter setting address definition (holding
+    register)
+
+The registers below can only be accessed with a valid AC-Charger’s modbus
+slave address (1-246). And are only applicable for “EVAC” devices.
+
+Table 5-6 AC-Charger parameter setting address definition
+
+|No.|	Name	|Add.|	QTY	|Perm.|	Data Type|	Gain	|Unit|	Comment|
+|----|---------------------|------|------|-----|-----------|-------|-------|------------------------|
+|1|	Start/Stop|	42000|	1|	WO|	U16	|N/A|	N/A|0: Start       1: Stop|
+|2	|Charger output current	|42001	|2	|RW	|U32|	100|	N/A|	[6, X]          X is the smaller value between the rated current and the AC-Charger  input breaker rated  current.|
+
+6. Modbus Protocol Command Overview
+
+(1) MODBUS-RTU frame format
+
+Filed                 Length (Bytes)    Description
+Slave Address         1                 Customized by user (1~247)
+PDU                        X                 Described in chapter 6.1
+Error Check      2                 Crc16 check. It is worth pointing out that the byte order of CRC16 is the little-end mode
+
+(2) MODBUS-TCP frame format
+
+Filed                 Length (Bytes)  Description
+Transmission          2               Matching identifier between a request
+identifier                          frame and a response frame
+Protocol type         2               0=Modbus protocol
+Data length           2               Follow-up data length
+Slave Address         1               Customized by user (1~247)
+
+6.1 Function code
+Index   Function code   Description
+1          0x03         Read Read-only Register (RO)
+2          0x04         Read Holding Register (RW/WO)
+3          0x06         Write a single Register
+4   	   0x10	        Write multiple Registers
+
+------------------------------------------------------------------------------
+ModbusProtocol 22/34
+6.1.1 Read Read-only Register
+
+Request
+
+Filed	Length (Bytes)	Description
+Slave address	1 Byte	1~247
+Function code	1 Byte	0x03
+Starting address	2 Bytes	0x0000~0xFFFF
+Quantity of registers	2 Bytes	1~124
+
+Response
+
+Filed	Length (Bytes)	Description
+Slave address	1 Byte	1~247
+Function code	1 Byte	0x03
+Byte count	1 Byte	2 x N
+Register value	2 x N Bytes	N = Quantity of Registers
+
+Error
+
+Filed	Length (Bytes)	Description
+Slave address	1 Byte	1~247
+Error code	1 Byte	0x83
+Exception code	1 Byte	01 or 02 or 03 or 04
+
+Example PDU: The following example contains only the slave address and the
+Protocol Data Unit (PDU). If using Modbus RTU mode, a CRC16 should be added
+at the end; if using Modbus TCP mode, an MBAP header should be added at the
+beginning.
+
+Example Meaning: Read the Rated active power register of the hybrid inverter
+with Modbus slave address 1.
+
+Host Query Command: 01 03 77 4C 00 02
+
+Slave Normal Response: 01 03 04 00 00 61 A8
+
+Slave Exception Response: 01 83 04
+
+6.1.2 Read Holding Register
+Request
+
+Filed	Length (Bytes)	Description
+Slave address	1 Byte	1~247
+Function code	1 Byte	0x04
+Starting address	2 Bytes	0x0000~0xFFFF
+Quantity of registers	2 Bytes	1~124
+
+Response
+-----------------------------------------------------------
+ModbusProtocol 23/34
+
+Filed	Length (Bytes)	Description
+Slave address	1 Byte	1~247
+Function code	1 Byte	0x04
+Byte count	1 Byte	2 x N
+Register value	2 x N Bytes	N = Quantity of Registers
+
+Error
+
+Filed	Length (Bytes)	Description
+Slave address	1 Byte	1~247
+Error code	1 Byte	0x84
+Exception code	1 Byte	01 or 02 or 03 or 04
+
+Example PDU: The following example contains only the slave address and the
+Protocol Data Unit (PDU). If using Modbus RTU mode, a CRC16 should be added
+at the end; if using Modbus TCP mode, an MBAP header should be added at the
+beginning.
+
+Example Meaning: Read the Active power fixed adjustment target value register
+of a power plant with Modbus slave address 247.
+
+Host Query Command: F7 04 9C 41 00 02
+
+Slave Normal Response: F7 04 04 00 00 61 A8
+
+Slave Exception Response: F7 83 04
+
+6.1.3 Write a single Register
+
+Request
+
+Filed	Length (Bytes)	Description
+Slave address	1 Byte	0~247
+Function code	1 Byte	0x06
+Register address	2 Bytes	0x0000~0xFFFF
+Register value	2 Bytes	0x0000~0xFFFF
+
+Response
+
+Filed	Length (Bytes)	Description
+Slave address	1 Byte	1~247
+---------------------------------------------------------------
+ModbusProtocol	24/34
+Function	code	1	Byte	0x06
+Register	address	2	Bytes	0x0000~0xFFFF
+Register	value	2	Bytes	0x0000~0xFFFF
+
+Error
+
+Filed	Length	(Bytes)	Description
+Slave	address	1	Byte	1~247
+Error	code	    1	Byte	0x86
+Exception	code	1	Byte	01	or	02	or	03	or	04
+
+Example	PDU:	The	following	example	contains	only	the	slave	address	and	the
+Protocol	Data	Unit	(PDU).	If	using	Modbus	RTU	mode,	a	CRC16	should	be	added
+at	the	end;	if	using	Modbus	TCP	mode,	an	MBAP	header	should	be	added	at	the
+beginning.
+
+Example	Meaning:	Write	the	Grid	code	register	of	the	hybrid	inverter	with
+Modbus	slave	address	1.
+
+Host	Query	Command:	01	06	9E	34	00	01
+
+Slave	Normal	Response:	01	06	9E	34	00	01
+
+Slave	Exception	Response:	01	86	04
+
+6.1.4	Write multiple Registers
+
+Request
+
+Filed	Length(Bytes)	Description
+Slaveaddress	1Byte	0~247
+Functioncode	1Byte	0x10
+Startingaddress	2Bytes	0x0000~0xFFFF
+Quantityofregisters	2Bytes	1~123
+Bytecount	1Byte	2 x N
+Registersvalue	2 x N Bytes	N = Quantity of Registers
+
+Response
+
+Filed	Length(Bytes)	Description
+Slaveaddress	1Byte	1~247
+
+--------------------------------------------------------------------------------
+ModbusProtocol 25/34
+
+Functioncode	1Byte	0x10
+Startingaddress	2Bytes	0x0000~0xFFFF
+Quantityofregisters	2Bytes	1~123
+
+Error
+
+Filed	Length(Bytes)	Description
+Slaveaddress	1Byte	1~247
+Errorcode	1Byte	0x90
+Exceptioncode	1Byte	01or02or03or04
+
+ExamplePDU:Thefollowingexamplecontainsonlytheslaveaddressandthe
+ProtocolDataUnit(PDU).IfusingModbusRTUmode,aCRC16shouldbeadded
+attheend;ifusingModbusTCPmode,anMBAPheadershouldbeaddedatthe
+beginning.
+
+ExampleMeaning:WritetheActivepowerfixedadjustmenttargetvalueregister
+ofapowerplantwithModbusslaveaddress247.
+
+HostQueryCommand:F7109C41000204000061A8
+
+SlaveNormalResponse:F7109C410002
+
+SlaveExceptionResponse:F79004
+
+6.2Exceptioncode
+
+Code	Name	Meaning
+0x01	ILLEGALFUNCTION	Thefunctioncodereceivedinthequeryisnot
+anallowableactionfortheserver(orslave).
+Thismaybebecausethefunctioncodeisonly
+applicabletonewerdevices,andwasnot
+implementedintheunitselected.Itcouldalso
+indicatethattheserver(orslave)isinthe
+wrongstatetoprocessarequestofthistype,
+forexamplebecauseitisunconfiguredandis
+beingaskedtoreturnregistervalues.
+0x02	ILLEGALDATAADDRESS	Thedataaddressreceivedinthequeryisnot
+anallowableaddressfortheserver(orslave).
+--------------------------------------------------------------------------
+ModbusProtocol                                                        26/34
+
+Function code	1 Byte	0x10
+Starting address	2 Bytes	0x0000~0xFFFF
+Quantity of registers	2 Bytes	1~123
+
+Error
+
+| Field             | Length (Bytes) | Description                  |
+|-------------------|----------------|------------------------------|
+| Slave address     | 1 Byte         | 1~247                        |
+| Error code        | 1 Byte         | 0x90                         |
+| Exception code    | 1 Byte         | 01 or 02 or 03 or 04        |
+
+Example PDU: The following example contains only the slave address and the
+Protocol Data Unit (PDU). If using Modbus RTU mode, a CRC16 should be added
+at the end; if using Modbus TCP mode, an MBAP header should be added at the
+beginning.
+
+Example Meaning: Write the Active power fixed adjustment target value register
+of a power plant with Modbus slave address 247.
+
+Host Query Command: F7 10 9C 41 00 02 04 00 00 61 A8
+
+Slave Normal Response: F7 10 9C 41 00 02
+
+Slave Exception Response: F7 90 04
+
+6.2 Exception code
+
+| Code | Name             | Meaning                                                                                                                                                                                                                                                                   |
+|------|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 0x01 | ILLEGAL FUNCTION | The function code received in the query is not  an allowable action for the server (or slave).  This may be because the function code is only  applicable to newer devices, and was not  implemented in the unit selected. It could also  indicate that the server (or slave) is in the  wrong state to process a request of this type,  for example because it is unconfigured and is  being asked to return register values. |
+| 0x02 | ILLEGAL DATA ADDRESS   |The data address received in the query is not an allowable address for the server (or slave).                                                                               |
+---------------------------------------------------------------------
+
+ModbusProtocol	27/34
+More	specifically,	the	combination	of	reference
+number	and	transfer	length	is	invalid.
+0x03	ILLEGAL	DATA	VALUE	A	value	contained	in	the	query	data	field	is	not
+an	allowable	value	for	server	(or	slave).	This
+indicates	a	fault	in	the	structure	of	the
+remainder	of	a	complex	request,	such	as	that
+the	implied
+length	is	incorrect.	It	specifically	does	NOT
+mean	that	a	data	item	submitted	for	storage	in
+a	register	has	a	value	outside	the	expectation
+of	the	applicationprogram,	since	the	MODBUS
+protocol	is	unaware	of	the	significance	of	any
+particular	value	of	any	particular	register.
+0x04	SLAVE	DEVICE	FAILURE	An	unrecoverable	error	occurred	while	the
+server	(or	slave)	was	attempting	to	perform	the
+requested	action.
+
+----------------------------------------------------------------------
+Modbus	Protocol	28/34
+Appendix	1	Running	state
+Running	State	Value
+Standby	0x00
+Running	0x01
+Fault	0x02
+Shutdown	0x03
+
+Appendix	2	PCS	alarm	code	--1
+Alarm	Code	Alarm	Description	Bit	Severity Level
+1001	Software	version	mismatch	0	Critical
+1002	Low	insulation	resistance	1	Critical
+1003	Over-temperature	2	Critical
+1004	Equipment	fault	3	Critical
+1005	System	grounding	fault	4	General
+1006	PV	string	over-voltage	5	Critical
+1007	PV	string	reversely	connected	6	Critical
+1008	PV	string	back-filling	7	Critical
+1009	AFCI	fault	8	Critical
+1010	Grid	power	outage	9	Critical
+1011	Grid	over-voltage	10	Critical
+---------------------------------------------------------------------------------
+Modbus	Protocol	29/34
+1012	Grid	under-voltage	11	Critical
+1013	Grid	over-frequency	12	Critical
+1014	Grid	under-frequency	13	Critical
+1015	Grid	voltage	imbalance	14	Critical
+1016	DC	component	of	output	current	out	of	limit	15	Critical
+
+Appendix	3	PCS	alarm	code	--2
+Alarm	Code	Alarm	Description	Bit	Severity Level
+1017	Leak	current	out	of	limit	0	Critical
+1018	Communication	abnormal	1	General
+1019	System	internal	protection	2	Critical
+1020	AFCI	self-checking	circuit	fault	3	Critical
+1021	Off-grid	protection	4	Critical
+1022	Manual	operation	protection	5	Critical
+1024	Abnormal	phase	sequence	7	Critical
+1025	Short	circuit	to	PE	8	Critical
+1026	Soft	start	failure	9	Critical
+Not	defined	Not	defined	Not defined
+
+------------------------------------------------------------------------
+ModbusProtocol	30/34
+Appendix	4	ESS	alarm	code
+Alarm	Code	Alarm	Description	Bit	Severity Level
+2001	Software	version	mismatch	0	Critical
+2002	The	energy	storage	module	has	low	insulation	resistance	to	ground	1	General
+2003	The	temperature	is	too	high	2	Critical
+2004	Equipment	fault	3	Critical
+2005	Under-temperature	4	Critical
+2008	Internal	protection	5	Critical
+2009	Thermal	runaway	6	Critical
+Not	defined	Not	defined	Not defined
+Appendix	5	Gateway	alarm	code
+Alarm	Code	Alarm	Description	Bit	Severity Level
+3001	Software	version	mismatch	0	Critical
+3002	The	temperature	is	too	high	1	Critical
+3003	Equipment	fault	2	Critical
+3004	Excessive	leakage	current	in
+off-grid	output	3	Critical
+----------------------------------------------------------------------------
+Modbus	Protocol        31/34	
+3005	N	line	grounding	fault		4	Critical
+3006	Abnormal	phase	sequence	of	grid wiring	5	Critical
+3007	Abnormal	phase	sequence	of inverter	wiring	6	Critical
+3008	Grid	phase	loss	7	Critical	
+Not	defined	Not	defined	Not defined
+Appendix	6	Remote	EMS	control	mode
+Remote	EMS	control	mode	Value
+PCS	remote	control	0x00
+Standby	0x01
+Maximumself-consumption	0x02
+Command	charging
+(consume	grid	power	first)	0x03
+Command	charging
+(consume	PV	power	first)	0x04
+Command	discharging
+(output	from	PV	first)	0x05
+Command	discharging
+(output	from	ESS	first)	0x06
+-------------------------------------------------------------------------------
+Modbus	Protocol	32/34
+Appendix	7	AC-Charger	system	state
+System	State	Value
+System	innit	0x00
+A1/A2	0x01
+B1	0x02
+B2	0x03
+C1	0x04
+C2	0x05
+F	0x06
+E	0x07
+Appendix	8	AC-Charger	alarm	code	--1
+Alarm	Code	Alarm	Description	Bit	Severity	Level
+5001_1	Grid	overvoltage	0	Critical
+5001_2	Grid	undervoltage	1	Critical
+5001_3	Overload	2	Critical
+5001_4	Short	circuit	3	Critical
+5001_5	Charging	output	overcurrent	4	Critical
+5001_6	Leak	current	out	of	limit	5	Critical
+---------------------------------------------------------------
+Modbus	Protocol	33/34
+5001_7	Grounding	fault	6	Critical
+5001_8	Abnormal	phase	sequence	of	grid wiring	7	Critical
+5001_9	PEN	Fault	8	Critical
+Not	defined	Not	defined	Not	defined
+Appendix	9	AC-Charger	alarm	code	--2
+Alarm	Code	Alarm	Description	Bit	SeverityLevel
+5002_1	Leak	current	detection	circuit	fault	0	Critical
+5002_2	Relay	stuck	1	Critical
+5002_3	Pilot	circuit	fault	2	Critical
+5002_4	Auxiliary	power	supply	module	fault 3	Critical
+5002_5	Electric	lock	fault	4	Critical
+5002_6	Lamp	panel	communication	fault	5	General
+Not	defined	Not	defined	Not defined
+--------------------------------------------------------------------
+Modbus	Protocol                                                 34/34
+Appendix	10	AC-Charger	alarm	code--3
+Alarm	Code	Alarm	Description	Bit	Severity	Level
+5003	Too	high	internal	temperature	0	Critical
+5004	Charging	cable	fault	1	Critical
+5005	Meter	communication	fault	2	General
+Not	defined	Not	defined	Not	defined
+
+Appendix	11	DC-Charger alarm	code
+Alarm	Code	Alarm	Description	Bit	SeverityLevel
+5101	Software	version	mismatch	0	Critical
+5102	Low	insulation	resistance	to ground	1	Critical
+5103	Over-temperature	2	Critical
+5104	Equipment	fault	3	Critical
+5105	Charging	fault	4	Critical
+5106	Equipment	protection	5	Critical
+Not	defined	Not	defined	Not	defined
+--------------------------------------------------------------------
