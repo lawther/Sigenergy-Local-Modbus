@@ -1173,19 +1173,19 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         description="Alarm5 (Refer to Appendix 11)",
         applicable_to=["hybrid_inverter"],
     ),
-    "ess_maximum_battery_temperature": ModbusRegisterDefinition(
-        address=30620,
-        count=1,
-        register_type=RegisterType.READ_ONLY,
-        data_type=DataType.S16,
-        gain=10,
-        unit=UnitOfTemperature.CELSIUS,
-        description="Battery Maximum Temperature",
-        applicable_to=["hybrid_inverter"],
-    ),
     # 
     # The following registers are not used in the current firmware version  V100R001C21 (01/03/2025)
     # 
+    # "ess_maximum_battery_temperature": ModbusRegisterDefinition(
+    #     address=30620,
+    #     count=1,
+    #     register_type=RegisterType.READ_ONLY,
+    #     data_type=DataType.S16,
+    #     gain=10,
+    #     unit=UnitOfTemperature.CELSIUS,
+    #     description="Battery Maximum Temperature",
+    #     applicable_to=["hybrid_inverter"],
+    # ),
     # "ess_minimum_battery_temperature": ModbusRegisterDefinition(
     #     address=30621,
     #     count=1,
