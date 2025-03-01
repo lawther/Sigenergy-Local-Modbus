@@ -121,7 +121,17 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Store the basic connection information
         self._data.update(user_input)
         
-        # Proceed to device type selection
+        # Check if any plants exist in the system
+        await self._async_load_plants()
+        has_plants = len(self._plants) > 0
+        
+        # If no plants exist, go directly to plant configuration
+        # bypassing the device type selection
+        if not has_plants:
+            self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_NEW_PLANT
+            return await self.async_step_plant_config()
+        
+        # Proceed to device type selection if plants already exist
         return await self.async_step_device_type()
 
     async def async_step_device_type(
