@@ -121,18 +121,25 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Store the basic connection information
         self._data.update(user_input)
         
-        # Check if any plants exist in the system
+        # Clear existing data
+        self._plants = {}
+        
+        # Load plants from config entries
         await self._async_load_plants()
+        _LOGGER.debug("Plants after loading: %s", self._plants)
         has_plants = len(self._plants) > 0
+        _LOGGER.debug("Has plants: %s", has_plants)
         
         # If no plants exist, go directly to plant configuration
-        # bypassing the device type selection
         if not has_plants:
             self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_NEW_PLANT
             return await self.async_step_plant_config()
         
-        # Proceed to device type selection if plants already exist
-        return await self.async_step_device_type()
+        # Explicitly show device type selection if plants exist
+        return self.async_show_form(
+            step_id=STEP_DEVICE_TYPE,
+            data_schema=STEP_DEVICE_TYPE_SCHEMA,
+        )
 
     async def async_step_device_type(
         self, user_input: dict[str, Any] | None = None
@@ -402,9 +409,21 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_load_plants(self) -> None:
         """Load existing plants from config entries."""
         self._plants = {}
+        
+        # Log the number of config entries for debugging
+        _LOGGER.debug("Total config entries: %s", len(self.hass.config_entries.async_entries(DOMAIN)))
+        
         for entry in self.hass.config_entries.async_entries(DOMAIN):
+            # Log each entry to see what's being found
+            _LOGGER.debug("Found entry: %s, device type: %s", 
+                        entry.entry_id, 
+                        entry.data.get(CONF_DEVICE_TYPE))
+                        
             if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT, DEVICE_TYPE_NEW_PLANT]:
                 self._plants[entry.entry_id] = entry.data.get(CONF_NAME, f"Plant {entry.entry_id}")
+                
+        # Log the plants that were found
+        _LOGGER.debug("Found plants: %s", self._plants)
 
     async def _async_load_inverters(self) -> None:
         """Load existing inverters from config entries."""
