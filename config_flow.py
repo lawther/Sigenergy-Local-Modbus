@@ -22,6 +22,7 @@ from .const import (
     CONF_INVERTER_SLAVE_IDS,
     CONF_PARENT_DEVICE_ID,
     CONF_PLANT_ID,
+    CONF_SLAVE_ID,
     DEFAULT_AC_CHARGER_COUNT,
     DEFAULT_DC_CHARGER_COUNT,
     DEFAULT_INVERTER_COUNT,
@@ -47,13 +48,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 # Schema definitions for each step
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_HOST): str,
-        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
-    }
-)
+STEP_USER_DATA_SCHEMA = vol.Schema({})  # Empty schema for initial step
 
 STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
     {
@@ -73,6 +68,9 @@ STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
 
 STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
     {
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+        vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
         vol.Required(CONF_PLANT_ID, default=DEFAULT_SLAVE_ID): int,
         vol.Required(CONF_INVERTER_COUNT, default=DEFAULT_INVERTER_COUNT): int,
         vol.Required(CONF_AC_CHARGER_COUNT, default=DEFAULT_AC_CHARGER_COUNT): int,
@@ -113,12 +111,29 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle the initial step."""
+        # Initialize data if needed
         if user_input is None:
+            # Clear existing data
+            self._plants = {}
+            
+            # Load plants from config entries
+            await self._async_load_plants()
+            _LOGGER.debug("Plants after loading: %s", self._plants)
+            has_plants = len(self._plants) > 0
+            _LOGGER.debug("Has plants: %s", has_plants)
+            
+            # If no plants exist, go directly to plant configuration
+            if not has_plants:
+                self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_NEW_PLANT
+                return await self.async_step_plant_config()
+            
+            # Show device type selection if plants exist
             return self.async_show_form(
-                step_id=STEP_USER, data_schema=STEP_USER_DATA_SCHEMA
+                step_id=STEP_DEVICE_TYPE,
+                data_schema=STEP_DEVICE_TYPE_SCHEMA,
             )
-
-        # Store the basic connection information
+        
+        # Store any user input (this will be empty for the initial step with our new flow)
         self._data.update(user_input)
         
         # Clear existing data
@@ -126,16 +141,14 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         # Load plants from config entries
         await self._async_load_plants()
-        _LOGGER.debug("Plants after loading: %s", self._plants)
         has_plants = len(self._plants) > 0
-        _LOGGER.debug("Has plants: %s", has_plants)
         
         # If no plants exist, go directly to plant configuration
         if not has_plants:
             self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_NEW_PLANT
             return await self.async_step_plant_config()
         
-        # Explicitly show device type selection if plants exist
+        # Show device type selection if plants exist
         return self.async_show_form(
             step_id=STEP_DEVICE_TYPE,
             data_schema=STEP_DEVICE_TYPE_SCHEMA,
@@ -229,7 +242,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data[CONF_DC_CHARGER_COUNT] = DEFAULT_DC_CHARGER_COUNT
         self._data[CONF_DC_CHARGER_SLAVE_IDS] = []
         
-        # Create the configuration entry
+        # Create the configuration entry with the name from user input
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
 
     async def async_step_inverter_config(

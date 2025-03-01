@@ -21,6 +21,9 @@
         "title": "Plant Configuration",
         "description": "Configure the plant settings.",
         "data": {
+          "host": "Host",
+          "port": "Port",
+          "name": "Name",
           "plant_id": "Plant ID",
           "inverter_count": "Number of inverters",
           "ac_charger_count": "Number of AC chargers"
