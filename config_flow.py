@@ -1,4 +1,6 @@
 """Config flow for Sigenergy ESS integration."""
+# pylint: disable=import-error
+# pyright: reportMissingImports=false
 from __future__ import annotations
 
 import logging
@@ -298,6 +300,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         # Get plant configuration for the inverter
         parent_id = user_input[CONF_PARENT_DEVICE_ID]
+        _LOGGER.debug("Selected plant ID for inverter configuration: %s", parent_id)
         for entry in self.hass.config_entries.async_entries(DOMAIN):
             if entry.entry_id == parent_id:
                 # Copy network configuration from parent plant
@@ -307,6 +310,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # THIS IS THE IMPORTANT ADDITION
                 # Store the plant's modbus ID - crucial for association
                 self._data[CONF_PLANT_ID] = entry.data.get(CONF_PLANT_ID)
+                _LOGGER.debug("Associated inverter with plant modbus ID: %s", self._data[CONF_PLANT_ID])
                 
                 # Also, mark the device type as specific to child inverters
                 self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_INVERTER

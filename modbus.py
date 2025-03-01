@@ -1,4 +1,6 @@
 """Modbus communication for Sigenergy ESS."""
+# pylint: disable=import-error
+# pyright: reportMissingImports=false
 from __future__ import annotations
 
 import asyncio

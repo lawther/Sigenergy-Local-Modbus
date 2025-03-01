@@ -1,4 +1,5 @@
 """Data update coordinator for Sigenergy ESS."""
+# pylint: disable=import-error
 from __future__ import annotations
 
 import asyncio
