@@ -31,11 +31,27 @@ CONF_AC_CHARGER_COUNT = "ac_charger_count"
 CONF_DC_CHARGER_COUNT = "dc_charger_count"
 CONF_INVERTER_SLAVE_IDS = "inverter_slave_ids"
 CONF_AC_CHARGER_SLAVE_IDS = "ac_charger_slave_ids"
+CONF_DC_CHARGER_SLAVE_IDS = "dc_charger_slave_ids"
+CONF_DEVICE_TYPE = "device_type"
+CONF_PARENT_DEVICE_ID = "parent_device_id"
+
+# Configuration step identifiers
+STEP_USER = "user"
+STEP_DEVICE_TYPE = "device_type"
+STEP_PLANT_CONFIG = "plant_config"
+STEP_INVERTER_CONFIG = "inverter_config"
+STEP_AC_CHARGER_CONFIG = "ac_charger_config"
+STEP_DC_CHARGER_CONFIG = "dc_charger_config"
+STEP_SELECT_PLANT = "select_plant"
+STEP_SELECT_INVERTER = "select_inverter"
+
+# Device type options
+DEVICE_TYPE_NEW_PLANT = "new_plant"
 
 # Default values
 DEFAULT_PORT = 502
 DEFAULT_SLAVE_ID = 247  # Plant address
-DEFAULT_SCAN_INTERVAL = 30
+DEFAULT_SCAN_INTERVAL = 5
 DEFAULT_INVERTER_COUNT = 1
 DEFAULT_AC_CHARGER_COUNT = 0
 DEFAULT_DC_CHARGER_COUNT = 0
@@ -1932,5 +1948,158 @@ AC_CHARGER_PARAMETER_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="Charger output current ([6, X] X is the smaller value between the rated current and the AC-Charger input breaker rated current.)",
+    ),
+}
+
+# DC Charger register definitions
+DC_CHARGER_RUNNING_INFO_REGISTERS = {
+    "model_type": ModbusRegisterDefinition(
+        address=33000,
+        count=15,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.STRING,
+        gain=1,
+        description="Model Type",
+    ),
+    "serial_number": ModbusRegisterDefinition(
+        address=33015,
+        count=10,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.STRING,
+        gain=1,
+        description="Serial Number",
+    ),
+    "firmware_version": ModbusRegisterDefinition(
+        address=33025,
+        count=15,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.STRING,
+        gain=1,
+        description="Firmware Version",
+    ),
+    "rated_power": ModbusRegisterDefinition(
+        address=33040,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="Rated Power",
+    ),
+    "output_voltage": ModbusRegisterDefinition(
+        address=33042,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U16,
+        gain=10,
+        unit=UnitOfElectricPotential.VOLT,
+        description="Output Voltage",
+    ),
+    "output_current": ModbusRegisterDefinition(
+        address=33043,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U16,
+        gain=10,
+        unit=UnitOfElectricCurrent.AMPERE,
+        description="Output Current",
+    ),
+    "output_power": ModbusRegisterDefinition(
+        address=33044,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="Output Power",
+    ),
+    "vehicle_soc": ModbusRegisterDefinition(
+        address=33046,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U16,
+        gain=10,
+        unit=PERCENTAGE,
+        description="Vehicle State of Charge",
+    ),
+    "charging_capacity": ModbusRegisterDefinition(
+        address=33047,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Charging Capacity (Single Time)",
+    ),
+    "charging_duration": ModbusRegisterDefinition(
+        address=33049,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=1,
+        unit="s",
+        description="Charging Duration (Single Time)",
+    ),
+    "running_state": ModbusRegisterDefinition(
+        address=33051,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U16,
+        gain=1,
+        description="Running State (Refer to Appendix 1)",
+    ),
+    "alarm1": ModbusRegisterDefinition(
+        address=33052,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U16,
+        gain=1,
+        description="Alarm1",
+    ),
+    "alarm2": ModbusRegisterDefinition(
+        address=33053,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U16,
+        gain=1,
+        description="Alarm2",
+    ),
+    "total_energy_delivered": ModbusRegisterDefinition(
+        address=33054,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total Energy Delivered",
+    ),
+}
+
+DC_CHARGER_PARAMETER_REGISTERS = {
+    "start_stop": ModbusRegisterDefinition(
+        address=43000,
+        count=1,
+        register_type=RegisterType.WRITE_ONLY,
+        data_type=DataType.U16,
+        gain=1,
+        description="Start/Stop DC Charger (0: Start 1: Stop)",
+    ),
+    "max_charging_current": ModbusRegisterDefinition(
+        address=43001,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=10,
+        unit=UnitOfElectricCurrent.AMPERE,
+        description="Maximum Charging Current",
+    ),
+    "target_soc": ModbusRegisterDefinition(
+        address=43002,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=10,
+        unit=PERCENTAGE,
+        description="Target State of Charge",
     ),
 }

@@ -7,16 +7,66 @@
         "data": {
           "host": "Host",
           "port": "Port",
-          "name": "Name",
+          "name": "Name"
+        }
+      },
+      "device_type": {
+        "title": "Select Device Type",
+        "description": "Choose the type of device you want to add.",
+        "data": {
+          "device_type": "Device Type"
+        }
+      },
+      "plant_config": {
+        "title": "Plant Configuration",
+        "description": "Configure the plant settings.",
+        "data": {
           "plant_id": "Plant ID",
           "inverter_count": "Number of inverters",
           "ac_charger_count": "Number of AC chargers"
+        }
+      },
+      "inverter_config": {
+        "title": "Inverter Configuration",
+        "description": "Configure the inverter settings.",
+        "data": {
+          "inverter_count": "Number of inverters"
+        }
+      },
+      "ac_charger_config": {
+        "title": "AC Charger Configuration",
+        "description": "Configure the AC charger settings.",
+        "data": {
+          "ac_charger_count": "Number of AC chargers"
+        }
+      },
+      "dc_charger_config": {
+        "title": "DC Charger Configuration",
+        "description": "Configure the DC charger settings.",
+        "data": {
+          "dc_charger_count": "Number of DC chargers"
+        }
+      },
+      "select_plant": {
+        "title": "Select Plant",
+        "description": "Choose the plant to connect this device to.",
+        "data": {
+          "parent_device_id": "Parent Plant"
+        }
+      },
+      "select_inverter": {
+        "title": "Select Inverter",
+        "description": "Choose the inverter to connect this DC charger to.",
+        "data": {
+          "parent_device_id": "Parent Inverter"
         }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect to the Sigenergy system. Please check the host and port.",
-      "unknown": "An unexpected error occurred."
+      "unknown": "An unexpected error occurred.",
+      "no_plants": "No plants found in the system. Please add a plant first.",
+      "no_inverters": "No inverters found in the system. Please add an inverter first."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured."

@@ -18,11 +18,14 @@ from pymodbus.payload import BinaryPayloadBuilder, BinaryPayloadDecoder
 from .const import (
     CONF_AC_CHARGER_COUNT,
     CONF_AC_CHARGER_SLAVE_IDS,
+    CONF_DC_CHARGER_COUNT,
+    CONF_DC_CHARGER_SLAVE_IDS,
     CONF_INVERTER_COUNT,
     CONF_INVERTER_SLAVE_IDS,
     CONF_PLANT_ID,
     CONF_SLAVE_ID,
     DEFAULT_AC_CHARGER_COUNT,
+    DEFAULT_DC_CHARGER_COUNT,
     DEFAULT_INVERTER_COUNT,
     DEFAULT_SLAVE_ID,
     DataType,
@@ -32,6 +35,8 @@ from .const import (
     INVERTER_PARAMETER_REGISTERS,
     AC_CHARGER_RUNNING_INFO_REGISTERS,
     AC_CHARGER_PARAMETER_REGISTERS,
+    DC_CHARGER_RUNNING_INFO_REGISTERS,
+    DC_CHARGER_PARAMETER_REGISTERS,
     RegisterType,
 )
 
@@ -65,6 +70,7 @@ class SigenergyModbusHub:
         self.plant_id = config_entry.data.get(CONF_PLANT_ID, DEFAULT_SLAVE_ID)
         self.inverter_count = config_entry.data.get(CONF_INVERTER_COUNT, DEFAULT_INVERTER_COUNT)
         self.ac_charger_count = config_entry.data.get(CONF_AC_CHARGER_COUNT, DEFAULT_AC_CHARGER_COUNT)
+        self.dc_charger_count = config_entry.data.get(CONF_DC_CHARGER_COUNT, DEFAULT_DC_CHARGER_COUNT)
         
         # Get specific slave IDs if configured
         self.inverter_slave_ids = config_entry.data.get(
@@ -72,6 +78,10 @@ class SigenergyModbusHub:
         )
         self.ac_charger_slave_ids = config_entry.data.get(
             CONF_AC_CHARGER_SLAVE_IDS, list(range(self.inverter_count + 1, self.inverter_count + self.ac_charger_count + 1))
+        )
+        self.dc_charger_slave_ids = config_entry.data.get(
+            CONF_DC_CHARGER_SLAVE_IDS, list(range(self.inverter_count + self.ac_charger_count + 1,
+                                                 self.inverter_count + self.ac_charger_count + self.dc_charger_count + 1))
         )
 
     async def async_connect(self) -> None:
@@ -357,6 +367,32 @@ class SigenergyModbusHub:
         
         return data
 
+    async def async_read_dc_charger_data(self, dc_charger_id: int) -> Dict[str, Any]:
+        """Read all DC charger data."""
+        data = {}
+        
+        for register_name, register_def in DC_CHARGER_RUNNING_INFO_REGISTERS.items():
+            try:
+                registers = await self.async_read_registers(
+                    slave_id=dc_charger_id,
+                    address=register_def.address,
+                    count=register_def.count,
+                    register_type=register_def.register_type,
+                )
+                
+                value = self._decode_value(
+                    registers=registers,
+                    data_type=register_def.data_type,
+                    gain=register_def.gain,
+                )
+                
+                data[register_name] = value
+            except Exception as ex:
+                _LOGGER.error("Error reading DC charger %s register %s: %s", dc_charger_id, register_name, ex)
+                data[register_name] = None
+        
+        return data
+
     async def async_write_plant_parameter(
         self, 
         register_name: str, 
@@ -450,6 +486,39 @@ class SigenergyModbusHub:
         else:
             await self.async_write_registers(
                 slave_id=ac_charger_id,
+                address=register_def.address,
+                values=encoded_values,
+                register_type=register_def.register_type,
+            )
+            
+    async def async_write_dc_charger_parameter(
+        self,
+        dc_charger_id: int,
+        register_name: str,
+        value: Union[int, float, str]
+    ) -> None:
+        """Write a DC charger parameter."""
+        if register_name not in DC_CHARGER_PARAMETER_REGISTERS:
+            raise SigenergyModbusError(f"Unknown DC charger parameter: {register_name}")
+        
+        register_def = DC_CHARGER_PARAMETER_REGISTERS[register_name]
+        
+        encoded_values = self._encode_value(
+            value=value,
+            data_type=register_def.data_type,
+            gain=register_def.gain,
+        )
+        
+        if len(encoded_values) == 1:
+            await self.async_write_register(
+                slave_id=dc_charger_id,
+                address=register_def.address,
+                value=encoded_values[0],
+                register_type=register_def.register_type,
+            )
+        else:
+            await self.async_write_registers(
+                slave_id=dc_charger_id,
                 address=register_def.address,
                 values=encoded_values,
                 register_type=register_def.register_type,

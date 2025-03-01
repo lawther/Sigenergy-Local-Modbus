@@ -56,11 +56,17 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 for ac_charger_id in self.hub.ac_charger_slave_ids:
                     ac_charger_data[ac_charger_id] = await self.hub.async_read_ac_charger_data(ac_charger_id)
                 
+                # Fetch DC charger data for each DC charger
+                dc_charger_data = {}
+                for dc_charger_id in self.hub.dc_charger_slave_ids:
+                    dc_charger_data[dc_charger_id] = await self.hub.async_read_dc_charger_data(dc_charger_id)
+                
                 # Combine all data
                 data = {
                     "plant": plant_data,
                     "inverters": inverter_data,
                     "ac_chargers": ac_charger_data,
+                    "dc_chargers": dc_charger_data,
                 }
                 
                 return data
