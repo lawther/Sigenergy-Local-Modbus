@@ -58,9 +58,9 @@ STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
             selector.SelectSelectorConfig(
                 options=[
                     {"value": DEVICE_TYPE_NEW_PLANT, "label": "New Plant"},
-                    {"value": DEVICE_TYPE_INVERTER, "label": "Inverter"},
-                    {"value": DEVICE_TYPE_AC_CHARGER, "label": "AC Charger"},
-                    {"value": DEVICE_TYPE_DC_CHARGER, "label": "DC Charger"},
+                    {"value": DEVICE_TYPE_INVERTER, "label": "Add Inverter to Plant"},
+                    {"value": DEVICE_TYPE_AC_CHARGER, "label": "Add AC Charger to Plant"},
+                    {"value": DEVICE_TYPE_DC_CHARGER, "label": "Add DC Charger to Inverter"},
                 ],
                 mode=selector.SelectSelectorMode.DROPDOWN,
             )
@@ -72,17 +72,11 @@ STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
+        # vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
         vol.Required(CONF_PLANT_ID, default=DEFAULT_SLAVE_ID): int,
-        vol.Required(CONF_INVERTER_COUNT, default=DEFAULT_INVERTER_COUNT): int,
-        vol.Required(CONF_AC_CHARGER_COUNT, default=DEFAULT_AC_CHARGER_COUNT): int,
-    }
-)
-
-STEP_INVERTER_CONFIG_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_NAME, default="Inverter"): str,
-        vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): int,
+        vol.Required(CONF_SLAVE_ID, default=1): int,
+        # vol.Required(CONF_INVERTER_COUNT, default=DEFAULT_INVERTER_COUNT): int,
+        # vol.Required(CONF_AC_CHARGER_COUNT, default=DEFAULT_AC_CHARGER_COUNT): int,
     }
 )
 
@@ -120,39 +114,39 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             # Clear existing data
             self._plants = {}
-            
+
             # Load plants from config entries
             await self._async_load_plants()
             _LOGGER.debug("Plants after loading: %s", self._plants)
             has_plants = len(self._plants) > 0
             _LOGGER.debug("Has plants: %s", has_plants)
-            
+
             # If no plants exist, go directly to plant configuration
             if not has_plants:
                 self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_NEW_PLANT
                 return await self.async_step_plant_config()
-            
+
             # Show device type selection if plants exist
             return self.async_show_form(
                 step_id=STEP_DEVICE_TYPE,
                 data_schema=STEP_DEVICE_TYPE_SCHEMA,
             )
-        
+
         # Store any user input (this will be empty for the initial step with our new flow)
         self._data.update(user_input)
-        
+
         # Clear existing data
         self._plants = {}
-        
+
         # Load plants from config entries
         await self._async_load_plants()
         has_plants = len(self._plants) > 0
-        
+
         # If no plants exist, go directly to plant configuration
         if not has_plants:
             self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_NEW_PLANT
             return await self.async_step_plant_config()
-        
+
         # Show device type selection if plants exist
         return self.async_show_form(
             step_id=STEP_DEVICE_TYPE,
@@ -229,28 +223,26 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Store plant configuration
         self._data.update(user_input)
-        
-        # Generate inverter and AC charger slave IDs
-        inverter_count = user_input[CONF_INVERTER_COUNT]
-        ac_charger_count = user_input[CONF_AC_CHARGER_COUNT]
-        
-        inverter_slave_ids = list(range(1, inverter_count + 1))
-        ac_charger_slave_ids = list(range(inverter_count + 1, inverter_count + ac_charger_count + 1))
-        
-        self._data[CONF_INVERTER_SLAVE_IDS] = inverter_slave_ids
-        self._data[CONF_AC_CHARGER_SLAVE_IDS] = ac_charger_slave_ids
-        self._data[CONF_DC_CHARGER_COUNT] = DEFAULT_DC_CHARGER_COUNT
-        self._data[CONF_DC_CHARGER_SLAVE_IDS] = []
-        
-        # Create the configuration entry with the name from user input
-        return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
+
+        # Check if any plants exist in the system
+        await self._async_load_plants()
+        plant_no = len(self._plants)
+
+        # vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
+        self._data[CONF_NAME] = f"Sigen{"" if plant_no == 0 else f" {plant_no}"}"
+        self._data[CONF_INVERTER_SLAVE_IDS] = [user_input[CONF_SLAVE_ID]]
+
+        # Create the configuration entry with the default name
+        return self.async_create_entry(title=DEFAULT_NAME +
+                                       "" if plant_no == 0 
+                                       else f" {plant_no}", data=self._data)
 
     async def async_step_inverter_config(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle inverter configuration."""
         errors = {}
-        
+
         if user_input is None:
             # Find the next available slave ID after existing inverters to suggest as default
             existing_slave_ids = []
@@ -259,16 +251,16 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     existing_slave_ids.extend(entry.data.get(CONF_INVERTER_SLAVE_IDS, []))
                 elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER:
                     existing_slave_ids.append(entry.data.get(CONF_SLAVE_ID, 0))
-            
+
             # Start from the highest existing slave ID + 1
             next_slave_id = max(existing_slave_ids, default=0) + 1
-            
+
             # Load plants for selection
             await self._async_load_plants()
-            
+
             # Create dynamic schema with plants dropdown and other fields
             schema = vol.Schema({
-                vol.Required(CONF_NAME, default="Inverter"): str,
+                # vol.Required(CONF_NAME, default="Inverter"): str,
                 vol.Required(CONF_SLAVE_ID, default=next_slave_id): int,
                 vol.Required(CONF_PARENT_DEVICE_ID): selector.SelectSelector(
                     selector.SelectSelectorConfig(
@@ -289,7 +281,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Store inverter configuration
         self._data.update(user_input)
-        
+
+        self._data[CONF_NAME] = "Inverter"  # Default name
         # Store the slave ID in the inverter_slave_ids list as well (for compatibility)
         self._data[CONF_INVERTER_SLAVE_IDS] = [user_input[CONF_SLAVE_ID]]
         self._data[CONF_INVERTER_COUNT] = 1  # Always 1 inverter
@@ -371,15 +364,15 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     existing_slave_ids.extend(entry.data.get(CONF_DC_CHARGER_SLAVE_IDS, []))
                 elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_DC_CHARGER:
                     existing_slave_ids.append(entry.data.get(CONF_SLAVE_ID, 0))
-            
+
             # Start from the highest existing slave ID + 1
             next_slave_id = max(existing_slave_ids, default=0) + 1
-            
+
             # Create a schema with the suggested slave ID
             schema = STEP_DC_CHARGER_CONFIG_SCHEMA.extend({
                 vol.Required(CONF_SLAVE_ID, default=next_slave_id): int,
             })
-            
+
             return self.async_show_form(
                 step_id=STEP_DC_CHARGER_CONFIG,
                 data_schema=schema
@@ -387,7 +380,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Store DC charger configuration
         self._data.update(user_input)
-        
+
         # Store the slave ID in the dc_charger_slave_ids list as well (for compatibility)
         self._data[CONF_DC_CHARGER_SLAVE_IDS] = [user_input[CONF_SLAVE_ID]]
         self._data[CONF_DC_CHARGER_COUNT] = 1  # Always 1 DC charger
@@ -395,7 +388,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data[CONF_INVERTER_SLAVE_IDS] = []
         self._data[CONF_AC_CHARGER_COUNT] = DEFAULT_AC_CHARGER_COUNT
         self._data[CONF_AC_CHARGER_SLAVE_IDS] = []
-        
+
         # Create the configuration entry
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
 

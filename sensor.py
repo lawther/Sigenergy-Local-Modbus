@@ -472,17 +472,20 @@ async def async_setup_entry(
         )
 
     # Add inverter sensors
+    inverter_no = 0
     for inverter_id in coordinator.hub.inverter_slave_ids:
         for description in INVERTER_SENSORS:
             entities.append(
                 SigenergySensor(
                     coordinator=coordinator,
                     description=description,
-                    name=f"{plant_name} Inverter {inverter_id} {description.name}",
+                    # name=f"{plant_name} Inverter {inverter_id} {description.name}",
+                    name=f"{plant_name} Inverter{" " if inverter_no == 0 else f" {inverter_no}"} {description.name}",
                     device_type=DEVICE_TYPE_INVERTER,
                     device_id=inverter_id,
                 )
             )
+        inverter_no += 1
 
     # Add AC charger sensors
     for ac_charger_id in coordinator.hub.ac_charger_slave_ids:

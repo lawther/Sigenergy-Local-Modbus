@@ -19,22 +19,24 @@
       },
       "plant_config": {
         "title": "Plant Configuration",
-        "description": "Configure the plant settings.",
+        "description": "Configure the plant settings. Usually, you only need to set the Host IP address.",
         "data": {
           "host": "Host",
           "port": "Port",
-          "name": "Name",
+          // "name": "Name",
           "plant_id": "Plant ID",
-          "inverter_count": "Number of inverters",
-          "ac_charger_count": "Number of AC chargers"
+          "slave_id": "Inverter Device ID (Slave ID)"
+          // "inverter_count": "Number of inverters",
+          // "ac_charger_count": "Number of AC chargers"
         }
       },
       "inverter_config": {
-        "title": "Inverter Configuration",
+        "title": "Add New Inverter",
         "description": "Configure the inverter settings.",
         "data": {
           "name": "Inverter Name",
-          "slave_id": "Device ID (Slave ID)"
+          "slave_id": "Device ID (Slave ID)",
+          "parent_device_id": "Add to this plant"
         }
       },
       "ac_charger_config": {
