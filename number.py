@@ -1,4 +1,6 @@
 """Number platform for Sigenergy ESS integration."""
+# pylint: disable=import-error
+# pyright: reportMissingImports=false
 from __future__ import annotations
 
 import logging

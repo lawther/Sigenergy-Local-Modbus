@@ -1,4 +1,6 @@
 """Diagnostics support for Sigenergy ESS."""
+# pylint: disable=import-error
+# pyright: reportMissingImports=false
 from __future__ import annotations
 
 from typing import Any, Dict

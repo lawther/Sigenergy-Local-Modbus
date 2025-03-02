@@ -4,11 +4,12 @@
   "documentation": "https://github.com/custom-components/sigen",
   "issue_tracker": "https://github.com/custom-components/sigen/issues",
   "dependencies": ["modbus"],
-  "codeowners": ["@custom-components"],
+  "codeowners": ["@TypQxQ"],
   "requirements": ["pymodbus>=3.0.0"],
   "iot_class": "local_polling",
   "version": "0.1.0",
   "config_flow": true,
   "integration_type": "device",
-  "quality_scale": "platinum"
+  "quality_scale": "custom",
+  "loggers": ["custom_components.sigen"]
 }
