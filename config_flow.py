@@ -290,7 +290,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data[CONF_AC_CHARGER_SLAVE_IDS] = []
         self._data[CONF_DC_CHARGER_COUNT] = DEFAULT_DC_CHARGER_COUNT
         self._data[CONF_DC_CHARGER_SLAVE_IDS] = []
-        
+
         # Get plant configuration for the inverter
         parent_id = user_input[CONF_PARENT_DEVICE_ID]
         _LOGGER.debug("Selected plant ID for inverter configuration: %s", parent_id)
@@ -299,16 +299,16 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Copy network configuration from parent plant
                 self._data[CONF_HOST] = entry.data.get(CONF_HOST)
                 self._data[CONF_PORT] = entry.data.get(CONF_PORT)
-                
+
                 # THIS IS THE IMPORTANT ADDITION
                 # Store the plant's modbus ID - crucial for association
                 self._data[CONF_PLANT_ID] = entry.data.get(CONF_PLANT_ID)
                 _LOGGER.debug("Associated inverter with plant modbus ID: %s", self._data[CONF_PLANT_ID])
-                
+
                 # Also, mark the device type as specific to child inverters
                 self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_INVERTER
                 break
-        
+
         # Create the configuration entry
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
 
