@@ -152,6 +152,7 @@ async def async_setup_entry(
     ac_charger_no = 0
     for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
         ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
+        _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
         for description in AC_CHARGER_SWITCHES:
             entities.append(
                 SigenergySwitch(

@@ -57,6 +57,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Required(CONF_PLANT_ID, default=DEFAULT_SLAVE_ID): int,
         vol.Required(CONF_INVERTER_SLAVE_IDS, default="1"): str,
+        vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=""): str,
     }
 )
 
@@ -109,8 +110,31 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Commented out under development
         # Check for duplicates
-        if len(set(id_list)) != len(id_list):
-            errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        # if len(set(id_list)) != len(id_list):
+        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+            
+        # Process the AC charger slave IDs
+        raw_ac_ids = user_input.get(CONF_AC_CHARGER_SLAVE_IDS, "")
+        ac_id_list = []
+        
+        for part in raw_ac_ids.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if part.isdigit():
+                val = int(part)
+                if not (1 <= val <= 246):
+                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "Each ID must be between 1 and 246."
+                    break
+                ac_id_list.append(val)
+            else:
+                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Invalid integer value."
+                break
+
+        # Commented out under development
+        # Check for duplicates in AC charger IDs
+        # if len(set(ac_id_list)) != len(ac_id_list):
+        #     errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
 
         # If there are errors, show the form again
         if errors:
@@ -122,6 +146,9 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Store the validated list of inverter slave IDs
         self._data[CONF_INVERTER_SLAVE_IDS] = id_list
+        
+        # Store the validated list of AC charger slave IDs
+        self._data[CONF_AC_CHARGER_SLAVE_IDS] = ac_id_list
 
         # Store the plant name generated based on the number of installed plants
         self._data[CONF_NAME] = f"{DEFAULT_PLANT_NAME}{'' if plant_no == 0 else f' {plant_no}'}"
@@ -177,13 +204,19 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         _LOGGER.debug("Found plants: %s", self._plants)
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle dynamic reconfiguration of inverter slave IDs."""
+        """Handle dynamic reconfiguration of inverter and AC charger slave IDs."""
         if user_input is None:
             # Retrieve current inverter slave IDs as a comma-separated string
             current_ids = self._data.get(CONF_INVERTER_SLAVE_IDS, [])
             current_str = ", ".join(str(i) for i in current_ids) if current_ids else ""
+            
+            # Retrieve current AC charger slave IDs as a comma-separated string
+            current_ac_ids = self._data.get(CONF_AC_CHARGER_SLAVE_IDS, [])
+            current_ac_str = ", ".join(str(i) for i in current_ac_ids) if current_ac_ids else ""
+            
             schema = vol.Schema({
                 vol.Required(CONF_INVERTER_SLAVE_IDS, default=current_str): str,
+                vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=current_ac_str): str,
             })
             return self.async_show_form(
                 step_id="reconfigure",
@@ -191,6 +224,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         errors = {}
+        
+        # Process the inverter slave IDs
         raw_ids = user_input.get(CONF_INVERTER_SLAVE_IDS, "")
         id_list = []
         for part in raw_ids.split(","):
@@ -208,13 +243,36 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 break
 
         # Commented out under development
-        # Check for duplicates
-        if len(set(id_list)) != len(id_list):
-            errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        # Check for duplicates in inverter IDs
+        # if len(set(id_list)) != len(id_list):
+        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+            
+        # Process the AC charger slave IDs
+        raw_ac_ids = user_input.get(CONF_AC_CHARGER_SLAVE_IDS, "")
+        ac_id_list = []
+        for part in raw_ac_ids.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if part.isdigit():
+                val = int(part)
+                if not (1 <= val <= 246):
+                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "Each ID must be between 1 and 246."
+                    break
+                ac_id_list.append(val)
+            else:
+                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Invalid integer value."
+                break
+
+        # Commented out under development
+        # Check for duplicates in AC charger IDs
+        # if len(set(ac_id_list)) != len(ac_id_list):
+        #     errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
 
         if errors:
             schema = vol.Schema({
                 vol.Required(CONF_INVERTER_SLAVE_IDS, default=raw_ids): str,
+                vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=raw_ac_ids): str,
             })
             return self.async_show_form(
                 step_id="reconfigure",
@@ -222,8 +280,11 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors=errors,
             )
 
+        # Update the data with the validated IDs
         self._data[CONF_INVERTER_SLAVE_IDS] = id_list
-        # Update the configuration entry with the new inverter slave IDs
+        self._data[CONF_AC_CHARGER_SLAVE_IDS] = ac_id_list
+        
+        # Update the configuration entry with the new data
         self.hass.config_entries.async_update_entry(
             self.context.get("entry"), data=self._data
         )
@@ -249,7 +310,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         return await self.async_step_reconfigure()
 
     async def async_step_reconfigure(self, user_input=None):
-        """Handle reconfiguration of inverter slave IDs."""
+        """Handle reconfiguration of inverter and AC charger slave IDs."""
         errors = {}
         
         if user_input is None:
@@ -257,8 +318,13 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             current_ids = self._data.get(CONF_INVERTER_SLAVE_IDS, [])
             current_str = ", ".join(str(i) for i in current_ids) if current_ids else ""
             
+            # Retrieve current AC charger slave IDs as a comma-separated string
+            current_ac_ids = self._data.get(CONF_AC_CHARGER_SLAVE_IDS, [])
+            current_ac_str = ", ".join(str(i) for i in current_ac_ids) if current_ac_ids else ""
+            
             schema = vol.Schema({
                 vol.Required(CONF_INVERTER_SLAVE_IDS, default=current_str): str,
+                vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=current_ac_str): str,
             })
             
             return self.async_show_form(
@@ -285,14 +351,38 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 break
 
         # Commented out under development
-        # Check for duplicates
-        if len(set(id_list)) != len(id_list):
-            errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        # Check for duplicates in inverter IDs
+        # if len(set(id_list)) != len(id_list):
+        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+            
+        # Process the AC charger slave IDs
+        raw_ac_ids = user_input.get(CONF_AC_CHARGER_SLAVE_IDS, "")
+        ac_id_list = []
+        
+        for part in raw_ac_ids.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if part.isdigit():
+                val = int(part)
+                if not (1 <= val <= 246):
+                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "Each ID must be between 1 and 246."
+                    break
+                ac_id_list.append(val)
+            else:
+                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Invalid integer value."
+                break
+
+        # Commented out under development
+        # Check for duplicates in AC charger IDs
+        # if len(set(ac_id_list)) != len(ac_id_list):
+        #     errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
 
         # If there are errors, show the form again
         if errors:
             schema = vol.Schema({
                 vol.Required(CONF_INVERTER_SLAVE_IDS, default=raw_ids): str,
+                vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=raw_ac_ids): str,
             })
             
             return self.async_show_form(
@@ -301,8 +391,8 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 errors=errors,
             )
 
-        # Update the configuration entry with the new inverter slave IDs
-        new_data = {**self._data, CONF_INVERTER_SLAVE_IDS: id_list}
+        # Update the configuration entry with the new IDs
+        new_data = {**self._data, CONF_INVERTER_SLAVE_IDS: id_list, CONF_AC_CHARGER_SLAVE_IDS: ac_id_list}
         self.hass.config_entries.async_update_entry(
             self.config_entry, data=new_data
         )

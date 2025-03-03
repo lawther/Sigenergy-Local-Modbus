@@ -585,8 +585,9 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             )
         elif device_type == DEVICE_TYPE_AC_CHARGER:
             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_ac_charger_{device_id}")},
-                name=f"AC Charger {device_id}",
+                # identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_ac_charger_{device_id}")},
+                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
+                name=device_name,
                 manufacturer="Sigenergy",
                 model="AC Charger",
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
