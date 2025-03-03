@@ -2,12 +2,13 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Sigenergy ESS",
-        "description": "Set up a Sigenergy ESS to monitor and control it through Home Assistant.",
+        "title": "Plant Configuration",
+        "description": "Configure the plant settings. Usually, you only need to set the Host IP address.",
         "data": {
           "host": "Host",
           "port": "Port",
-          "name": "Name"
+          "plant_id": "Plant ID",
+          "slave_id": "Inverter Device ID (Slave ID)"
         }
       },
       "device_type": {
