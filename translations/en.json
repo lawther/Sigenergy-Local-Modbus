@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect to Sigenergy Energy Storage System",
-        "description": "Set up a Sigenergy Energy Storage System to monitor and control it through Home Assistant.",
+        "description": "Set up a Sigenergy Energy Storage System to monitor and control it through Home Assistant. \n\nMake sure the Sigenergy system is connected to the same network as Home Assistant and the Modbus option has been enabled by the installer.",
         "data": {
           "host": "Host ( IP address of the main Sigenergy inverter )",
           "port": "Port ( default is 502 )",
