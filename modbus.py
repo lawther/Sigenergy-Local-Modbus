@@ -261,18 +261,15 @@ class SigenergyModbusHub:
                 registers, data_type=ModbusClientMixin.DATATYPE.UINT64
             )
         elif data_type == DataType.STRING:
-            # Convert to bytes first, then decode as ASCII
-            # bytes_data = b''.join(struct.pack('>H', reg) for reg in registers)
-            # value = bytes_data.decode('ascii').strip('\x00')
-            return ModbusClientMixin.convert_from_registers(registers, data_type=ModbusClientMixin.DATATYPE.STRING)
             # return value  # No gain for strings
+            return ModbusClientMixin.convert_from_registers(registers, data_type=ModbusClientMixin.DATATYPE.STRING)
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
-        
+
         # Apply gain
         if isinstance(value, (int, float)) and gain != 1:
             value = value / gain
-            
+
         return value
 
     def _encode_value(
