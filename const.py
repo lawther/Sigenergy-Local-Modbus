@@ -37,6 +37,12 @@ CONF_DC_CHARGER_SLAVE_IDS = "dc_charger_slave_ids"
 CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
 
+# Default names
+DEFAULT_PLANT_NAME = "Sigen Plant"
+DEFAULT_INVERTER_NAME = "Sigen Inverter"
+DEFAULT_AC_CHARGER_NAME = "Sigen AC Charger"
+DEFAULT_DC_CHARGER_NAME = "Sigen DC Charger"
+
 # Configuration step identifiers
 STEP_USER = "user"
 STEP_DEVICE_TYPE = "device_type"
@@ -48,7 +54,7 @@ STEP_SELECT_PLANT = "select_plant"
 STEP_SELECT_INVERTER = "select_inverter"
 
 # Device type options
-DEVICE_TYPE_NEW_PLANT = "new_plant"
+DEVICE_TYPE_PLANT = "new_plant"
 
 # Default values
 DEFAULT_PORT = 502
