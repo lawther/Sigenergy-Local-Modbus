@@ -16,6 +16,7 @@ from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.constants import Endian
 from pymodbus.exceptions import ConnectionException, ModbusException
 from pymodbus.payload import BinaryPayloadBuilder, BinaryPayloadDecoder
+from pymodbus.client.mixin import ModbusClientMixin
 
 from .const import (
     CONF_AC_CHARGER_COUNT,
@@ -235,23 +236,36 @@ class SigenergyModbusHub:
         gain: float
     ) -> Union[int, float, str]:
         """Decode register values based on data type."""
-        decoder = BinaryPayloadDecoder.fromRegisters(
-            registers, byteorder=Endian.BIG, wordorder=Endian.BIG
-        )
-        
         if data_type == DataType.U16:
-            value = decoder.decode_16bit_uint()
+            value = ModbusClientMixin.convert_from_registers(
+                registers, data_type=ModbusClientMixin.DATATYPE.UINT16
+            )
         elif data_type == DataType.S16:
-            value = decoder.decode_16bit_int()
+            value = 0
+            value = ModbusClientMixin.convert_from_registers(
+                registers, data_type=ModbusClientMixin.DATATYPE.INT16
+            )
         elif data_type == DataType.U32:
-            value = decoder.decode_32bit_uint()
+            value = 0
+            value = ModbusClientMixin.convert_from_registers(
+                registers, data_type=ModbusClientMixin.DATATYPE.UINT32
+            )
         elif data_type == DataType.S32:
-            value = decoder.decode_32bit_int()
+            value = 0
+            value = ModbusClientMixin.convert_from_registers(
+                registers, data_type=ModbusClientMixin.DATATYPE.INT32
+            )
         elif data_type == DataType.U64:
-            value = decoder.decode_64bit_uint()
+            value = 0
+            value = ModbusClientMixin.convert_from_registers(
+                registers, data_type=ModbusClientMixin.DATATYPE.UINT64
+            )
         elif data_type == DataType.STRING:
-            value = decoder.decode_string(len(registers) * 2).decode("ascii").strip("\x00")
-            return value  # No gain for strings
+            # Convert to bytes first, then decode as ASCII
+            # bytes_data = b''.join(struct.pack('>H', reg) for reg in registers)
+            # value = bytes_data.decode('ascii').strip('\x00')
+            return ModbusClientMixin.convert_from_registers(registers, data_type=ModbusClientMixin.DATATYPE.STRING)
+            # return value  # No gain for strings
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
         
@@ -268,7 +282,7 @@ class SigenergyModbusHub:
         gain: float
     ) -> List[int]:
         """Encode value to register values based on data type."""
-        builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.BIG)
+        builder = BinaryPayloadBuilder(word_order='big', wordorder=Endian.BIG)
         
         # Apply gain for numeric values
         if isinstance(value, (int, float)) and gain != 1 and data_type != DataType.STRING:
