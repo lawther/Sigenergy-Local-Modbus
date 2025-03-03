@@ -2,80 +2,29 @@
   "config": {
     "step": {
       "user": {
-        "title": "Plant Configuration",
-        "description": "Configure the plant settings. Usually, you only need to set the Host IP address.",
+        "title": "Connect to Sigenergy Energy Storage System",
+        "description": "Set up a Sigenergy Energy Storage System to monitor and control it through Home Assistant.",
         "data": {
-          "host": "Host",
-          "port": "Port",
-          "plant_id": "Plant ID",
-          "slave_id": "Inverter Device ID (Slave ID)"
+          "host": "Host ( IP address of the main Sigenergy inverter )",
+          "port": "Port ( default is 502 )",
+          "plant_id": "Plant ID ( default is 247 )",
+          "inverter_slave_ids": "Inverter Device IDs ( comma-separated when multiple. Default is 1 )"
         }
       },
-      "device_type": {
-        "title": "Select Device Type",
-        "description": "Choose the type of device you want to add.",
+      "reconfigure": {
+        "title": "Reconfigure Sigenergy System",
+        "description": "Update the list of inverter device IDs for this Sigenergy system.",
         "data": {
-          "device_type": "Device Type"
-        }
-      },
-      "plant_config": {
-        "title": "Plant Configuration",
-        "description": "Configure the plant settings. Usually, you only need to set the Host IP address.",
-        "data": {
-          "host": "Host",
-          "port": "Port",
-          // "name": "Name",
-          "plant_id": "Plant ID",
-          "slave_id": "Inverter Device ID (Slave ID)"
-          // "inverter_count": "Number of inverters",
-          // "ac_charger_count": "Number of AC chargers"
-        }
-      },
-      "inverter_config": {
-        "title": "Add New Inverter",
-        "description": "Configure the inverter settings.",
-        "data": {
-          "name": "Inverter Name",
-          "slave_id": "Device ID (Slave ID)",
-          "parent_device_id": "Add to this plant"
-        }
-      },
-      "ac_charger_config": {
-        "title": "AC Charger Configuration",
-        "description": "Configure the AC charger settings.",
-        "data": {
-          "name": "AC Charger Name",
-          "slave_id": "Device ID (Slave ID)"
-        }
-      },
-      "dc_charger_config": {
-        "title": "DC Charger Configuration",
-        "description": "Configure the DC charger settings.",
-        "data": {
-          "name": "DC Charger Name",
-          "slave_id": "Device ID (Slave ID)"
-        }
-      },
-      "select_plant": {
-        "title": "Select Plant",
-        "description": "Choose the plant to connect this device to.",
-        "data": {
-          "parent_device_id": "Parent Plant"
-        }
-      },
-      "select_inverter": {
-        "title": "Select Inverter",
-        "description": "Choose the inverter to connect this DC charger to.",
-        "data": {
-          "parent_device_id": "Parent Inverter"
+          "inverter_slave_ids": "Inverter Device IDs ( comma-separated when multiple. Default is 1 )"
         }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect to the Sigenergy system. Please check the host and port.",
       "unknown": "An unexpected error occurred.",
-      "no_plants": "No plants found in the system. Please add a plant first.",
-      "no_inverters": "No inverters found in the system. Please add an inverter first."
+      "invalid_integer_value": "Invalid integer value.",
+      "each_id_must_be_between_1_and_246": "Each ID must be between 1 and 246.",
+      "duplicate_ids_found": "Duplicate IDs found."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured."
@@ -85,11 +34,20 @@
     "step": {
       "init": {
         "title": "Sigenergy Options",
-        "description": "Configure the options for the Sigenergy integration.",
+        "description": "Configure the options for the Sigenergy integration."
+      },
+      "reconfigure": {
+        "title": "Reconfigure Sigenergy System",
+        "description": "Update the list of inverter device IDs for this Sigenergy system.",
         "data": {
-          "scan_interval": "Data update interval (seconds)"
+          "inverter_slave_ids": "Inverter Device IDs ( comma-separated when multiple. Default is 1 )"
         }
       }
+    },
+    "error": {
+      "invalid_integer_value": "Invalid integer value.",
+      "each_id_must_be_between_1_and_246": "Each ID must be between 1 and 246.",
+      "duplicate_ids_found": "Duplicate IDs found."
     }
   }
 }
