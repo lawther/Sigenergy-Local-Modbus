@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, Optional
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -20,7 +20,6 @@ from .const import (
     DOMAIN,
     EMSWorkMode,
     RemoteEMSControlMode,
-    DEFAULT_PLANT_NAME,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError

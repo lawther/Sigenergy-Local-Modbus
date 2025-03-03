@@ -3,7 +3,7 @@
 from __future__ import annotations
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, Optional
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -18,7 +18,6 @@ from .const import (
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
-    DEFAULT_PLANT_NAME,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
@@ -269,7 +268,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
                 and "ac_chargers" in self.coordinator.data
                 and self._device_id in self.coordinator.data["ac_chargers"]
             )
-            
+
         return False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
