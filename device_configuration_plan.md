@@ -52,7 +52,7 @@ Add or update the following constants:
   - `STEP_SELECT_PLANT` - For selecting a plant when needed
   - `STEP_SELECT_INVERTER` - For selecting an inverter when needed
 - Device type options:
-  - `DEVICE_TYPE_NEW_PLANT`
+  - `DEVICE_TYPE_PLANT`
   - `DEVICE_TYPE_INVERTER`
   - `DEVICE_TYPE_AC_CHARGER`
   - `DEVICE_TYPE_DC_CHARGER`
