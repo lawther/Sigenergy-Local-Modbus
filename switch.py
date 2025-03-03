@@ -1,7 +1,7 @@
 """Switch platform for Sigenergy ESS integration."""
 
 from __future__ import annotations
-import logging
+import logging,random
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -199,11 +199,12 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
 
         # Set unique ID
         if device_type == DEVICE_TYPE_PLANT:
-            self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}"
+            # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}"
+            self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}_{random.randint(1, 1000000)}"
         else:
             # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_id}_{description.key}"
             # Used for testing in development to allow multiple sensors with the same unique ID
-            self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_number_str}_{description.key}"
+            self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_number_str}_{description.key}_{random.randint(1, 1000000)}"
         
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:
