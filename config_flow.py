@@ -56,7 +56,6 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Required(CONF_PLANT_ID, default=DEFAULT_SLAVE_ID): int,
-        # vol.Required(CONF_SLAVE_ID, default=1): int,
         vol.Required(CONF_INVERTER_SLAVE_IDS, default="1"): str,
     }
 )
@@ -70,7 +69,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self._data = {}
         self._plants = {}
-        # self._inverters = {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -111,8 +109,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Commented out under development
         # Check for duplicates
-        # if len(set(id_list)) != len(id_list):
-        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        if len(set(id_list)) != len(id_list):
+            errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
 
         # If there are errors, show the form again
         if errors:
@@ -211,8 +209,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Commented out under development
         # Check for duplicates
-        # if len(set(id_list)) != len(id_list):
-        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        if len(set(id_list)) != len(id_list):
+            errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
 
         if errors:
             schema = vol.Schema({
@@ -288,8 +286,8 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
         # Commented out under development
         # Check for duplicates
-        # if len(set(id_list)) != len(id_list):
-        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        if len(set(id_list)) != len(id_list):
+            errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
 
         # If there are errors, show the form again
         if errors:
