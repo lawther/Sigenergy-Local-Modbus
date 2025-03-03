@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import random
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -26,6 +27,7 @@ from .const import (
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
+    DEFAULT_PLANT_NAME,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
@@ -264,6 +266,7 @@ async def async_setup_entry(
                 name=f"{plant_name} {description.name}",
                 device_type=DEVICE_TYPE_PLANT,
                 device_id=None,
+                plant_name=plant_name
             )
         )
 
@@ -311,6 +314,7 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
         name: str,
         device_type: str,
         device_id: Optional[int],
+        plant_name: Optional[str] =DEFAULT_PLANT_NAME,
     ) -> None:
         """Initialize the number."""
         super().__init__(coordinator)
@@ -324,13 +328,17 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}"
         else:
-            self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_id}_{description.key}"
+            # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_id}_{description.key}"
+            # Used for testing in development to allow multiple sensors with the same unique ID
+            # Remove this line before submitting a PR
+            self._attr_unique_id = f"{coordinator.hub.plant_id}_{device_type}_{device_id}_{description.key}_{random.randint(0, 10000)}"
         
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.host}_plant")},
-                name=name.split(" ", 1)[0],  # Use plant name as device name
+                # name=f"{hub.name} qqq", #.split(" ", 1)[0],  # Use plant name as device name
+                name=plant_name,
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
                 via_device=(DOMAIN, f"{coordinator.hub.host}_plant"),
@@ -346,7 +354,7 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
 
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.host}_inverter_{device_id}")},
-                name=f"Inverter {device_id}",
+                name=f"Sigen Inverter{'' if device_id == 1 else f' {device_id}'}",
                 manufacturer="Sigenergy",
                 model=model,
                 serial_number=serial_number,
