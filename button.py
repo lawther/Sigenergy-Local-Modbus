@@ -62,7 +62,7 @@ async def async_setup_entry(
                 name=f"{plant_name} {description.name}",
                 device_type=DEVICE_TYPE_PLANT,
                 device_id=None,
-                plant_name=plant_name,
+                device_name=plant_name,
             )
         )
 
@@ -82,7 +82,8 @@ class SigenergyButton(CoordinatorEntity, ButtonEntity):
         name: str,
         device_type: str,
         device_id: Optional[int],
-        plant_name: Optional[str] =DEFAULT_PLANT_NAME,
+        plant_name: Optional[str] = DEFAULT_PLANT_NAME,
+        device_name: Optional[str] = None,
     ) -> None:
         """Initialize the button."""
         super().__init__(coordinator)
@@ -91,6 +92,9 @@ class SigenergyButton(CoordinatorEntity, ButtonEntity):
         self._attr_name = name
         self._device_type = device_type
         self._device_id = device_id
+        
+        # Use device_name if provided, otherwise use plant_name for backwards compatibility
+        device_name = device_name if device_name is not None else plant_name
         
         # Set unique ID
         if device_type == DEVICE_TYPE_PLANT:
@@ -106,8 +110,7 @@ class SigenergyButton(CoordinatorEntity, ButtonEntity):
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.host}_plant")},
-                # name=f"{hub.name} qqq", #.split(" ", 1)[0],  # Use plant name as device name
-                name=plant_name,
+                name=device_name,
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
                 via_device=(DOMAIN, f"{coordinator.hub.host}"),

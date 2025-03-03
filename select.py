@@ -133,20 +133,25 @@ async def async_setup_entry(
                 name=f"{plant_name} {description.name}",
                 device_type=DEVICE_TYPE_PLANT,
                 device_id=None,
+                device_name=plant_name,
             )
         )
 
     # Add inverter selects
+    inverter_no = 0
     for inverter_id in coordinator.hub.inverter_slave_ids:
+        inverter_no += 1
+        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
         for description in INVERTER_SELECTS:
             entities.append(
                 SigenergySelect(
                     coordinator=coordinator,
                     hub=hub,
                     description=description,
-                    name=f"{plant_name} Inverter {inverter_id} {description.name}",
+                    name=f"{inverter_name} {description.name}",
                     device_type=DEVICE_TYPE_INVERTER,
                     device_id=inverter_id,
+                    device_name=inverter_name,
                 )
             )
 
@@ -166,7 +171,8 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         name: str,
         device_type: str,
         device_id: Optional[int],
-        plant_name: Optional[str] =DEFAULT_PLANT_NAME,
+        plant_name: Optional[str] = DEFAULT_PLANT_NAME,
+        device_name: Optional[str] = None,
     ) -> None:
         """Initialize the select."""
         super().__init__(coordinator)
@@ -176,6 +182,9 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         self._device_type = device_type
         self._device_id = device_id
         self._attr_options = description.options
+        
+        # Use device_name if provided, otherwise use plant_name for backwards compatibility
+        device_name = device_name if device_name is not None else plant_name
         
         # Set unique ID
         if device_type == DEVICE_TYPE_PLANT:
@@ -190,8 +199,7 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.host}_plant")},
-                # name=f"{hub.name} qqq", #.split(" ", 1)[0],  # Use plant name as device name
-                name=plant_name,
+                name=device_name,
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
                 via_device=(DOMAIN, f"{coordinator.hub.host}_plant"),
@@ -206,8 +214,8 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
                 serial_number = inverter_data.get("serial_number")
 
             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.host}_inverter_{device_id}")},
-                name=f"Sigen Inverter{'' if device_id == 1 else f' {device_id}'}",
+                identifiers={(DOMAIN, f"{coordinator.hub.host}_{str(device_name).lower().replace(' ', '_')}")},
+                name=device_name,
                 manufacturer="Sigenergy",
                 model=model,
                 serial_number=serial_number,

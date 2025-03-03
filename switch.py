@@ -135,30 +135,38 @@ async def async_setup_entry(
         )
 
     # Add inverter switches
+    inverter_no = 0
     for inverter_id in coordinator.hub.inverter_slave_ids:
+        inverter_no += 1
+        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
         for description in INVERTER_SWITCHES:
             entities.append(
                 SigenergySwitch(
                     coordinator=coordinator,
                     hub=hub,
                     description=description,
-                    name=f"{plant_name} Inverter {inverter_id} {description.name}",
+                    name=f"{inverter_name} {description.name}",
                     device_type=DEVICE_TYPE_INVERTER,
                     device_id=inverter_id,
+                    device_name=inverter_name,
                 )
             )
 
     # Add AC charger switches
+    ac_charger_no = 0
     for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
+        ac_charger_no += 1
+        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 1 else f' {ac_charger_no}'}"
         for description in AC_CHARGER_SWITCHES:
             entities.append(
                 SigenergySwitch(
                     coordinator=coordinator,
                     hub=hub,
                     description=description,
-                    name=f"{plant_name} AC Charger {ac_charger_id} {description.name}",
+                    name=f"{ac_charger_name} {description.name}",
                     device_type=DEVICE_TYPE_AC_CHARGER,
                     device_id=ac_charger_id,
+                    device_name=ac_charger_name,
                 )
             )
 
@@ -178,7 +186,8 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         name: str,
         device_type: str,
         device_id: Optional[int],
-        plant_name: Optional[str] =DEFAULT_PLANT_NAME,
+        plant_name: Optional[str] = DEFAULT_PLANT_NAME,
+        device_name: Optional[str] = None,
     ) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
@@ -187,6 +196,9 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         self._attr_name = name
         self._device_type = device_type
         self._device_id = device_id
+        
+        # Use device_name if provided, otherwise use plant_name for backwards compatibility
+        device_name = device_name if device_name is not None else plant_name
         
         # Set unique ID
         if device_type == DEVICE_TYPE_PLANT:
@@ -201,8 +213,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.host}_plant")},
-                # name=f"{hub.name} qqq", #.split(" ", 1)[0],  # Use plant name as device name
-                name=plant_name,
+                name=device_name,
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
                 via_device=(DOMAIN, f"{coordinator.hub.host}_plant"),
@@ -217,8 +228,8 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
                 serial_number = inverter_data.get("serial_number")
 
             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.host}_inverter_{device_id}")},
-                name=f"Sigen Inverter{'' if device_id == 1 else f' {device_id}'}",
+                identifiers={(DOMAIN, f"{coordinator.hub.host}_{str(device_name).lower().replace(' ', '_')}")},
+                name=device_name,
                 manufacturer="Sigenergy",
                 model=model,
                 serial_number=serial_number,
@@ -226,8 +237,8 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
             )
         elif device_type == DEVICE_TYPE_AC_CHARGER:
             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.host}_ac_charger_{device_id}")},
-                name=f"AC Charger {device_id}",
+                identifiers={(DOMAIN, f"{coordinator.hub.host}_{str(device_name).lower().replace(' ', '_')}")},
+                name=device_name,
                 manufacturer="Sigenergy",
                 model="AC Charger",
                 via_device=(DOMAIN, f"{coordinator.hub.host}_plant"),
