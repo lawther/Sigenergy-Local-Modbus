@@ -1,0 +1,10 @@
+- Add check for IP address
+- Add device id check for Inverters
+- Add device id check for AC chargers
+- Add device id check for DC chargers
+- Add check so no AC and Inverter has same address
+- Uncomment developer commented out checks for duplicates
+- Check all sensors and such on yaml integration are available here.
+- Check name on all sensors and such if can be same as yaml
+- Add DC charger
+- Add AC charger device addresses

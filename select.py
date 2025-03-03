@@ -104,11 +104,6 @@ PLANT_SELECTS = [
     ),
 ]
 
-INVERTER_SELECTS = [
-    # Add inverter-specific selects if needed
-]
-
-
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -133,24 +128,6 @@ async def async_setup_entry(
                 device_name=plant_name,
             )
         )
-
-    # Add inverter selects
-    inverter_no = 0
-    for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_no += 1
-        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
-        for description in INVERTER_SELECTS:
-            entities.append(
-                SigenergySelect(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{inverter_name} {description.name}",
-                    device_type=DEVICE_TYPE_INVERTER,
-                    device_id=inverter_id,
-                    device_name=inverter_name,
-                )
-            )
 
     async_add_entities(entities)
 

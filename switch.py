@@ -133,8 +133,7 @@ async def async_setup_entry(
     # Add inverter switches
     inverter_no = 0
     for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_no += 1
-        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
+        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
         for description in INVERTER_SWITCHES:
             entities.append(
                 SigenergySwitch(
@@ -147,12 +146,12 @@ async def async_setup_entry(
                     device_name=inverter_name,
                 )
             )
+        inverter_no += 1
 
     # Add AC charger switches
     ac_charger_no = 0
     for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_no += 1
-        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 1 else f' {ac_charger_no}'}"
+        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
         for description in AC_CHARGER_SWITCHES:
             entities.append(
                 SigenergySwitch(
@@ -165,6 +164,7 @@ async def async_setup_entry(
                     device_name=ac_charger_name,
                 )
             )
+        ac_charger_no += 1
 
     async_add_entities(entities)
 
@@ -253,7 +253,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         """Return if entity is available."""
         if not self.coordinator.last_update_success:
             return False
-            
+
         if self._device_type == DEVICE_TYPE_PLANT:
             return self.coordinator.data is not None and "plant" in self.coordinator.data
         elif self._device_type == DEVICE_TYPE_INVERTER:
