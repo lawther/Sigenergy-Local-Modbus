@@ -467,8 +467,10 @@ async def async_setup_entry(
     _LOGGER.debug(f"config_entry.data: {config_entry.data}")
     _LOGGER.debug(f"coordinator.hub: {coordinator.hub}")
 
+    # Set plant name
+    plant_name : str = config_entry.data[CONF_NAME]
+
     # Add plant sensors
-    plant_name = config_entry.data[CONF_NAME]
     for description in PLANT_SENSORS:
         entities.append(
             SigenergySensor(
@@ -477,36 +479,43 @@ async def async_setup_entry(
                 name=f"{plant_name} {description.name}",
                 device_type=DEVICE_TYPE_PLANT,
                 device_id=None,
-                plant_name=plant_name,
+                device_name=plant_name,
             )
         )
 
     # Add inverter sensors
-    inverter_no = 1
+    inverter_no = 0
     for inverter_id in coordinator.hub.inverter_slave_ids:
+        inverter_no += 1
+        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
+        _LOGGER.debug(f"Adding inverter {inverter_id} with inverter_no {inverter_no} as {inverter_name}")
         for description in INVERTER_SENSORS:
             entities.append(
                 SigenergySensor(
                     coordinator=coordinator,
                     description=description,
-                    # name=f"{plant_name} Inverter {inverter_id} {description.name}",
-                    name=f"{plant_name} Inverter{" " if inverter_no == 1 else f" {inverter_no}"} {description.name}",
+                    name=f"{inverter_name} {description.name}",
                     device_type=DEVICE_TYPE_INVERTER,
                     device_id=inverter_id,
+                    device_name=inverter_name,
                 )
             )
-        inverter_no += 1
 
     # Add AC charger sensors
+    ac_charger_no = 0
     for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
+        ac_charger_no += 1
+        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 1 else f' {ac_charger_no}'}"
+        _LOGGER.debug(f"Adding AC charger {ac_charger_id} with ac_charger_no {ac_charger_no} as {ac_charger_name}")
         for description in AC_CHARGER_SENSORS:
             entities.append(
                 SigenergySensor(
                     coordinator=coordinator,
                     description=description,
-                    name=f"{plant_name} AC Charger {ac_charger_id} {description.name}",
+                    name=f"{ac_charger_name} {description.name}",
                     device_type=DEVICE_TYPE_AC_CHARGER,
                     device_id=ac_charger_id,
+                    device_name=ac_charger_name,
                 )
             )
 
@@ -525,7 +534,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
         name: str,
         device_type: str,
         device_id: Optional[int],
-        plant_name: Optional[str] =DEFAULT_PLANT_NAME,
+        device_name: Optional[str] =DEFAULT_PLANT_NAME,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
@@ -548,7 +557,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.host}_plant")},
                 # name=f"{hub.name} qqq", #.split(" ", 1)[0],  # Use plant name as device name
-                name=plant_name,
+                name=device_name,
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
                 via_device=(DOMAIN, f"{coordinator.hub.host}_plant"),
@@ -563,8 +572,9 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 serial_number = inverter_data.get("serial_number")
 
             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.host}_inverter_{device_id}")},
-                name=f"Sigen Inverter{'' if device_id == 1 else f' {device_id}'}",
+                # identifiers={(DOMAIN, f"{coordinator.hub.host}_inverter_{device_id}")},
+                identifiers={(DOMAIN, f"{coordinator.hub.host}_{str(device_name).lower().replace(' ', '_')}")},
+                name=device_name,
                 manufacturer="Sigenergy",
                 model=model,
                 serial_number=serial_number,
