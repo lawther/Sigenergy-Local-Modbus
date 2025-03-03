@@ -72,11 +72,9 @@ STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        # vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
         vol.Required(CONF_PLANT_ID, default=DEFAULT_SLAVE_ID): int,
         vol.Required(CONF_SLAVE_ID, default=1): int,
-        # vol.Required(CONF_INVERTER_COUNT, default=DEFAULT_INVERTER_COUNT): int,
-        # vol.Required(CONF_AC_CHARGER_COUNT, default=DEFAULT_AC_CHARGER_COUNT): int,
+        vol.Required(CONF_INVERTER_SLAVE_IDS, default="1"): str,
     }
 )
 
@@ -215,6 +213,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle plant configuration."""
+        errors = {}
+        
         if user_input is None:
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
@@ -228,14 +228,43 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self._async_load_plants()
         plant_no = len(self._plants)
 
-        # vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
-        self._data[CONF_NAME] = f"{DEFAULT_PLANT_NAME}{"" if plant_no == 0 else f" {plant_no}"}"
-        self._data[CONF_INVERTER_SLAVE_IDS] = [user_input[CONF_SLAVE_ID]]
+        # Process the inverter slave IDs
+        raw_ids = user_input.get(CONF_INVERTER_SLAVE_IDS, "")
+        id_list = []
+        
+        for part in raw_ids.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if part.isdigit():
+                val = int(part)
+                if not (1 <= val <= 246):
+                    errors[CONF_INVERTER_SLAVE_IDS] = "Each ID must be between 1 and 246."
+                    break
+                id_list.append(val)
+            else:
+                errors[CONF_INVERTER_SLAVE_IDS] = "Invalid integer value."
+                break
+
+        # Commented out under development
+        # Check for duplicates
+        # if len(set(id_list)) != len(id_list):
+        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+
+        # If there are errors, show the form again
+        if errors:
+            return self.async_show_form(
+                step_id=STEP_PLANT_CONFIG,
+                data_schema=STEP_PLANT_CONFIG_SCHEMA,
+                errors=errors
+            )
+
+        # Store the validated list of inverter slave IDs
+        self._data[CONF_INVERTER_SLAVE_IDS] = id_list
+        self._data[CONF_NAME] = f"{DEFAULT_PLANT_NAME}{'' if plant_no == 0 else f' {plant_no}'}"
 
         # Create the configuration entry with the default name
-        return self.async_create_entry(title=DEFAULT_NAME +
-                                       "" if plant_no == 0 
-                                       else f" {plant_no}", data=self._data)
+        return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
 
     def generate_inverter_config_schema(self) -> vol.Schema:
         """Generate the inverter configuration schema."""
@@ -538,3 +567,139 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         for entry in self.hass.config_entries.async_entries(DOMAIN):
             if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER:
                 self._inverters[entry.entry_id] = entry.data.get(CONF_NAME, f"Inverter {entry.entry_id}")
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle dynamic reconfiguration of inverter slave IDs."""
+        if user_input is None:
+            # Retrieve current inverter slave IDs as a comma-separated string
+            current_ids = self._data.get(CONF_INVERTER_SLAVE_IDS, [])
+            current_str = ", ".join(str(i) for i in current_ids) if current_ids else ""
+            schema = vol.Schema({
+                vol.Required(CONF_INVERTER_SLAVE_IDS, default=current_str): str,
+            })
+            return self.async_show_form(
+                step_id="reconfigure",
+                data_schema=schema,
+            )
+
+        errors = {}
+        raw_ids = user_input.get(CONF_INVERTER_SLAVE_IDS, "")
+        id_list = []
+        for part in raw_ids.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if part.isdigit():
+                val = int(part)
+                if not (1 <= val <= 246):
+                    errors[CONF_INVERTER_SLAVE_IDS] = "Each ID must be between 1 and 246."
+                    break
+                id_list.append(val)
+            else:
+                errors[CONF_INVERTER_SLAVE_IDS] = "Invalid integer value."
+                break
+
+        # Commented out under development
+        # Check for duplicates
+        # if len(set(id_list)) != len(id_list):
+        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+
+        if errors:
+            schema = vol.Schema({
+                vol.Required(CONF_INVERTER_SLAVE_IDS, default=raw_ids): str,
+            })
+            return self.async_show_form(
+                step_id="reconfigure",
+                data_schema=schema,
+                errors=errors,
+            )
+
+        self._data[CONF_INVERTER_SLAVE_IDS] = id_list
+        # Update the configuration entry with the new inverter slave IDs
+        self.hass.config_entries.async_update_entry(
+            self.context.get("entry"), data=self._data
+        )
+        return self.async_create_entry(title=self._data.get(CONF_NAME, "Reconfigured"), data=self._data)
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        """Get the options flow for this handler."""
+        return SigenergyOptionsFlowHandler(config_entry)
+
+class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle Sigenergy options."""
+
+    def __init__(self, config_entry):
+        """Initialize options flow."""
+        self.config_entry = config_entry
+        self.options = dict(config_entry.options)
+        self._data = dict(config_entry.data)
+
+    async def async_step_init(self, user_input=None):
+        """Manage the options for the custom component."""
+        if self._data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PLANT:
+            return await self.async_step_reconfigure()
+        return self.async_abort(title="Not Configurable", 
+                               reason="Only plant configurations can be reconfigured")
+
+    async def async_step_reconfigure(self, user_input=None):
+        """Handle reconfiguration of inverter slave IDs."""
+        errors = {}
+        
+        if user_input is None:
+            # Retrieve current inverter slave IDs as a comma-separated string
+            current_ids = self._data.get(CONF_INVERTER_SLAVE_IDS, [])
+            current_str = ", ".join(str(i) for i in current_ids) if current_ids else ""
+            
+            schema = vol.Schema({
+                vol.Required(CONF_INVERTER_SLAVE_IDS, default=current_str): str,
+            })
+            
+            return self.async_show_form(
+                step_id="reconfigure",
+                data_schema=schema,
+            )
+
+        # Process the inverter slave IDs
+        raw_ids = user_input.get(CONF_INVERTER_SLAVE_IDS, "")
+        id_list = []
+        
+        for part in raw_ids.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if part.isdigit():
+                val = int(part)
+                if not (1 <= val <= 246):
+                    errors[CONF_INVERTER_SLAVE_IDS] = "Each ID must be between 1 and 246."
+                    break
+                id_list.append(val)
+            else:
+                errors[CONF_INVERTER_SLAVE_IDS] = "Invalid integer value."
+                break
+
+        # Commented out under development
+        # Check for duplicates
+        # if len(set(id_list)) != len(id_list):
+        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+
+        # If there are errors, show the form again
+        if errors:
+            schema = vol.Schema({
+                vol.Required(CONF_INVERTER_SLAVE_IDS, default=raw_ids): str,
+            })
+            
+            return self.async_show_form(
+                step_id="reconfigure",
+                data_schema=schema,
+                errors=errors,
+            )
+
+        # Update the configuration entry with the new inverter slave IDs
+        new_data = {**self._data, CONF_INVERTER_SLAVE_IDS: id_list}
+        self.hass.config_entries.async_update_entry(
+            self.config_entry, data=new_data
+        )
+        
+        return self.async_create_entry(title="", data={})
