@@ -1,0 +1,11 @@
+{
+    "python.languageServer": "Pylance",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportShadowedImports": "none",
+        "reportMissingImports": "none",
+        "reportUnusedImport": "information",
+    },
+    "pylint.args": [
+        "--disable=E0401,E1123",
+      ],
+  }

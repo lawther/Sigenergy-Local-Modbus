@@ -1,6 +1,5 @@
 """Select platform for Sigenergy ESS integration."""
-# pylint: disable=import-error
-# pyright: reportMissingImports=false
+
 from __future__ import annotations
 
 import logging
@@ -171,8 +170,7 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         name: str,
         device_type: str,
         device_id: Optional[int],
-        plant_name: Optional[str] = DEFAULT_PLANT_NAME,
-        device_name: Optional[str] = None,
+        device_name: Optional[str] = "",
     ) -> None:
         """Initialize the select."""
         super().__init__(coordinator)
@@ -183,17 +181,17 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         self._device_id = device_id
         self._attr_options = description.options
         
-        # Use device_name if provided, otherwise use plant_name for backwards compatibility
-        device_name = device_name if device_name is not None else plant_name
-        
+        # Get the device number if any as a string for use in names
+        device_number_str = device_name.split()[-1]
+        device_number_str = f" {device_number_str}" if device_number_str.isdigit() else ""
+
         # Set unique ID
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}"
         else:
             # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_id}_{description.key}"
             # Used for testing in development to allow multiple sensors with the same unique ID
-            # Remove this line before submitting a PR
-            self._attr_unique_id = f"{coordinator.hub.plant_id}_{device_type}_{device_id}_{description.key}_{random.randint(0, 10000)}"
+            self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_number_str}_{description.key}"
         
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:

@@ -1,12 +1,10 @@
 """Sensor platform for Sigenergy ESS integration."""
-# pylint: disable=import-error
-# pyright: reportMissingImports=false
+
 from __future__ import annotations
 
 import logging
-import random
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Optional
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -26,7 +24,6 @@ from homeassistant.const import (
     UnitOfPower,
     UnitOfTemperature,
     STATE_UNKNOWN,
-    STATE_UNAVAILABLE,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -39,7 +36,6 @@ from .const import (
     DEVICE_TYPE_PLANT,
     DOMAIN,
     RunningState,
-    DEFAULT_PLANT_NAME,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 
@@ -462,10 +458,10 @@ async def async_setup_entry(
 
     _LOGGER.debug("Setting up sensors for %s", config_entry.data[CONF_NAME])
     _LOGGER.debug("Inverters: %s", coordinator.hub.inverter_slave_ids)
-    _LOGGER.debug(f"config_entry: {config_entry}")
-    _LOGGER.debug(f"coordinator: {coordinator}")
-    _LOGGER.debug(f"config_entry.data: {config_entry.data}")
-    _LOGGER.debug(f"coordinator.hub: {coordinator.hub}")
+    _LOGGER.debug("config_entry: %s", config_entry)
+    _LOGGER.debug("coordinator: %s", coordinator)
+    _LOGGER.debug("config_entry.data: %s", config_entry.data)
+    _LOGGER.debug("coordinator.hub: %s", coordinator.hub)
 
     # Set plant name
     plant_name : str = config_entry.data[CONF_NAME]
@@ -488,7 +484,7 @@ async def async_setup_entry(
     for inverter_id in coordinator.hub.inverter_slave_ids:
         inverter_no += 1
         inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
-        _LOGGER.debug(f"Adding inverter {inverter_id} with inverter_no {inverter_no} as {inverter_name}")
+        _LOGGER.debug("Adding inverter %s with inverter_no %s as %s", inverter_id, inverter_no, inverter_name)
         for description in INVERTER_SENSORS:
             entities.append(
                 SigenergySensor(
@@ -506,7 +502,7 @@ async def async_setup_entry(
     for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
         ac_charger_no += 1
         ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 1 else f' {ac_charger_no}'}"
-        _LOGGER.debug(f"Adding AC charger {ac_charger_id} with ac_charger_no {ac_charger_no} as {ac_charger_name}")
+        _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
         for description in AC_CHARGER_SENSORS:
             entities.append(
                 SigenergySensor(
@@ -534,7 +530,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
         name: str,
         device_type: str,
         device_id: Optional[int],
-        device_name: Optional[str] =DEFAULT_PLANT_NAME,
+        device_name: Optional[str] ="",
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
@@ -543,14 +539,17 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
         self._device_type = device_type
         self._device_id = device_id
 
+        # Get the device number if any as a string for use in names
+        device_number_str = device_name.split()[-1]
+        device_number_str = f" {device_number_str}" if device_number_str.isdigit() else ""
+
         # Set unique ID
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}"
         else:
             # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_id}_{description.key}"
             # Used for testing in development to allow multiple sensors with the same unique ID
-            # Remove this line before submitting a PR
-            self._attr_unique_id = f"{coordinator.hub.plant_id}_{device_type}_{device_id}_{description.key}_{random.randint(0, 10000)}"
+            self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_number_str}_{description.key}"
 
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:

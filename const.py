@@ -65,7 +65,7 @@ DEFAULT_AC_CHARGER_COUNT = 0
 DEFAULT_DC_CHARGER_COUNT = 0
 
 # Platforms
-PLATFORMS = ["sensor", "switch", "select", "number", "button"]
+PLATFORMS = ["sensor", "switch", "select", "number"]
 
 # Device types
 DEVICE_TYPE_PLANT = "plant"
