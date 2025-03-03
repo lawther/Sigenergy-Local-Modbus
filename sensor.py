@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import logging, random
+import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -462,6 +462,9 @@ async def async_setup_entry(
     _LOGGER.debug("coordinator: %s", coordinator)
     _LOGGER.debug("config_entry.data: %s", config_entry.data)
     _LOGGER.debug("coordinator.hub: %s", coordinator.hub)
+    _LOGGER.debug("coordinator.hub.config_entry: %s", coordinator.hub.config_entry)
+    _LOGGER.debug("coordinator.hub.config_entry.data: %s", coordinator.hub.config_entry.data)
+    _LOGGER.debug("coordinator.hub.config_entry.entry_id: %s", coordinator.hub.config_entry.entry_id)
 
     # Set plant name
     plant_name : str = config_entry.data[CONF_NAME]
@@ -546,21 +549,21 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
         # Set unique ID
         if device_type == DEVICE_TYPE_PLANT:
             # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}"
-            self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}_{random.randint(1, 1000000)}"
+            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
         else:
             # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_id}_{description.key}"
             # Used for testing in development to allow multiple sensors with the same unique ID
-            self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_number_str}_{description.key}_{random.randint(1, 1000000)}"
+            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
 
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.host}_plant")},
+                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
                 # name=f"{hub.name} qqq", #.split(" ", 1)[0],  # Use plant name as device name
                 name=device_name,
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
-                via_device=(DOMAIN, f"{coordinator.hub.host}_plant"),
+                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
         elif device_type == DEVICE_TYPE_INVERTER:
             # Get model and serial number if available
@@ -573,20 +576,20 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
 
             self._attr_device_info = DeviceInfo(
                 # identifiers={(DOMAIN, f"{coordinator.hub.host}_inverter_{device_id}")},
-                identifiers={(DOMAIN, f"{coordinator.hub.host}_{str(device_name).lower().replace(' ', '_')}")},
+                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
                 name=device_name,
                 manufacturer="Sigenergy",
                 model=model,
                 serial_number=serial_number,
-                via_device=(DOMAIN, f"{coordinator.hub.host}_plant"),
+                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
         elif device_type == DEVICE_TYPE_AC_CHARGER:
             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.host}_ac_charger_{device_id}")},
+                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_ac_charger_{device_id}")},
                 name=f"AC Charger {device_id}",
                 manufacturer="Sigenergy",
                 model="AC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.host}_plant"),
+                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
 
     @property
