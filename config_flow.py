@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Dict, List, Tuple
 
 import voluptuous as vol
 
@@ -35,18 +35,51 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 # Schema definitions for each step
-STEP_USER_DATA_SCHEMA = vol.Schema({})  # Empty schema for initial step
-
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Required(CONF_PLANT_ID, default=DEFAULT_SLAVE_ID): int,
         vol.Required(CONF_INVERTER_SLAVE_IDS, default="1"): str,
-        vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=""): str,
-        vol.Required(CONF_DC_CHARGER_SLAVE_IDS, default=""): str,
+        vol.Optional(CONF_AC_CHARGER_SLAVE_IDS, default=""): str,
+        vol.Optional(CONF_DC_CHARGER_SLAVE_IDS, default=""): str,
     }
 )
+
+def validate_slave_ids(raw_ids: str, field_name: str) -> Tuple[List[int], Dict[str, str]]:
+    """Validate slave IDs from a comma-separated string.
+    
+    Returns:
+        Tuple containing list of valid IDs and dict of errors (if any)
+        An empty string input will return an empty list with no errors.
+    """
+    errors = {}
+    id_list = []
+    
+    # Skip validation for empty strings (indicating no devices of this type)
+    if not raw_ids or raw_ids.strip() == "":
+        return [], errors
+    
+    for part in raw_ids.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if part.isdigit():
+            val = int(part)
+            if not (1 <= val <= 246):
+                errors[field_name] = "each_id_must_be_between_1_and_246"
+                break
+            id_list.append(val)
+        else:
+            errors[field_name] = "invalid_integer_value"
+            break
+            
+    # Check for duplicate IDs
+    if not errors and not DEVELOPER_MODE:
+        if len(set(id_list)) != len(id_list):
+            errors[field_name] = "duplicate_ids_found"
+            
+    return id_list, errors
 
 class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Sigenergy ESS."""
@@ -77,58 +110,42 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self._async_load_plants()
         plant_no = len(self._plants)
 
-        # Process the inverter slave IDs
-        raw_ids = user_input.get(CONF_INVERTER_SLAVE_IDS, "")
-        id_list = []
+        # Process and validate all slave IDs
+        inverter_ids, inv_errors = validate_slave_ids(
+            user_input.get(CONF_INVERTER_SLAVE_IDS, ""), 
+            CONF_INVERTER_SLAVE_IDS
+        )
+        errors.update(inv_errors)
         
-        for part in raw_ids.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            if part.isdigit():
-                val = int(part)
-                if not (1 <= val <= 246):
-                    errors[CONF_INVERTER_SLAVE_IDS] = "Each ID must be between 1 and 246."
-                    break
-                id_list.append(val)
-            else:
-                errors[CONF_INVERTER_SLAVE_IDS] = "Invalid integer value."
-                break
+        ac_charger_ids, ac_errors = validate_slave_ids(
+            user_input.get(CONF_AC_CHARGER_SLAVE_IDS, ""), 
+            CONF_AC_CHARGER_SLAVE_IDS
+        )
+        errors.update(ac_errors)
+        
+        dc_charger_ids, dc_errors = validate_slave_ids(
+            user_input.get(CONF_DC_CHARGER_SLAVE_IDS, ""), 
+            CONF_DC_CHARGER_SLAVE_IDS
+        )
+        errors.update(dc_errors)
 
-        # Check for duplicate Inverter IDs
-        if not DEVELOPER_MODE:
-            if len(set(id_list)) != len(id_list):
-                errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        # Check for conflicts between device types
+        if not errors:
+            # Check AC charger IDs don't conflict with inverter IDs
+            # Note: Empty AC charger list is valid and means no AC chargers present
+            if ac_charger_ids:
+                for ac_id in ac_charger_ids:
+                    if ac_id in inverter_ids:
+                        errors[CONF_AC_CHARGER_SLAVE_IDS] = "ac_charger_conflicts_inverter"
+                        break
             
-        # Process the AC charger slave IDs
-        raw_ac_ids = user_input.get(CONF_AC_CHARGER_SLAVE_IDS, "")
-        ac_id_list = []
-        
-        for part in raw_ac_ids.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            if part.isdigit():
-                val = int(part)
-                if not (1 <= val <= 246):
-                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "Each ID must be between 1 and 246."
-                    break
-                ac_id_list.append(val)
-            else:
-                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Invalid integer value."
-                break
-
-        # Check for duplicates in AC charger IDs
-        if not DEVELOPER_MODE:
-            if len(set(ac_id_list)) != len(ac_id_list):
-                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
-                
-        # Check that no AC charger IDs are present in the inverter IDs
-        if ac_id_list and not errors.get(CONF_AC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
-            for ac_id in ac_id_list:
-                if ac_id in id_list:
-                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "AC charger conflicts with inverter."
-                    break
+            # Check DC charger IDs are all included in inverter IDs
+            # Note: Empty DC charger list is valid and means no DC chargers present
+            if dc_charger_ids:
+                for dc_id in dc_charger_ids:
+                    if dc_id not in inverter_ids:
+                        errors[CONF_DC_CHARGER_SLAVE_IDS] = "dc_charger_requires_inverter"
+                        break
 
         # If there are errors, show the form again
         if errors:
@@ -138,78 +155,16 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors=errors
             )
 
-        # Store the validated list of inverter slave IDs
-        self._data[CONF_INVERTER_SLAVE_IDS] = id_list
+        # Store the validated lists
+        self._data[CONF_INVERTER_SLAVE_IDS] = inverter_ids
+        self._data[CONF_AC_CHARGER_SLAVE_IDS] = ac_charger_ids
+        self._data[CONF_DC_CHARGER_SLAVE_IDS] = dc_charger_ids
         
-        # Store the validated list of AC charger slave IDs
-        self._data[CONF_AC_CHARGER_SLAVE_IDS] = ac_id_list
-        
-        # Process the DC charger slave IDs
-        raw_dc_ids = user_input.get(CONF_DC_CHARGER_SLAVE_IDS, "")
-        dc_id_list = []
-        
-        for part in raw_dc_ids.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            if part.isdigit():
-                val = int(part)
-                if not (1 <= val <= 246):
-                    errors[CONF_DC_CHARGER_SLAVE_IDS] = "Each ID must be between 1 and 246."
-                    break
-                dc_id_list.append(val)
-            else:
-                errors[CONF_DC_CHARGER_SLAVE_IDS] = "Invalid integer value."
-                break
-
-        # Check for duplicates in DC charger IDs
-        if not DEVELOPER_MODE:
-            if len(set(dc_id_list)) != len(dc_id_list):
-                errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
-        
-        # Check if all DC charger IDs are present in the inverter IDs
-        if dc_id_list and not errors.get(CONF_DC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
-            for dc_id in dc_id_list:
-                if dc_id not in id_list:
-                    errors[CONF_DC_CHARGER_SLAVE_IDS] = "DC charger requires inverter."
-                    break
-
-        # Store the validated list of DC charger slave IDs
-        self._data[CONF_DC_CHARGER_SLAVE_IDS] = dc_id_list
-
         # Store the plant name generated based on the number of installed plants
         self._data[CONF_NAME] = f"{DEFAULT_PLANT_NAME}{'' if plant_no == 0 else f' {plant_no}'}"
 
         # Create the configuration entry with the default name
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
-
-    def generate_inverter_config_schema(self) -> vol.Schema:
-        """Generate the inverter configuration schema."""
-        # Find the next available slave ID after existing inverters to suggest as default
-        existing_slave_ids = []
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            if entry.data.get(CONF_DEVICE_TYPE) in [DEVICE_TYPE_PLANT]:
-                existing_slave_ids.extend(entry.data.get(CONF_INVERTER_SLAVE_IDS, []))
-            elif entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER:
-                existing_slave_ids.append(entry.data.get(CONF_SLAVE_ID, 0))
-
-        # Start from the highest existing slave ID + 1
-        next_slave_id = max(existing_slave_ids, default=0) + 1
-
-        # Create dynamic schema with plants dropdown and other fields
-        return vol.Schema({
-            # vol.Required(CONF_NAME, default="Inverter"): str,
-            vol.Required(CONF_SLAVE_ID, default=next_slave_id): int,
-            vol.Required(CONF_PARENT_DEVICE_ID): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=[
-                        {"value": plant_id, "label": plant_name}
-                        for plant_id, plant_name in self._plants.items()
-                    ],
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                )
-            )
-        })
 
     async def _async_load_plants(self) -> None:
         """Load existing plants from config entries."""
@@ -233,116 +188,56 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle dynamic reconfiguration of inverter and AC charger slave IDs."""
         if user_input is None:
-            # Retrieve current inverter slave IDs as a comma-separated string
-            current_ids = self._data.get(CONF_INVERTER_SLAVE_IDS, [])
-            current_str = ", ".join(str(i) for i in current_ids) if current_ids else ""
-            
-            # Retrieve current AC charger slave IDs as a comma-separated string
-            current_ac_ids = self._data.get(CONF_AC_CHARGER_SLAVE_IDS, [])
-            current_ac_str = ", ".join(str(i) for i in current_ac_ids) if current_ac_ids else ""
-            
-            # Retrieve current DC charger slave IDs as a comma-separated string
-            current_dc_ids = self._data.get(CONF_DC_CHARGER_SLAVE_IDS, [])
-            current_dc_str = ", ".join(str(i) for i in current_dc_ids) if current_dc_ids else ""
-            
-            schema = vol.Schema({
-                vol.Required(CONF_INVERTER_SLAVE_IDS, default=current_str): str,
-                vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=current_ac_str): str,
-                vol.Required(CONF_DC_CHARGER_SLAVE_IDS, default=current_dc_str): str,
-            })
+            # Create schema with current values
+            schema = self._create_reconfigure_schema()
             return self.async_show_form(
                 step_id="reconfigure",
                 data_schema=schema,
             )
 
+        # Process and validate all slave IDs
         errors = {}
+        inverter_ids, inv_errors = validate_slave_ids(
+            user_input.get(CONF_INVERTER_SLAVE_IDS, ""), 
+            CONF_INVERTER_SLAVE_IDS
+        )
+        errors.update(inv_errors)
         
-        # Process the inverter slave IDs
-        raw_ids = user_input.get(CONF_INVERTER_SLAVE_IDS, "")
-        id_list = []
-        for part in raw_ids.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            if part.isdigit():
-                val = int(part)
-                if not (1 <= val <= 246):
-                    errors[CONF_INVERTER_SLAVE_IDS] = "Each ID must be between 1 and 246."
-                    break
-                id_list.append(val)
-            else:
-                errors[CONF_INVERTER_SLAVE_IDS] = "Invalid integer value."
-                break
+        ac_charger_ids, ac_errors = validate_slave_ids(
+            user_input.get(CONF_AC_CHARGER_SLAVE_IDS, ""), 
+            CONF_AC_CHARGER_SLAVE_IDS
+        )
+        errors.update(ac_errors)
+        
+        dc_charger_ids, dc_errors = validate_slave_ids(
+            user_input.get(CONF_DC_CHARGER_SLAVE_IDS, ""), 
+            CONF_DC_CHARGER_SLAVE_IDS
+        )
+        errors.update(dc_errors)
 
-        # Check for duplicate Inverter IDs
-        if not DEVELOPER_MODE:
-            if len(set(id_list)) != len(id_list):
-                errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        # Check for conflicts between device types
+        if not errors:
+            # Note: Empty AC charger list is valid and means no AC chargers present
+            if ac_charger_ids:
+                for ac_id in ac_charger_ids:
+                    if ac_id in inverter_ids:
+                        errors[CONF_AC_CHARGER_SLAVE_IDS] = "ac_charger_conflicts_inverter"
+                        break
             
-        # Process the AC charger slave IDs
-        raw_ac_ids = user_input.get(CONF_AC_CHARGER_SLAVE_IDS, "")
-        ac_id_list = []
-        for part in raw_ac_ids.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            if part.isdigit():
-                val = int(part)
-                if not (1 <= val <= 246):
-                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "Each ID must be between 1 and 246."
-                    break
-                ac_id_list.append(val)
-            else:
-                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Invalid integer value."
-                break
-
-        # Check for duplicates in AC charger IDs
-        if not DEVELOPER_MODE:
-            if len(set(ac_id_list)) != len(ac_id_list):
-                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
-                
-        # Check that no AC charger IDs are present in the inverter IDs
-        if ac_id_list and not errors.get(CONF_AC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
-            for ac_id in ac_id_list:
-                if ac_id in id_list:
-                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "AC charger conflicts with inverter."
-                    break
-            
-        # Process the DC charger slave IDs
-        raw_dc_ids = user_input.get(CONF_DC_CHARGER_SLAVE_IDS, "")
-        dc_id_list = []
-        for part in raw_dc_ids.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            if part.isdigit():
-                val = int(part)
-                if not (1 <= val <= 246):
-                    errors[CONF_DC_CHARGER_SLAVE_IDS] = "Each ID must be between 1 and 246."
-                    break
-                dc_id_list.append(val)
-            else:
-                errors[CONF_DC_CHARGER_SLAVE_IDS] = "Invalid integer value."
-                break
-
-        # Check for duplicates in DC charger IDs
-        if not DEVELOPER_MODE:
-            if len(set(dc_id_list)) != len(dc_id_list):
-                errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
-                
-        # Check if all DC charger IDs are present in the inverter IDs
-        if dc_id_list and not errors.get(CONF_DC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
-            for dc_id in dc_id_list:
-                if dc_id not in id_list:
-                    errors[CONF_DC_CHARGER_SLAVE_IDS] = "DC charger requires inverter."
-                    break
+            # Note: Empty DC charger list is valid and means no DC chargers present
+            if dc_charger_ids:
+                for dc_id in dc_charger_ids:
+                    if dc_id not in inverter_ids:
+                        errors[CONF_DC_CHARGER_SLAVE_IDS] = "dc_charger_requires_inverter"
+                        break
 
         if errors:
-            schema = vol.Schema({
-                vol.Required(CONF_INVERTER_SLAVE_IDS, default=raw_ids): str,
-                vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=raw_ac_ids): str,
-                vol.Required(CONF_DC_CHARGER_SLAVE_IDS, default=raw_dc_ids): str,
-            })
+            # Re-create schema with user input values for error display
+            schema = self._create_reconfigure_schema(
+                user_input.get(CONF_INVERTER_SLAVE_IDS, ""),
+                user_input.get(CONF_AC_CHARGER_SLAVE_IDS, ""),
+                user_input.get(CONF_DC_CHARGER_SLAVE_IDS, "")
+            )
             return self.async_show_form(
                 step_id="reconfigure",
                 data_schema=schema,
@@ -350,15 +245,36 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         # Update the data with the validated IDs
-        self._data[CONF_INVERTER_SLAVE_IDS] = id_list
-        self._data[CONF_AC_CHARGER_SLAVE_IDS] = ac_id_list
-        self._data[CONF_DC_CHARGER_SLAVE_IDS] = dc_id_list
+        self._data[CONF_INVERTER_SLAVE_IDS] = inverter_ids
+        self._data[CONF_AC_CHARGER_SLAVE_IDS] = ac_charger_ids
+        self._data[CONF_DC_CHARGER_SLAVE_IDS] = dc_charger_ids
         
         # Update the configuration entry with the new data
         self.hass.config_entries.async_update_entry(
             self.context.get("entry"), data=self._data
         )
         return self.async_create_entry(title=self._data.get(CONF_NAME, "Reconfigured"), data=self._data)
+
+    def _create_reconfigure_schema(self, inv_ids="", ac_ids="", dc_ids=""):
+        """Create schema for reconfiguration step with default or provided values."""
+        # Use provided values or get current values from data
+        if not inv_ids:
+            current_ids = self._data.get(CONF_INVERTER_SLAVE_IDS, [])
+            inv_ids = ", ".join(str(i) for i in current_ids) if current_ids else ""
+        
+        if not ac_ids:
+            current_ac_ids = self._data.get(CONF_AC_CHARGER_SLAVE_IDS, [])
+            ac_ids = ", ".join(str(i) for i in current_ac_ids) if current_ac_ids else ""
+        
+        if not dc_ids:
+            current_dc_ids = self._data.get(CONF_DC_CHARGER_SLAVE_IDS, [])
+            dc_ids = ", ".join(str(i) for i in current_dc_ids) if current_dc_ids else ""
+        
+        return vol.Schema({
+            vol.Required(CONF_INVERTER_SLAVE_IDS, default=inv_ids): str,
+            vol.Optional(CONF_AC_CHARGER_SLAVE_IDS, default=ac_ids): str,
+            vol.Optional(CONF_DC_CHARGER_SLAVE_IDS, default=dc_ids): str,
+        })
 
     @staticmethod
     @callback
@@ -384,119 +300,55 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         errors = {}
         
         if user_input is None:
-            # Retrieve current inverter slave IDs as a comma-separated string
-            current_ids = self._data.get(CONF_INVERTER_SLAVE_IDS, [])
-            current_str = ", ".join(str(i) for i in current_ids) if current_ids else ""
-            # Retrieve current AC charger slave IDs as a comma-separated string
-            current_ac_ids = self._data.get(CONF_AC_CHARGER_SLAVE_IDS, [])
-            current_ac_str = ", ".join(str(i) for i in current_ac_ids) if current_ac_ids else ""
-            
-            # Retrieve current DC charger slave IDs as a comma-separated string
-            current_dc_ids = self._data.get(CONF_DC_CHARGER_SLAVE_IDS, [])
-            current_dc_str = ", ".join(str(i) for i in current_dc_ids) if current_dc_ids else ""
-            
-            schema = vol.Schema({
-                vol.Required(CONF_INVERTER_SLAVE_IDS, default=current_str): str,
-                vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=current_ac_str): str,
-                vol.Required(CONF_DC_CHARGER_SLAVE_IDS, default=current_dc_str): str,
-            })
-            
+            # Create schema with current values
+            schema = self._create_reconfigure_schema()
             return self.async_show_form(
                 step_id="reconfigure",
                 data_schema=schema,
             )
 
-        # Process the inverter slave IDs
-        raw_ids = user_input.get(CONF_INVERTER_SLAVE_IDS, "")
-        id_list = []
+        # Process and validate all slave IDs
+        inverter_ids, inv_errors = validate_slave_ids(
+            user_input.get(CONF_INVERTER_SLAVE_IDS, ""), 
+            CONF_INVERTER_SLAVE_IDS
+        )
+        errors.update(inv_errors)
         
-        for part in raw_ids.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            if part.isdigit():
-                val = int(part)
-                if not (1 <= val <= 246):
-                    errors[CONF_INVERTER_SLAVE_IDS] = "Each ID must be between 1 and 246."
-                    break
-                id_list.append(val)
-            else:
-                errors[CONF_INVERTER_SLAVE_IDS] = "Invalid integer value."
-                break
+        ac_charger_ids, ac_errors = validate_slave_ids(
+            user_input.get(CONF_AC_CHARGER_SLAVE_IDS, ""), 
+            CONF_AC_CHARGER_SLAVE_IDS
+        )
+        errors.update(ac_errors)
+        
+        dc_charger_ids, dc_errors = validate_slave_ids(
+            user_input.get(CONF_DC_CHARGER_SLAVE_IDS, ""), 
+            CONF_DC_CHARGER_SLAVE_IDS
+        )
+        errors.update(dc_errors)
 
-        # Check for duplicate Inverter IDs
-        if not DEVELOPER_MODE:
-            if len(set(id_list)) != len(id_list):
-                errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        # Check for conflicts between device types
+        if not errors:
+            # Note: Empty AC charger list is valid and means no AC chargers present
+            if ac_charger_ids:
+                for ac_id in ac_charger_ids:
+                    if ac_id in inverter_ids:
+                        errors[CONF_AC_CHARGER_SLAVE_IDS] = "ac_charger_conflicts_inverter"
+                        break
             
-        # Process the AC charger slave IDs
-        raw_ac_ids = user_input.get(CONF_AC_CHARGER_SLAVE_IDS, "")
-        ac_id_list = []
-        
-        for part in raw_ac_ids.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            if part.isdigit():
-                val = int(part)
-                if not (1 <= val <= 246):
-                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "Each ID must be between 1 and 246."
-                    break
-                ac_id_list.append(val)
-            else:
-                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Invalid integer value."
-                break
+            # Note: Empty DC charger list is valid and means no DC chargers present
+            if dc_charger_ids:
+                for dc_id in dc_charger_ids:
+                    if dc_id not in inverter_ids:
+                        errors[CONF_DC_CHARGER_SLAVE_IDS] = "dc_charger_requires_inverter"
+                        break
 
-        # Check for duplicates in AC charger IDs
-        if not DEVELOPER_MODE:
-            if len(set(ac_id_list)) != len(ac_id_list):
-                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
-                
-        # Check that no AC charger IDs are present in the inverter IDs
-        if ac_id_list and not errors.get(CONF_AC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
-            for ac_id in ac_id_list:
-                if ac_id in id_list:
-                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "AC charger conflicts with inverter."
-                    break
-            
-        # Process the DC charger slave IDs
-        raw_dc_ids = user_input.get(CONF_DC_CHARGER_SLAVE_IDS, "")
-        dc_id_list = []
-        
-        for part in raw_dc_ids.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            if part.isdigit():
-                val = int(part)
-                if not (1 <= val <= 246):
-                    errors[CONF_DC_CHARGER_SLAVE_IDS] = "Each ID must be between 1 and 246."
-                    break
-                dc_id_list.append(val)
-            else:
-                errors[CONF_DC_CHARGER_SLAVE_IDS] = "Invalid integer value."
-                break
-
-        # Check for duplicates in DC charger IDs
-        if not DEVELOPER_MODE:
-            if len(set(dc_id_list)) != len(dc_id_list):
-                errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
-        
-        # Check if all DC charger IDs are present in the inverter IDs
-        if dc_id_list and not errors.get(CONF_DC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
-            for dc_id in dc_id_list:
-                if dc_id not in id_list:
-                    errors[CONF_DC_CHARGER_SLAVE_IDS] = "DC charger requires inverter."
-                    break
-
-        # If there are errors, show the form again
         if errors:
-            schema = vol.Schema({
-                vol.Required(CONF_INVERTER_SLAVE_IDS, default=raw_ids): str,
-                vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=raw_ac_ids): str,
-                vol.Required(CONF_DC_CHARGER_SLAVE_IDS, default=raw_dc_ids): str,
-            })
-            
+            # Re-create schema with user input values for error display
+            schema = self._create_reconfigure_schema(
+                user_input.get(CONF_INVERTER_SLAVE_IDS, ""),
+                user_input.get(CONF_AC_CHARGER_SLAVE_IDS, ""),
+                user_input.get(CONF_DC_CHARGER_SLAVE_IDS, "")
+            )
             return self.async_show_form(
                 step_id="reconfigure",
                 data_schema=schema,
@@ -504,9 +356,35 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             )
 
         # Update the configuration entry with the new IDs
-        new_data = {**self._data, CONF_INVERTER_SLAVE_IDS: id_list, CONF_AC_CHARGER_SLAVE_IDS: ac_id_list, CONF_DC_CHARGER_SLAVE_IDS: dc_id_list}
+        new_data = {
+            **self._data, 
+            CONF_INVERTER_SLAVE_IDS: inverter_ids, 
+            CONF_AC_CHARGER_SLAVE_IDS: ac_charger_ids, 
+            CONF_DC_CHARGER_SLAVE_IDS: dc_charger_ids
+        }
         self.hass.config_entries.async_update_entry(
             self.config_entry, data=new_data
         )
         
         return self.async_create_entry(title="", data={})
+
+    def _create_reconfigure_schema(self, inv_ids="", ac_ids="", dc_ids=""):
+        """Create schema for reconfiguration step with default or provided values."""
+        # Use provided values or get current values from data
+        if not inv_ids:
+            current_ids = self._data.get(CONF_INVERTER_SLAVE_IDS, [])
+            inv_ids = ", ".join(str(i) for i in current_ids) if current_ids else ""
+        
+        if not ac_ids:
+            current_ac_ids = self._data.get(CONF_AC_CHARGER_SLAVE_IDS, [])
+            ac_ids = ", ".join(str(i) for i in current_ac_ids) if current_ac_ids else ""
+        
+        if not dc_ids:
+            current_dc_ids = self._data.get(CONF_DC_CHARGER_SLAVE_IDS, [])
+            dc_ids = ", ".join(str(i) for i in current_dc_ids) if current_dc_ids else ""
+        
+        return vol.Schema({
+            vol.Required(CONF_INVERTER_SLAVE_IDS, default=inv_ids): str,
+            vol.Required(CONF_AC_CHARGER_SLAVE_IDS, default=ac_ids): str,
+            vol.Required(CONF_DC_CHARGER_SLAVE_IDS, default=dc_ids): str,
+        })
