@@ -28,7 +28,9 @@
       "unknown": "An unexpected error occurred.",
       "invalid_integer_value": "Invalid integer value.",
       "each_id_must_be_between_1_and_246": "Each ID must be between 1 and 246.",
-      "duplicate_ids_found": "Duplicate IDs found."
+      "duplicate_ids_found": "Duplicate IDs found.",
+      "dc_charger_requires_inverter": "DC charger IDs must correspond to configured inverter IDs.",
+      "ac_charger_conflicts_inverter": "AC charger IDs must be different from inverter IDs."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured."
@@ -53,7 +55,9 @@
     "error": {
       "invalid_integer_value": "Invalid integer value.",
       "each_id_must_be_between_1_and_246": "Each ID must be between 1 and 246.",
-      "duplicate_ids_found": "Duplicate IDs found."
+      "duplicate_ids_found": "Duplicate IDs found.",
+      "dc_charger_requires_inverter": "DC charger IDs must correspond to configured inverter IDs.",
+      "ac_charger_conflicts_inverter": "AC charger IDs must be different from inverter IDs."
     }
   }
 }

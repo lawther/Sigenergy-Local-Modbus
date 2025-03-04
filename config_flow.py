@@ -122,6 +122,13 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not DEVELOPER_MODE:
             if len(set(ac_id_list)) != len(ac_id_list):
                 errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+                
+        # Check that no AC charger IDs are present in the inverter IDs
+        if ac_id_list and not errors.get(CONF_AC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
+            for ac_id in ac_id_list:
+                if ac_id in id_list:
+                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "AC charger conflicts with inverter."
+                    break
 
         # If there are errors, show the form again
         if errors:
@@ -159,6 +166,13 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not DEVELOPER_MODE:
             if len(set(dc_id_list)) != len(dc_id_list):
                 errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+        
+        # Check if all DC charger IDs are present in the inverter IDs
+        if dc_id_list and not errors.get(CONF_DC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
+            for dc_id in dc_id_list:
+                if dc_id not in id_list:
+                    errors[CONF_DC_CHARGER_SLAVE_IDS] = "DC charger requires inverter."
+                    break
 
         # Store the validated list of DC charger slave IDs
         self._data[CONF_DC_CHARGER_SLAVE_IDS] = dc_id_list
@@ -286,6 +300,13 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not DEVELOPER_MODE:
             if len(set(ac_id_list)) != len(ac_id_list):
                 errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+                
+        # Check that no AC charger IDs are present in the inverter IDs
+        if ac_id_list and not errors.get(CONF_AC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
+            for ac_id in ac_id_list:
+                if ac_id in id_list:
+                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "AC charger conflicts with inverter."
+                    break
             
         # Process the DC charger slave IDs
         raw_dc_ids = user_input.get(CONF_DC_CHARGER_SLAVE_IDS, "")
@@ -308,6 +329,13 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not DEVELOPER_MODE:
             if len(set(dc_id_list)) != len(dc_id_list):
                 errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+                
+        # Check if all DC charger IDs are present in the inverter IDs
+        if dc_id_list and not errors.get(CONF_DC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
+            for dc_id in dc_id_list:
+                if dc_id not in id_list:
+                    errors[CONF_DC_CHARGER_SLAVE_IDS] = "DC charger requires inverter."
+                    break
 
         if errors:
             schema = vol.Schema({
@@ -423,6 +451,13 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         if not DEVELOPER_MODE:
             if len(set(ac_id_list)) != len(ac_id_list):
                 errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+                
+        # Check that no AC charger IDs are present in the inverter IDs
+        if ac_id_list and not errors.get(CONF_AC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
+            for ac_id in ac_id_list:
+                if ac_id in id_list:
+                    errors[CONF_AC_CHARGER_SLAVE_IDS] = "AC charger conflicts with inverter."
+                    break
             
         # Process the DC charger slave IDs
         raw_dc_ids = user_input.get(CONF_DC_CHARGER_SLAVE_IDS, "")
@@ -446,6 +481,13 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         if not DEVELOPER_MODE:
             if len(set(dc_id_list)) != len(dc_id_list):
                 errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+        
+        # Check if all DC charger IDs are present in the inverter IDs
+        if dc_id_list and not errors.get(CONF_DC_CHARGER_SLAVE_IDS) and not errors.get(CONF_INVERTER_SLAVE_IDS):
+            for dc_id in dc_id_list:
+                if dc_id not in id_list:
+                    errors[CONF_DC_CHARGER_SLAVE_IDS] = "DC charger requires inverter."
+                    break
 
         # If there are errors, show the form again
         if errors:
