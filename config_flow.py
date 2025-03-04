@@ -15,33 +15,19 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
 from .const import (
-    CONF_AC_CHARGER_COUNT,
+    DEVELOPER_MODE,
     CONF_AC_CHARGER_SLAVE_IDS,
-    CONF_DC_CHARGER_COUNT,
     CONF_DC_CHARGER_SLAVE_IDS,
     CONF_DEVICE_TYPE,
-    CONF_INVERTER_COUNT,
     CONF_INVERTER_SLAVE_IDS,
     CONF_PARENT_DEVICE_ID,
     CONF_PLANT_ID,
     CONF_SLAVE_ID,
-    DEFAULT_AC_CHARGER_COUNT,
-    DEFAULT_DC_CHARGER_COUNT,
-    DEFAULT_INVERTER_COUNT,
     DEFAULT_PORT,
     DEFAULT_SLAVE_ID,
-    DEVICE_TYPE_AC_CHARGER,
-    DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
-    STEP_AC_CHARGER_CONFIG,
-    STEP_DC_CHARGER_CONFIG,
-    STEP_DEVICE_TYPE,
-    STEP_INVERTER_CONFIG,
-    STEP_PLANT_CONFIG,
-    STEP_SELECT_INVERTER,
-    STEP_SELECT_PLANT,
     STEP_USER,
     DEFAULT_PLANT_NAME,
 )
@@ -109,10 +95,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_INVERTER_SLAVE_IDS] = "Invalid integer value."
                 break
 
-        # Commented out under development
-        # Check for duplicates
-        # if len(set(id_list)) != len(id_list):
-        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        # Check for duplicate Inverter IDs
+        if not DEVELOPER_MODE:
+            if len(set(id_list)) != len(id_list):
+                errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
             
         # Process the AC charger slave IDs
         raw_ac_ids = user_input.get(CONF_AC_CHARGER_SLAVE_IDS, "")
@@ -132,10 +118,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_AC_CHARGER_SLAVE_IDS] = "Invalid integer value."
                 break
 
-        # Commented out under development
         # Check for duplicates in AC charger IDs
-        # if len(set(ac_id_list)) != len(ac_id_list):
-        #     errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+        if not DEVELOPER_MODE:
+            if len(set(ac_id_list)) != len(ac_id_list):
+                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
 
         # If there are errors, show the form again
         if errors:
@@ -169,11 +155,11 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_DC_CHARGER_SLAVE_IDS] = "Invalid integer value."
                 break
 
-        # Commented out under development
         # Check for duplicates in DC charger IDs
-        # if len(set(dc_id_list)) != len(dc_id_list):
-        #     errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
-        
+        if not DEVELOPER_MODE:
+            if len(set(dc_id_list)) != len(dc_id_list):
+                errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+
         # Store the validated list of DC charger slave IDs
         self._data[CONF_DC_CHARGER_SLAVE_IDS] = dc_id_list
 
@@ -274,10 +260,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_INVERTER_SLAVE_IDS] = "Invalid integer value."
                 break
 
-        # Commented out under development
-        # Check for duplicates in inverter IDs
-        # if len(set(id_list)) != len(id_list):
-        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        # Check for duplicate Inverter IDs
+        if not DEVELOPER_MODE:
+            if len(set(id_list)) != len(id_list):
+                errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
             
         # Process the AC charger slave IDs
         raw_ac_ids = user_input.get(CONF_AC_CHARGER_SLAVE_IDS, "")
@@ -296,10 +282,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_AC_CHARGER_SLAVE_IDS] = "Invalid integer value."
                 break
 
-        # Commented out under development
         # Check for duplicates in AC charger IDs
-        # if len(set(ac_id_list)) != len(ac_id_list):
-        #     errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+        if not DEVELOPER_MODE:
+            if len(set(ac_id_list)) != len(ac_id_list):
+                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
             
         # Process the DC charger slave IDs
         raw_dc_ids = user_input.get(CONF_DC_CHARGER_SLAVE_IDS, "")
@@ -318,10 +304,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_DC_CHARGER_SLAVE_IDS] = "Invalid integer value."
                 break
 
-        # Commented out under development
         # Check for duplicates in DC charger IDs
-        # if len(set(dc_id_list)) != len(dc_id_list):
-        #     errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+        if not DEVELOPER_MODE:
+            if len(set(dc_id_list)) != len(dc_id_list):
+                errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
 
         if errors:
             schema = vol.Schema({
@@ -410,10 +396,10 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 errors[CONF_INVERTER_SLAVE_IDS] = "Invalid integer value."
                 break
 
-        # Commented out under development
-        # Check for duplicates in inverter IDs
-        # if len(set(id_list)) != len(id_list):
-        #     errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
+        # Check for duplicate Inverter IDs
+        if not DEVELOPER_MODE:
+            if len(set(id_list)) != len(id_list):
+                errors[CONF_INVERTER_SLAVE_IDS] = "Duplicate IDs found."
             
         # Process the AC charger slave IDs
         raw_ac_ids = user_input.get(CONF_AC_CHARGER_SLAVE_IDS, "")
@@ -433,10 +419,10 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 errors[CONF_AC_CHARGER_SLAVE_IDS] = "Invalid integer value."
                 break
 
-        # Commented out under development
         # Check for duplicates in AC charger IDs
-        # if len(set(ac_id_list)) != len(ac_id_list):
-        #     errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+        if not DEVELOPER_MODE:
+            if len(set(ac_id_list)) != len(ac_id_list):
+                errors[CONF_AC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
             
         # Process the DC charger slave IDs
         raw_dc_ids = user_input.get(CONF_DC_CHARGER_SLAVE_IDS, "")
@@ -456,10 +442,10 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 errors[CONF_DC_CHARGER_SLAVE_IDS] = "Invalid integer value."
                 break
 
-        # Commented out under development
         # Check for duplicates in DC charger IDs
-        # if len(set(dc_id_list)) != len(dc_id_list):
-        #     errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
+        if not DEVELOPER_MODE:
+            if len(set(dc_id_list)) != len(dc_id_list):
+                errors[CONF_DC_CHARGER_SLAVE_IDS] = "Duplicate IDs found."
 
         # If there are errors, show the form again
         if errors:

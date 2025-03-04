@@ -21,6 +21,7 @@ from homeassistant.const import (
 # Integration domain
 DOMAIN = "sigen"
 DEFAULT_NAME = "Sigenergy ESS"
+DEVELOPER_MODE = True
 
 # Configuration keys
 CONF_HOST = "host"
