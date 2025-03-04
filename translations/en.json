@@ -10,7 +10,7 @@
           "plant_id": "Plant ID ( default is 247 )",
           "inverter_slave_ids": "Inverter Device IDs ( comma-separated when multiple. Default is 1 )",
           "ac_charger_slave_ids": "AC Charger Device IDs ( comma-separated when multiple. Default is empty for no AC charger )",
-          "dc_charger_slave_ids": "DC Charger Device IDs ( comma-separated when multiple. Default is empty for no DC charger )"
+          "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached ( comma-separated when multiple )"
         }
       },
       "reconfigure": {
@@ -19,7 +19,7 @@
         "data": {
           "inverter_slave_ids": "Inverter Device IDs ( comma-separated when multiple. Default is 1 )",
           "ac_charger_slave_ids": "AC Charger Device IDs ( comma-separated when multiple. Default is empty for no AC charger )",
-          "dc_charger_slave_ids": "DC Charger Device IDs ( comma-separated when multiple. Default is empty for no DC charger )"
+          "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached ( comma-separated when multiple )"
         }
       }
     },
@@ -46,7 +46,7 @@
         "data": {
           "inverter_slave_ids": "Inverter Device IDs ( comma-separated when multiple. Default is 1 )",
           "ac_charger_slave_ids": "AC Charger Device IDs ( comma-separated when multiple. Default is empty for no AC charger )",
-          "dc_charger_slave_ids": "DC Charger Device IDs ( comma-separated when multiple. Default is empty for no DC charger )"
+          "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached ( comma-separated when multiple )"
         }
       }
     },
