@@ -15,6 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
@@ -104,6 +105,31 @@ PLANT_SELECTS = [
     ),
 ]
 
+AC_CHARGER_SELECTS = [
+    SigenergySelectEntityDescription(
+        key="ac_charger_mode",
+        name="DC Charger Mode",
+        icon="mdi:ev-station",
+        options=[
+            "Auto",
+            "Manual",
+        ],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, ac_charger_id: {
+            0: "Auto",
+            1: "Manual",
+        }.get(data["ac_chargers"].get(ac_charger_id, {}).get("ac_charger_mode", 0), "Unknown"),
+        select_option_fn=lambda hub, ac_charger_id, option: hub.async_write_ac_charger_parameter(
+            ac_charger_id,
+            "ac_charger_mode",
+            {
+                "Auto": 0,
+                "Manual": 1,
+            }.get(option, 0),
+        ),
+    ),
+]
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -128,6 +154,25 @@ async def async_setup_entry(
                 device_name=plant_name,
             )
         )
+
+    # Add DC charger selects
+    ac_charger_no = 0
+    for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
+        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
+        _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
+        for description in AC_CHARGER_SELECTS:
+            entities.append(
+                SigenergySelect(
+                    coordinator=coordinator,
+                    hub=hub,
+                    description=description,
+                    name=f"{ac_charger_name} {description.name}",
+                    device_type=DEVICE_TYPE_AC_CHARGER,
+                    device_id=ac_charger_id,
+                    device_name=ac_charger_name,
+                )
+            )
+        ac_charger_no += 1
 
     async_add_entities(entities)
 
@@ -195,6 +240,14 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
                 serial_number=serial_number,
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
+        elif device_type == DEVICE_TYPE_AC_CHARGER:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
+                name=device_name,
+                manufacturer="Sigenergy",
+                model="DC Charger",
+                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
+            )
 
     @property
     def current_option(self) -> str:
@@ -224,6 +277,19 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
                 self.coordinator.data is not None
                 and "inverters" in self.coordinator.data
                 and self._device_id in self.coordinator.data["inverters"]
+            ):
+                return False
+                
+            # Check if the entity has a specific availability function
+            if hasattr(self.entity_description, "available_fn"):
+                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
+                
+            return True
+        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
+            if not (
+                self.coordinator.data is not None
+                and "ac_chargers" in self.coordinator.data
+                and self._device_id in self.coordinator.data["ac_chargers"]
             ):
                 return False
                 

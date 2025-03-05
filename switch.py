@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
+    DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
@@ -92,7 +93,6 @@ INVERTER_SWITCHES = [
         turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "remote_ems_dispatch_enable", 0),
     ),
 ]
-
 AC_CHARGER_SWITCHES = [
     SigenergySwitchEntityDescription(
         key="ac_charger_start_stop",
@@ -103,6 +103,19 @@ AC_CHARGER_SWITCHES = [
         turn_off_fn=lambda hub, ac_charger_id: hub.async_write_ac_charger_parameter(ac_charger_id, "start_stop", 1),
     ),
 ]
+
+DC_CHARGER_SWITCHES = [
+    SigenergySwitchEntityDescription(
+        key="dc_charger_start_stop",
+        # name="DC Charger Power",
+        name="Power",
+        icon="mdi:ev-station",
+        is_on_fn=lambda data, dc_charger_id: data["dc_chargers"].get(dc_charger_id, {}).get("running_state") == 1,
+        turn_on_fn=lambda hub, dc_charger_id: hub.async_write_dc_charger_parameter(dc_charger_id, "dc_charger_start_stop", 0),
+        turn_off_fn=lambda hub, dc_charger_id: hub.async_write_dc_charger_parameter(dc_charger_id, "dc_charger_start_stop", 1),
+    ),
+]
+
 
 
 async def async_setup_entry(
@@ -166,6 +179,25 @@ async def async_setup_entry(
                 )
             )
         ac_charger_no += 1
+
+    # Add DC charger switches
+    dc_charger_no = 0
+    for dc_charger_id in coordinator.hub.dc_charger_slave_ids:
+        dc_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
+        _LOGGER.debug("Adding DC charger %s with dc_charger_no %s as %s", dc_charger_id, dc_charger_no, dc_charger_name)
+        for description in DC_CHARGER_SWITCHES:
+            entities.append(
+                SigenergySwitch(
+                    coordinator=coordinator,
+                    hub=hub,
+                    description=description,
+                    name=f"{dc_charger_name} {description.name}",
+                    device_type=DEVICE_TYPE_DC_CHARGER,
+                    device_id=dc_charger_id,
+                    device_name=dc_charger_name,
+                )
+            )
+        dc_charger_no += 1
 
     async_add_entities(entities)
 
@@ -240,6 +272,14 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
                 model="AC Charger",
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
+        elif device_type == DEVICE_TYPE_DC_CHARGER:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
+                name=device_name,
+                manufacturer="Sigenergy",
+                model="DC Charger",
+                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
+            )
 
     @property
     def is_on(self) -> bool:
@@ -268,6 +308,12 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
                 self.coordinator.data is not None
                 and "ac_chargers" in self.coordinator.data
                 and self._device_id in self.coordinator.data["ac_chargers"]
+            )
+        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
+            return (
+                self.coordinator.data is not None
+                and "dc_chargers" in self.coordinator.data
+                and self._device_id in self.coordinator.data["dc_chargers"]
             )
 
         return False

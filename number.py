@@ -23,6 +23,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
+    DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
@@ -226,7 +227,6 @@ INVERTER_NUMBERS = [
         set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "power_factor_adjustment", value),
     ),
 ]
-
 AC_CHARGER_NUMBERS = [
     SigenergyNumberEntityDescription(
         key="charger_output_current",
@@ -241,6 +241,9 @@ AC_CHARGER_NUMBERS = [
         set_value_fn=lambda hub, ac_charger_id, value: hub.async_write_ac_charger_parameter(ac_charger_id, "charger_output_current", value),
     ),
 ]
+
+DC_CHARGER_NUMBERS = []
+
 
 
 async def async_setup_entry(
@@ -303,6 +306,24 @@ async def async_setup_entry(
                 )
             )
         ac_charger_no += 1
+
+    # Add DC charger numbers
+    dc_charger_no = 0
+    for dc_charger_id in coordinator.hub.dc_charger_slave_ids:
+        dc_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
+        for description in DC_CHARGER_NUMBERS:
+            entities.append(
+                SigenergyNumber(
+                    coordinator=coordinator,
+                    hub=hub,
+                    description=description,
+                    name=f"{dc_charger_name} {description.name}",
+                    device_type=DEVICE_TYPE_DC_CHARGER,
+                    device_id=dc_charger_id,
+                    device_name=dc_charger_name,
+                )
+            )
+        dc_charger_no += 1
 
     async_add_entities(entities)
 
@@ -377,6 +398,14 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
                 model="AC Charger",
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
+        elif device_type == DEVICE_TYPE_DC_CHARGER:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
+                name=device_name,
+                manufacturer="Sigenergy",
+                model="DC Charger",
+                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
+            )
 
     @property
     def native_value(self) -> float:
@@ -405,6 +434,12 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
                 self.coordinator.data is not None
                 and "ac_chargers" in self.coordinator.data
                 and self._device_id in self.coordinator.data["ac_chargers"]
+            )
+        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
+            return (
+                self.coordinator.data is not None
+                and "dc_chargers" in self.coordinator.data
+                and self._device_id in self.coordinator.data["dc_chargers"]
             )
             
         return False

@@ -8,3 +8,4 @@
 - Check name on all sensors and such if can be same as yaml
 
 - Add slow and fast update intervall and have slow as default while fast for acumulative values.
+- Check if dc_charger_start_stop is getting right state. running state?

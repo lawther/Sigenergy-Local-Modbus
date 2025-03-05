@@ -32,6 +32,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
+    DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
@@ -402,7 +403,6 @@ INVERTER_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 ]
-
 AC_CHARGER_SENSORS = [
     SensorEntityDescription(
         key="system_state",
@@ -445,6 +445,51 @@ AC_CHARGER_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 ]
+
+DC_CHARGER_SENSORS = [
+    SensorEntityDescription(
+        key="dc_charger_vehicle_battery_voltage",
+        name="DC Charger Vehicle Battery Voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="dc_charger_charging_current",
+        name="DC Charger Charging Current",
+        device_class=SensorDeviceClass.CURRENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="dc_charger_output_power",
+        name="DC Charger Output Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="dc_charger_vehicle_soc",
+        name="DC Charger Vehicle SOC",
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="dc_charger_current_charging_capacity",
+        name="DC Charger Current Charging Capacity (Single Time)",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.TOTAL,
+    ),
+    SensorEntityDescription(
+        key="dc_charger_current_charging_duration",
+        name="DC Charger Current Charging Duration (Single Time)",
+        icon="mdi:timer",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+]
+
 
 
 async def async_setup_entry(
@@ -517,6 +562,24 @@ async def async_setup_entry(
                 )
             )
         ac_charger_no += 1
+
+    # Add DC charger sensors
+    dc_charger_no = 0
+    for dc_charger_id in coordinator.hub.dc_charger_slave_ids:
+        dc_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
+        _LOGGER.debug("Adding DC charger %s with dc_charger_no %s as %s", dc_charger_id, dc_charger_no, dc_charger_name)
+        for description in DC_CHARGER_SENSORS:
+            entities.append(
+                SigenergySensor(
+                    coordinator=coordinator,
+                    description=description,
+                    name=f"{dc_charger_name} {description.name}",
+                    device_type=DEVICE_TYPE_DC_CHARGER,
+                    device_id=dc_charger_id,
+                    device_name=dc_charger_name,
+                )
+            )
+        dc_charger_no += 1
 
     async_add_entities(entities)
 
@@ -592,6 +655,14 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 model="AC Charger",
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
+        elif device_type == DEVICE_TYPE_DC_CHARGER:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
+                name=device_name,
+                manufacturer="Sigenergy",
+                model="DC Charger",
+                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
+            )
 
     @property
     def native_value(self) -> Any:
@@ -607,6 +678,10 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             )
         elif self._device_type == DEVICE_TYPE_AC_CHARGER:
             value = self.coordinator.data["ac_chargers"].get(self._device_id, {}).get(
+                self.entity_description.key
+            )
+        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
+            value = self.coordinator.data["dc_chargers"].get(self._device_id, {}).get(
                 self.entity_description.key
             )
         else:
@@ -682,6 +757,12 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 self.coordinator.data is not None
                 and "ac_chargers" in self.coordinator.data
                 and self._device_id in self.coordinator.data["ac_chargers"]
+            )
+        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
+            return (
+                self.coordinator.data is not None
+                and "dc_chargers" in self.coordinator.data
+                and self._device_id in self.coordinator.data["dc_chargers"]
             )
             
         return False
