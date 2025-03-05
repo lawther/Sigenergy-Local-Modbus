@@ -47,17 +47,17 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
             async with async_timeout.timeout(60):
                 # Fetch plant data
                 plant_data = await self.hub.async_read_plant_data()
-                
+
                 # Fetch inverter data for each inverter
                 inverter_data = {}
                 for inverter_id in self.hub.inverter_slave_ids:
                     inverter_data[inverter_id] = await self.hub.async_read_inverter_data(inverter_id)
-                
+
                 # Fetch AC charger data for each AC charger
                 ac_charger_data = {}
                 for ac_charger_id in self.hub.ac_charger_slave_ids:
                     ac_charger_data[ac_charger_id] = await self.hub.async_read_ac_charger_data(ac_charger_id)
-                
+
                 # Fetch DC charger data for each DC charger
                 dc_charger_data = {}
                 for dc_charger_id in self.hub.dc_charger_slave_ids:

@@ -6,5 +6,5 @@
 - Uncomment developer commented out checks for duplicates
 - Check all sensors and such on yaml integration are available here.
 - Check name on all sensors and such if can be same as yaml
-- Add DC charger
-- Add AC charger device addresses
+
+- Add slow and fast update intervall and have slow as default while fast for acumulative values.
