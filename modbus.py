@@ -6,10 +6,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
+import pymodbus.logging
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from pymodbus.client import AsyncModbusTcpClient
@@ -46,11 +48,26 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+@contextmanager
+def _suppress_pymodbus_logging():
+    """Temporarily suppress pymodbus logging."""
+    pymodbus_logger = logging.getLogger("pymodbus")
+    original_level = pymodbus_logger.level
+    original_propagate = pymodbus_logger.propagate
+    pymodbus_logger.setLevel(logging.CRITICAL)
+    pymodbus_logger.propagate = False
+    try:
+        yield
+    finally:
+        pymodbus_logger.setLevel(original_level)
+        pymodbus_logger.propagate = original_propagate
+
 class SigenergyModbusError(HomeAssistantError):
     """Exception for Sigenergy Modbus errors."""
 
 
 class SigenergyModbusHub:
+    """Modbus hub for Sigenergy ESS."""
     """Modbus hub for Sigenergy ESS."""
 
     def __init__(
@@ -126,8 +143,13 @@ class SigenergyModbusHub:
                 self.connected = False
                 _LOGGER.info("Disconnected from Sigenergy system at %s:%s", self.host, self.port)
     
-    def _validate_register_response(self, registers: List[int], register_def: ModbusRegisterDefinition) -> bool:
+    def _validate_register_response(self, result: Any, register_def: ModbusRegisterDefinition) -> bool:
         """Validate if register response indicates support for the register."""
+        # Handle error responses silently - these indicate unsupported registers
+        if result is None or (hasattr(result, 'isError') and result.isError()):
+            return False
+            
+        registers = getattr(result, 'registers', [])
         if not registers:
             return False
             
@@ -185,68 +207,80 @@ class SigenergyModbusHub:
             
         for name, register in register_defs.items():
             try:
-                # Attempt to read the register
-                registers = await self.async_read_registers(
-                    slave_id=slave_id,
-                    address=register.address,
-                    count=register.count,
-                    register_type=register.register_type
-                )
+                # Get raw result from appropriate read method
+                async with self.lock:
+                    with _suppress_pymodbus_logging():
+                        if register.register_type == RegisterType.READ_ONLY:
+                            result = await self.client.read_input_registers(
+                                address=register.address,
+                                count=register.count,
+                                slave=slave_id
+                            )
+                        elif register.register_type == RegisterType.HOLDING:
+                            result = await self.client.read_holding_registers(
+                                address=register.address,
+                                count=register.count,
+                                slave=slave_id
+                            )
+                        else:
+                            _LOGGER.debug(
+                                "Register %s (0x%04X) for slave %d has unsupported type: %s",
+                                name,
+                                register.address,
+                                slave_id,
+                                register.register_type
+                            )
+                            register.is_supported = False
+                            continue
+
+                # Validate the response without raising exceptions for expected error cases
+                register.is_supported = self._validate_register_response(result, register)
                 
-                # Validate the response
-                register.is_supported = self._validate_register_response(registers, register)
-                
-                _LOGGER.debug(
-                    "Register %s (0x%04X) for slave %d is %s",
-                    name,
-                    register.address,
-                    slave_id,
-                    "supported" if register.is_supported else "not supported"
-                )
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    _LOGGER.debug(
+                        "Register %s (0x%04X) for slave %d is %s",
+                        name,
+                        register.address,
+                        slave_id,
+                        "supported" if register.is_supported else "not supported"
+                    )
                 
             except Exception as ex:
-                _LOGGER.debug(
-                    "Register %s (0x%04X) for slave %d is not supported: %s",
-                    name,
-                    register.address,
-                    slave_id,
-                    str(ex)
-                )
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    _LOGGER.debug(
+                        "Register %s (0x%04X) for slave %d is not supported: %s",
+                        name,
+                        register.address,
+                        slave_id,
+                        str(ex)
+                    )
                 register.is_supported = False
 
     async def async_read_registers(
-        self, 
-        slave_id: int, 
-        address: int, 
-        count: int, 
+        self,
+        slave_id: int,
+        address: int,
+        count: int,
         register_type: RegisterType
-    ) -> List[int]:
+    ) -> Optional[List[int]]:
         """Read registers from the Modbus device."""
         if not self.connected:
             await self.async_connect()
 
         try:
+            if register_type not in [RegisterType.READ_ONLY, RegisterType.HOLDING]:
+                raise SigenergyModbusError(f"Register type {register_type} is not readable")
+
             async with self.lock:
-                if register_type in [RegisterType.READ_ONLY, RegisterType.HOLDING]:
-                    if register_type == RegisterType.READ_ONLY:
-                        result = await self.client.read_input_registers(
-                            address=address, count=count, slave=slave_id
-                        )
-                    else:
-                        result = await self.client.read_holding_registers(
-                            address=address, count=count, slave=slave_id
-                        )
-                    
-                    if result.isError():
-                        raise SigenergyModbusError(
-                            f"Error reading registers at address {address}: {result}"
-                        )
-                    
-                    return result.registers
-                else:
-                    raise SigenergyModbusError(
-                        f"Register type {register_type} is not readable"
+                with _suppress_pymodbus_logging():
+                    result = await self.client.read_input_registers(
+                        address=address, count=count, slave=slave_id
+                    ) if register_type == RegisterType.READ_ONLY else await self.client.read_holding_registers(
+                        address=address, count=count, slave=slave_id
                     )
+                    
+                    return None if result.isError() else result.registers
+
         except ConnectionException as ex:
             self.connected = False
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
@@ -420,6 +454,12 @@ class SigenergyModbusHub:
                         register_type=register_def.register_type,
                     )
                     
+                    if registers is None:
+                        data[register_name] = None
+                        if register_def.is_supported is None:
+                            register_def.is_supported = False
+                        continue
+
                     value = self._decode_value(
                         registers=registers,
                         data_type=register_def.data_type,
@@ -464,6 +504,15 @@ class SigenergyModbusHub:
                         count=register_def.count,
                         register_type=register_def.register_type,
                     )
+
+                    if registers is None:
+                        data[register_name] = None
+                        if register_def.is_supported is None:
+                            register_def.is_supported = False
+                            if register_name.startswith("pv") and register_name.endswith("_voltage"):
+                                _LOGGER.debug("PV voltage register %s is not supported for inverter %d",
+                                           register_name, inverter_id)
+                        continue
 
                     value = self._decode_value(
                         registers=registers,
@@ -515,6 +564,12 @@ class SigenergyModbusHub:
                         register_type=register_def.register_type,
                     )
 
+                    if registers is None:
+                        data[register_name] = None
+                        if register_def.is_supported is None:
+                            register_def.is_supported = False
+                        continue
+
                     value = self._decode_value(
                         registers=registers,
                         data_type=register_def.data_type,
@@ -559,6 +614,12 @@ class SigenergyModbusHub:
                         count=register_def.count,
                         register_type=register_def.register_type,
                     )
+
+                    if registers is None:
+                        data[register_name] = None
+                        if register_def.is_supported is None:
+                            register_def.is_supported = False
+                        continue
 
                     value = self._decode_value(
                         registers=registers,
