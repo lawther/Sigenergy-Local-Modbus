@@ -90,13 +90,6 @@ PLANT_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(
-        key="ess_soh",
-        name="Battery State of Health",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    SensorEntityDescription(
         key="plant_active_power",
         name="Plant Active Power",
         device_class=SensorDeviceClass.POWER,
@@ -161,26 +154,33 @@ PLANT_SENSORS = [
         state_class=SensorStateClass.TOTAL,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    SensorEntityDescription(
-        key="ess_rated_energy_capacity",
-        name="Rated Energy Capacity",
-        device_class=SensorDeviceClass.ENERGY,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        state_class=SensorStateClass.TOTAL,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    SensorEntityDescription(
-        key="ess_charge_cut_off_soc",
-        name="Charge Cut-Off SOC",
-        native_unit_of_measurement=PERCENTAGE,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    SensorEntityDescription(
-        key="ess_discharge_cut_off_soc",
-        name="Discharge Cut-Off SOC",
-        native_unit_of_measurement=PERCENTAGE,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
+    # SensorEntityDescription(
+    #     key="ess_rated_energy_capacity",
+    #     name="Rated Energy Capacity",
+    #     device_class=SensorDeviceClass.ENERGY,
+    #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    #     state_class=SensorStateClass.TOTAL,
+    #     entity_category=EntityCategory.DIAGNOSTIC,
+    # ),
+    # SensorEntityDescription(
+    #     key="ess_charge_cut_off_soc",
+    #     name="Charge Cut-Off SOC",
+    #     native_unit_of_measurement=PERCENTAGE,
+    #     entity_category=EntityCategory.DIAGNOSTIC,
+    # ),
+    # SensorEntityDescription(
+    #     key="ess_discharge_cut_off_soc",
+    #     name="Discharge Cut-Off SOC",
+    #     native_unit_of_measurement=PERCENTAGE,
+    #     entity_category=EntityCategory.DIAGNOSTIC,
+    # ),
+    # SensorEntityDescription(
+    #     key="ess_soh",
+    #     name="Battery State of Health",
+    #     native_unit_of_measurement=PERCENTAGE,
+    #     state_class=SensorStateClass.MEASUREMENT,
+    #     entity_category=EntityCategory.DIAGNOSTIC,
+    # ),
 ]
 
 INVERTER_SENSORS = [

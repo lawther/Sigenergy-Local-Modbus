@@ -87,6 +87,12 @@ class SigenergyModbusHub:
                                                  self.inverter_count + self.ac_charger_count + self.dc_charger_count + 1))
         )
 
+        # Initialize register support status
+        self.plant_registers_probed = False
+        self.inverter_registers_probed = set()
+        self.ac_charger_registers_probed = set()
+        self.dc_charger_registers_probed = set()
+
     async def async_connect(self) -> None:
         """Connect to the Modbus device."""
         if self.connected:
@@ -119,6 +125,94 @@ class SigenergyModbusHub:
                 self.client.close()
                 self.connected = False
                 _LOGGER.info("Disconnected from Sigenergy system at %s:%s", self.host, self.port)
+    
+    def _validate_register_response(self, registers: List[int], register_def: ModbusRegisterDefinition) -> bool:
+        """Validate if register response indicates support for the register."""
+        if not registers:
+            return False
+            
+        # For string type registers, check if all values are 0 (indicating no support)
+        if register_def.data_type == DataType.STRING:
+            return not all(reg == 0 for reg in registers)
+            
+        # For numeric registers, check if values are within reasonable bounds
+        try:
+            value = self._decode_value(registers, register_def.data_type, register_def.gain)
+            if isinstance(value, (int, float)):
+                # Consider register supported if value is non-zero and within reasonable bounds
+                # This helps filter out invalid/unsupported registers that might return garbage values
+                max_reasonable = {
+                    "voltage": 1000,  # 1000V
+                    "current": 1000,  # 1000A
+                    "power": 100,     # 100kW
+                    "energy": 100000, # 100MWh
+                    "temperature": 100, # 100°C
+                    "percentage": 100  # 100%
+                }
+                
+                # Determine max value based on unit if present
+                if register_def.unit:
+                    unit = register_def.unit.lower()
+                    if any(u in unit for u in ["v", "volt"]):
+                        return 0 <= abs(value) <= max_reasonable["voltage"]
+                    elif any(u in unit for u in ["a", "amp"]):
+                        return 0 <= abs(value) <= max_reasonable["current"]
+                    elif any(u in unit for u in ["w", "watt"]):
+                        return 0 <= abs(value) <= max_reasonable["power"]
+                    elif any(u in unit for u in ["wh", "kwh"]):
+                        return 0 <= abs(value) <= max_reasonable["energy"]
+                    elif any(u in unit for u in ["c", "f", "temp"]):
+                        return -50 <= value <= max_reasonable["temperature"]
+                    elif "%" in unit:
+                        return 0 <= value <= max_reasonable["percentage"]
+                
+                # Default validation if no specific unit match
+                return value != 0
+            
+            return True
+        except Exception as ex:
+            _LOGGER.debug("Register validation failed: %s", ex)
+            return False
+            
+    async def async_probe_registers(
+        self,
+        slave_id: int,
+        register_defs: Dict[str, ModbusRegisterDefinition]
+    ) -> None:
+        """Probe registers to determine which ones are supported."""
+        if not self.connected:
+            await self.async_connect()
+            
+        for name, register in register_defs.items():
+            try:
+                # Attempt to read the register
+                registers = await self.async_read_registers(
+                    slave_id=slave_id,
+                    address=register.address,
+                    count=register.count,
+                    register_type=register.register_type
+                )
+                
+                # Validate the response
+                register.is_supported = self._validate_register_response(registers, register)
+                
+                _LOGGER.debug(
+                    "Register %s (0x%04X) for slave %d is %s",
+                    name,
+                    register.address,
+                    slave_id,
+                    "supported" if register.is_supported else "not supported"
+                )
+                
+            except Exception as ex:
+                _LOGGER.debug(
+                    "Register %s (0x%04X) for slave %d is not supported: %s",
+                    name,
+                    register.address,
+                    slave_id,
+                    str(ex)
+                )
+                register.is_supported = False
 
     async def async_read_registers(
         self, 
@@ -303,107 +397,188 @@ class SigenergyModbusHub:
         return builder.to_registers()
 
     async def async_read_plant_data(self) -> Dict[str, Any]:
-        """Read all plant data."""
+        """Read all supported plant data."""
         data = {}
-        
-        for register_name, register_def in PLANT_RUNNING_INFO_REGISTERS.items():
+
+        # Probe registers if not done yet
+        if not self.plant_registers_probed:
             try:
-                registers = await self.async_read_registers(
-                    slave_id=self.plant_id,
-                    address=register_def.address,
-                    count=register_def.count,
-                    register_type=register_def.register_type,
-                )
-                
-                value = self._decode_value(
-                    registers=registers,
-                    data_type=register_def.data_type,
-                    gain=register_def.gain,
-                )
-                
-                data[register_name] = value
+                await self.async_probe_registers(self.plant_id, PLANT_RUNNING_INFO_REGISTERS)
+                self.plant_registers_probed = True
             except Exception as ex:
-                _LOGGER.error("Error reading plant register %s: %s", register_name, ex)
-                data[register_name] = None
+                _LOGGER.error("Failed to probe plant registers: %s", ex)
+                # Continue with reading, some registers might still work
+        
+        # Read only supported registers
+        for register_name, register_def in PLANT_RUNNING_INFO_REGISTERS.items():
+            if register_def.is_supported is not False:  # Read if supported or unknown
+                try:
+                    registers = await self.async_read_registers(
+                        slave_id=self.plant_id,
+                        address=register_def.address,
+                        count=register_def.count,
+                        register_type=register_def.register_type,
+                    )
+                    
+                    value = self._decode_value(
+                        registers=registers,
+                        data_type=register_def.data_type,
+                        gain=register_def.gain,
+                    )
+                    
+                    data[register_name] = value
+                    
+                    # If we successfully read a register that wasn't probed, mark it as supported
+                    if register_def.is_supported is None:
+                        register_def.is_supported = True
+                        
+                except Exception as ex:
+                    _LOGGER.error("Error reading plant register %s: %s", register_name, ex)
+                    data[register_name] = None
+                    # If this is the first time we fail to read this register, mark it as unsupported
+                    if register_def.is_supported is None:
+                        register_def.is_supported = False
         
         return data
 
     async def async_read_inverter_data(self, inverter_id: int) -> Dict[str, Any]:
-        """Read all inverter data."""
+        """Read all supported inverter data."""
         data = {}
-        
-        for register_name, register_def in INVERTER_RUNNING_INFO_REGISTERS.items():
+
+        # Probe registers if not done yet for this inverter
+        if inverter_id not in self.inverter_registers_probed:
             try:
-                registers = await self.async_read_registers(
-                    slave_id=inverter_id,
-                    address=register_def.address,
-                    count=register_def.count,
-                    register_type=register_def.register_type,
-                )
-                
-                value = self._decode_value(
-                    registers=registers,
-                    data_type=register_def.data_type,
-                    gain=register_def.gain,
-                )
-                
-                data[register_name] = value
+                await self.async_probe_registers(inverter_id, INVERTER_RUNNING_INFO_REGISTERS)
+                self.inverter_registers_probed.add(inverter_id)
             except Exception as ex:
-                _LOGGER.error("Error reading inverter %s register %s: %s", inverter_id, register_name, ex)
-                data[register_name] = None
-        
+                _LOGGER.error("Failed to probe inverter %d registers: %s", inverter_id, ex)
+                # Continue with reading, some registers might still work
+
+        # Read only supported registers
+        for register_name, register_def in INVERTER_RUNNING_INFO_REGISTERS.items():
+            if register_def.is_supported is not False:  # Read if supported or unknown
+                try:
+                    registers = await self.async_read_registers(
+                        slave_id=inverter_id,
+                        address=register_def.address,
+                        count=register_def.count,
+                        register_type=register_def.register_type,
+                    )
+
+                    value = self._decode_value(
+                        registers=registers,
+                        data_type=register_def.data_type,
+                        gain=register_def.gain,
+                    )
+
+                    data[register_name] = value
+
+                    # If we successfully read a register that wasn't probed, mark it as supported
+                    if register_def.is_supported is None:
+                        register_def.is_supported = True
+
+                except Exception as ex:
+                    _LOGGER.error("Error reading inverter %d register %s: %s", inverter_id, register_name, ex)
+                    data[register_name] = None
+                    # If this is the first time we fail to read this register, mark it as unsupported
+                    if register_def.is_supported is None:
+                        register_def.is_supported = False
+
+                    # Log more details for PV voltage registers to help with debugging
+                    if register_name.startswith("pv") and register_name.endswith("_voltage"):
+                        _LOGGER.debug("PV voltage register %s is not supported for inverter %d",
+                                    register_name, inverter_id)
+
         return data
 
     async def async_read_ac_charger_data(self, ac_charger_id: int) -> Dict[str, Any]:
-        """Read all AC charger data."""
+        """Read all supported AC charger data."""
         data = {}
-        
-        for register_name, register_def in AC_CHARGER_RUNNING_INFO_REGISTERS.items():
+
+        # Probe registers if not done yet for this AC charger
+        if ac_charger_id not in self.ac_charger_registers_probed:
             try:
-                registers = await self.async_read_registers(
-                    slave_id=ac_charger_id,
-                    address=register_def.address,
-                    count=register_def.count,
-                    register_type=register_def.register_type,
-                )
-                
-                value = self._decode_value(
-                    registers=registers,
-                    data_type=register_def.data_type,
-                    gain=register_def.gain,
-                )
-                
-                data[register_name] = value
+                await self.async_probe_registers(ac_charger_id, AC_CHARGER_RUNNING_INFO_REGISTERS)
+                self.ac_charger_registers_probed.add(ac_charger_id)
             except Exception as ex:
-                _LOGGER.error("Error reading AC charger %s register %s: %s", ac_charger_id, register_name, ex)
-                data[register_name] = None
-        
+                _LOGGER.error("Failed to probe AC charger %d registers: %s", ac_charger_id, ex)
+                # Continue with reading, some registers might still work
+
+        # Read only supported registers
+        for register_name, register_def in AC_CHARGER_RUNNING_INFO_REGISTERS.items():
+            if register_def.is_supported is not False:  # Read if supported or unknown
+                try:
+                    registers = await self.async_read_registers(
+                        slave_id=ac_charger_id,
+                        address=register_def.address,
+                        count=register_def.count,
+                        register_type=register_def.register_type,
+                    )
+
+                    value = self._decode_value(
+                        registers=registers,
+                        data_type=register_def.data_type,
+                        gain=register_def.gain,
+                    )
+
+                    data[register_name] = value
+
+                    # If we successfully read a register that wasn't probed, mark it as supported
+                    if register_def.is_supported is None:
+                        register_def.is_supported = True
+
+                except Exception as ex:
+                    _LOGGER.error("Error reading AC charger %d register %s: %s", ac_charger_id, register_name, ex)
+                    data[register_name] = None
+                    # If this is the first time we fail to read this register, mark it as unsupported
+                    if register_def.is_supported is None:
+                        register_def.is_supported = False
+
         return data
 
     async def async_read_dc_charger_data(self, dc_charger_id: int) -> Dict[str, Any]:
-        """Read all DC charger data."""
+        """Read all supported DC charger data."""
         data = {}
-        
-        for register_name, register_def in DC_CHARGER_RUNNING_INFO_REGISTERS.items():
+
+        # Probe registers if not done yet for this DC charger
+        if dc_charger_id not in self.dc_charger_registers_probed:
             try:
-                registers = await self.async_read_registers(
-                    slave_id=dc_charger_id,
-                    address=register_def.address,
-                    count=register_def.count,
-                    register_type=register_def.register_type,
-                )
-                
-                value = self._decode_value(
-                    registers=registers,
-                    data_type=register_def.data_type,
-                    gain=register_def.gain,
-                )
-                
-                data[register_name] = value
+                await self.async_probe_registers(dc_charger_id, DC_CHARGER_RUNNING_INFO_REGISTERS)
+                self.dc_charger_registers_probed.add(dc_charger_id)
             except Exception as ex:
-                _LOGGER.error("Error reading DC charger %s register %s: %s", dc_charger_id, register_name, ex)
-                data[register_name] = None
-        
+                _LOGGER.error("Failed to probe DC charger %d registers: %s", dc_charger_id, ex)
+                # Continue with reading, some registers might still work
+
+        # Read only supported registers
+        for register_name, register_def in DC_CHARGER_RUNNING_INFO_REGISTERS.items():
+            if register_def.is_supported is not False:  # Read if supported or unknown
+                try:
+                    registers = await self.async_read_registers(
+                        slave_id=dc_charger_id,
+                        address=register_def.address,
+                        count=register_def.count,
+                        register_type=register_def.register_type,
+                    )
+
+                    value = self._decode_value(
+                        registers=registers,
+                        data_type=register_def.data_type,
+                        gain=register_def.gain,
+                    )
+
+                    data[register_name] = value
+
+                    # If we successfully read a register that wasn't probed, mark it as supported
+                    if register_def.is_supported is None:
+                        register_def.is_supported = True
+
+                except Exception as ex:
+                    _LOGGER.error("Error reading DC charger %d register %s: %s", dc_charger_id, register_name, ex)
+                    data[register_name] = None
+                    # If this is the first time we fail to read this register, mark it as unsupported
+                    if register_def.is_supported is None:
+                        register_def.is_supported = False
+
         return data
 
     async def async_write_plant_parameter(
