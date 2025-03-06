@@ -535,9 +535,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1,
         description="General Alarm5 (Refer to Appendix11)",
     ),
-    # 
-    # The following registers are not used in the current firmware version  V100R001C21 (01/03/2025)
-    # 
     "ess_rated_energy_capacity": ModbusRegisterDefinition(
         address=30083,
         count=2,
@@ -1181,9 +1178,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         description="Alarm5 (Refer to Appendix 11)",
         applicable_to=["hybrid_inverter"],
     ),
-    # 
-    # The following registers are not used in the current firmware version  V100R001C21 (01/03/2025)
-    # 
     "ess_maximum_battery_temperature": ModbusRegisterDefinition(
         address=30620,
         count=1,
@@ -1490,9 +1484,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit="s",
         description="Shutdown Time",
     ),
-    # 
-    # The following registers are not used in the current firmware version  V100R001C21 (01/03/2025)
-    # 
     "pv5_voltage": ModbusRegisterDefinition(
         address=31042,
         count=1,
