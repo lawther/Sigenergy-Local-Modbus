@@ -9,3 +9,7 @@
 
 - Add slow and fast update intervall and have slow as default while fast for acumulative values.
 - Check if dc_charger_start_stop is getting right state. running state?
+- Fix so no duplicate checks in dev mode.
+- Add "Sigen x DC Charger y" to fileds such as Power.
+- Refactor setup to look for dc chargers.
+- Refactor setup to look for number of pv.
