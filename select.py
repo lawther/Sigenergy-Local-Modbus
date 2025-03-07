@@ -106,28 +106,6 @@ PLANT_SELECTS = [
 ]
 
 AC_CHARGER_SELECTS = [
-    SigenergySelectEntityDescription(
-        key="ac_charger_mode",
-        name="DC Charger Mode",
-        icon="mdi:ev-station",
-        options=[
-            "Auto",
-            "Manual",
-        ],
-        entity_category=EntityCategory.CONFIG,
-        current_option_fn=lambda data, ac_charger_id: {
-            0: "Auto",
-            1: "Manual",
-        }.get(data["ac_chargers"].get(ac_charger_id, {}).get("ac_charger_mode", 0), "Unknown"),
-        select_option_fn=lambda hub, ac_charger_id, option: hub.async_write_ac_charger_parameter(
-            ac_charger_id,
-            "ac_charger_mode",
-            {
-                "Auto": 0,
-                "Manual": 1,
-            }.get(option, 0),
-        ),
-    ),
 ]
 
 async def async_setup_entry(

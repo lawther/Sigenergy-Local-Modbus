@@ -574,7 +574,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
 }
 
 PLANT_PARAMETER_REGISTERS = {
-    "start_stop": ModbusRegisterDefinition(
+    "plant_start_stop": ModbusRegisterDefinition(
         address=40000,
         count=1,
         register_type=RegisterType.WRITE_ONLY,
@@ -1703,7 +1703,7 @@ INVERTER_RUNNING_INFO_REGISTERS = {
 }
 
 INVERTER_PARAMETER_REGISTERS = {
-    "start_stop": ModbusRegisterDefinition(
+    "inverter_start_stop": ModbusRegisterDefinition(
         address=40500,
         count=1,
         register_type=RegisterType.WRITE_ONLY,
@@ -1871,7 +1871,7 @@ AC_CHARGER_RUNNING_INFO_REGISTERS = {
 }
 
 AC_CHARGER_PARAMETER_REGISTERS = {
-    "start_stop": ModbusRegisterDefinition(
+    "ac_charger_start_stop": ModbusRegisterDefinition(
         address=42000,
         count=1,
         register_type=RegisterType.WRITE_ONLY,

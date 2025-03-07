@@ -43,8 +43,8 @@ PLANT_SWITCHES = [
         name="Plant Power",
         icon="mdi:power",
         is_on_fn=lambda data, _: data["plant"].get("plant_running_state") == 1,
-        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("start_stop", 1),
-        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("start_stop", 0),
+        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_start_stop", 1),
+        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_start_stop", 0),
     ),
     SigenergySwitchEntityDescription(
         key="remote_ems_enable",
@@ -72,8 +72,8 @@ INVERTER_SWITCHES = [
         name="Inverter Power",
         icon="mdi:power",
         is_on_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("running_state") == 1,
-        turn_on_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "start_stop", 1),
-        turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "start_stop", 0),
+        turn_on_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_start_stop", 1),
+        turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_start_stop", 0),
     ),
     SigenergySwitchEntityDescription(
         key="dc_charger_start_stop",
@@ -99,8 +99,8 @@ AC_CHARGER_SWITCHES = [
         name="AC Charger Power",
         icon="mdi:ev-station",
         is_on_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("system_state") > 0,
-        turn_on_fn=lambda hub, ac_charger_id: hub.async_write_ac_charger_parameter(ac_charger_id, "start_stop", 0),
-        turn_off_fn=lambda hub, ac_charger_id: hub.async_write_ac_charger_parameter(ac_charger_id, "start_stop", 1),
+        turn_on_fn=lambda hub, ac_charger_id: hub.async_write_ac_charger_parameter(ac_charger_id, "ac_charger_start_stop", 0),
+        turn_off_fn=lambda hub, ac_charger_id: hub.async_write_ac_charger_parameter(ac_charger_id, "ac_charger_start_stop", 1),
     ),
 ]
 
