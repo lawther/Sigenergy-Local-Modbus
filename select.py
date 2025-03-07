@@ -40,7 +40,7 @@ class SigenergySelectEntityDescription(SelectEntityDescription):
 
 PLANT_SELECTS = [
     SigenergySelectEntityDescription(
-        key="ems_work_mode",
+        key="plant_ems_work_mode",
         name="EMS Work Mode",
         icon="mdi:home-battery",
         options=[
@@ -55,9 +55,9 @@ PLANT_SELECTS = [
             EMSWorkMode.AI_MODE: "AI Mode",
             EMSWorkMode.TOU: "Time of Use",
             EMSWorkMode.REMOTE_EMS: "Remote EMS",
-        }.get(data["plant"].get("ems_work_mode"), "Unknown"),
+        }.get(data["plant"].get("plant_ems_work_mode"), "Unknown"),
         select_option_fn=lambda hub, _, option: hub.async_write_plant_parameter(
-            "ems_work_mode",
+            "plant_ems_work_mode",
             {
                 "Maximum Self Consumption": EMSWorkMode.MAX_SELF_CONSUMPTION,
                 "AI Mode": EMSWorkMode.AI_MODE,
@@ -67,7 +67,7 @@ PLANT_SELECTS = [
         ),
     ),
     SigenergySelectEntityDescription(
-        key="remote_ems_control_mode",
+        key="plant_remote_ems_control_mode",
         name="Remote EMS Control Mode",
         icon="mdi:remote",
         options=[
@@ -88,9 +88,9 @@ PLANT_SELECTS = [
             RemoteEMSControlMode.COMMAND_CHARGING_PV_FIRST: "Command Charging (PV First)",
             RemoteEMSControlMode.COMMAND_DISCHARGING_PV_FIRST: "Command Discharging (PV First)",
             RemoteEMSControlMode.COMMAND_DISCHARGING_ESS_FIRST: "Command Discharging (ESS First)",
-        }.get(data["plant"].get("remote_ems_control_mode"), "Unknown"),
+        }.get(data["plant"].get("plant_remote_ems_control_mode"), "Unknown"),
         select_option_fn=lambda hub, _, option: hub.async_write_plant_parameter(
-            "remote_ems_control_mode",
+            "plant_remote_ems_control_mode",
             {
                 "PCS Remote Control": RemoteEMSControlMode.PCS_REMOTE_CONTROL,
                 "Standby": RemoteEMSControlMode.STANDBY,
@@ -205,10 +205,12 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
             # Get model and serial number if available
             model = None
             serial_number = None
+            sw_version = None
             if coordinator.data and "inverters" in coordinator.data:
                 inverter_data = coordinator.data["inverters"].get(device_id, {})
-                model = inverter_data.get("model_type")
-                serial_number = inverter_data.get("serial_number")
+                model = inverter_data.get("inverter_model_type")
+                serial_number = inverter_data.get("inverter_serial_number")
+                sw_version = inverter_data.get("inverter_machine_firmware_version")
 
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
@@ -216,6 +218,7 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
                 manufacturer="Sigenergy",
                 model=model,
                 serial_number=serial_number,
+                sw_version=sw_version,
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
         elif device_type == DEVICE_TYPE_AC_CHARGER:

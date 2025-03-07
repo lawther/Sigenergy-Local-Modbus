@@ -285,10 +285,12 @@ class SigenergyCalculatedSensor(CoordinatorEntity, SensorEntity):
             # Get model and serial number if available
             model = None
             serial_number = None
+            sw_version = None
             if coordinator.data and "inverters" in coordinator.data:
                 inverter_data = coordinator.data["inverters"].get(device_id, {})
-                model = inverter_data.get("model_type")
-                serial_number = inverter_data.get("serial_number")
+                model = inverter_data.get("inverter_model_type")
+                serial_number = inverter_data.get("inverter_serial_number")
+                sw_version = inverter_data.get("inverter_machine_firmware_version")
 
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
@@ -296,6 +298,7 @@ class SigenergyCalculatedSensor(CoordinatorEntity, SensorEntity):
                 manufacturer="Sigenergy",
                 model=model,
                 serial_number=serial_number,
+                sw_version=sw_version,
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
 

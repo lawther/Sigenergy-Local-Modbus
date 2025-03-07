@@ -47,22 +47,22 @@ PLANT_SWITCHES = [
         turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_start_stop", 0),
     ),
     SigenergySwitchEntityDescription(
-        key="remote_ems_enable",
+        key="plant_remote_ems_enable",
         name="Remote EMS",
         icon="mdi:remote",
         entity_category=EntityCategory.CONFIG,
-        is_on_fn=lambda data, _: data["plant"].get("remote_ems_enable") == 1,
-        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("remote_ems_enable", 1),
-        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("remote_ems_enable", 0),
+        is_on_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
+        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_remote_ems_enable", 1),
+        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_remote_ems_enable", 0),
     ),
     SigenergySwitchEntityDescription(
-        key="independent_phase_power_control_enable",
+        key="plant_independent_phase_power_control_enable",
         name="Independent Phase Power Control",
         icon="mdi:tune",
         entity_category=EntityCategory.CONFIG,
-        is_on_fn=lambda data, _: data["plant"].get("independent_phase_power_control_enable") == 1,
-        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("independent_phase_power_control_enable", 1),
-        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("independent_phase_power_control_enable", 0),
+        is_on_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_independent_phase_power_control_enable", 1),
+        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_independent_phase_power_control_enable", 0),
     ),
 ]
 
@@ -71,7 +71,7 @@ INVERTER_SWITCHES = [
         key="inverter_start_stop",
         name="Inverter Power",
         icon="mdi:power",
-        is_on_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("running_state") == 1,
+        is_on_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_running_state") == 1,
         turn_on_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_start_stop", 1),
         turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_start_stop", 0),
     ),
@@ -84,13 +84,13 @@ INVERTER_SWITCHES = [
         turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "dc_charger_start_stop", 1),
     ),
     SigenergySwitchEntityDescription(
-        key="remote_ems_dispatch_enable",
+        key="inverter_remote_ems_dispatch_enable",
         name="Remote EMS Dispatch",
         icon="mdi:remote",
         entity_category=EntityCategory.CONFIG,
-        is_on_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("remote_ems_dispatch_enable") == 1,
-        turn_on_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "remote_ems_dispatch_enable", 1),
-        turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "remote_ems_dispatch_enable", 0),
+        is_on_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_remote_ems_dispatch_enable") == 1,
+        turn_on_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_remote_ems_dispatch_enable", 1),
+        turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_remote_ems_dispatch_enable", 0),
     ),
 ]
 AC_CHARGER_SWITCHES = [
@@ -98,7 +98,7 @@ AC_CHARGER_SWITCHES = [
         key="ac_charger_start_stop",
         name="AC Charger Power",
         icon="mdi:ev-station",
-        is_on_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("system_state") > 0,
+        is_on_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("ac_charger_system_state") > 0,
         turn_on_fn=lambda hub, ac_charger_id: hub.async_write_ac_charger_parameter(ac_charger_id, "ac_charger_start_stop", 0),
         turn_off_fn=lambda hub, ac_charger_id: hub.async_write_ac_charger_parameter(ac_charger_id, "ac_charger_start_stop", 1),
     ),
@@ -251,10 +251,12 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
             # Get model and serial number if available
             model = None
             serial_number = None
+            sw_version = None
             if coordinator.data and "inverters" in coordinator.data:
                 inverter_data = coordinator.data["inverters"].get(device_id, {})
-                model = inverter_data.get("model_type")
-                serial_number = inverter_data.get("serial_number")
+                model = inverter_data.get("inverter_model_type")
+                serial_number = inverter_data.get("inverter_serial_number")
+                sw_version = inverter_data.get("inverter_machine_firmware_version")
 
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
@@ -262,6 +264,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
                 manufacturer="Sigenergy",
                 model=model,
                 serial_number=serial_number,
+                sw_version=sw_version,
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
         elif device_type == DEVICE_TYPE_AC_CHARGER:

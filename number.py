@@ -46,7 +46,7 @@ class SigenergyNumberEntityDescription(NumberEntityDescription):
 
 PLANT_NUMBERS = [
     SigenergyNumberEntityDescription(
-        key="active_power_fixed_adjustment_target",
+        key="plant_active_power_fixed_target",
         name="Active Power Fixed Adjustment",
         icon="mdi:flash",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -54,11 +54,11 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("active_power_fixed_adjustment_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("active_power_fixed_adjustment_target", value),
+        value_fn=lambda data, _: data["plant"].get("plant_active_power_fixed_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_active_power_fixed_target", value),
     ),
     SigenergyNumberEntityDescription(
-        key="reactive_power_fixed_adjustment_target",
+        key="plant_reactive_power_fixed_target",
         name="Reactive Power Fixed Adjustment",
         icon="mdi:flash",
         native_unit_of_measurement="kVar",
@@ -66,11 +66,11 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("reactive_power_fixed_adjustment_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("reactive_power_fixed_adjustment_target", value),
+        value_fn=lambda data, _: data["plant"].get("plant_reactive_power_fixed_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_reactive_power_fixed_target", value),
     ),
     SigenergyNumberEntityDescription(
-        key="active_power_percentage_adjustment_target",
+        key="plant_active_power_percentage_target",
         name="Active Power Percentage Adjustment",
         icon="mdi:percent",
         native_unit_of_measurement=PERCENTAGE,
@@ -78,11 +78,11 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("active_power_percentage_adjustment_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("active_power_percentage_adjustment_target", value),
+        value_fn=lambda data, _: data["plant"].get("plant_active_power_percentage_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_active_power_percentage_target", value),
     ),
     SigenergyNumberEntityDescription(
-        key="q_s_adjustment_target",
+        key="plant_qs_ratio_target",
         name="Q/S Adjustment",
         icon="mdi:percent",
         native_unit_of_measurement=PERCENTAGE,
@@ -90,22 +90,22 @@ PLANT_NUMBERS = [
         native_max_value=60,
         native_step=1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("q_s_adjustment_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("q_s_adjustment_target", value),
+        value_fn=lambda data, _: data["plant"].get("plant_qs_ratio_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_qs_ratio_target", value),
     ),
     SigenergyNumberEntityDescription(
-        key="power_factor_adjustment_target",
+        key="plant_power_factor_target",
         name="Power Factor Adjustment",
         icon="mdi:sine-wave",
         native_min_value=-1,
         native_max_value=1,
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("power_factor_adjustment_target", 0) / 1000,
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("power_factor_adjustment_target", value),
+        value_fn=lambda data, _: data["plant"].get("plant_power_factor_target", 0) / 1000,
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_power_factor_target", value),
     ),
     SigenergyNumberEntityDescription(
-        key="ess_max_charging_limit",
+        key="plant_ess_max_charging_limit",
         name="ESS Max Charging Limit",
         icon="mdi:battery-charging",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -113,11 +113,11 @@ PLANT_NUMBERS = [
         native_max_value=100,  # This will be adjusted dynamically based on rated power
         native_step=0.1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("ess_max_charging_limit", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("ess_max_charging_limit", value),
+        value_fn=lambda data, _: data["plant"].get("plant_ess_max_charging_limit", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_ess_max_charging_limit", value),
     ),
     SigenergyNumberEntityDescription(
-        key="ess_max_discharging_limit",
+        key="plant_ess_max_discharging_limit",
         name="ESS Max Discharging Limit",
         icon="mdi:battery-charging-outline",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -125,11 +125,11 @@ PLANT_NUMBERS = [
         native_max_value=100,  # This will be adjusted dynamically based on rated power
         native_step=0.1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("ess_max_discharging_limit", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("ess_max_discharging_limit", value),
+        value_fn=lambda data, _: data["plant"].get("plant_ess_max_discharging_limit", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_ess_max_discharging_limit", value),
     ),
     SigenergyNumberEntityDescription(
-        key="pv_max_power_limit",
+        key="plant_pv_max_power_limit",
         name="PV Max Power Limit",
         icon="mdi:solar-power",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -137,11 +137,11 @@ PLANT_NUMBERS = [
         native_max_value=100,  # This will be adjusted dynamically based on rated power
         native_step=0.1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("pv_max_power_limit", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("pv_max_power_limit", value),
+        value_fn=lambda data, _: data["plant"].get("plant_pv_max_power_limit", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pv_max_power_limit", value),
     ),
     SigenergyNumberEntityDescription(
-        key="grid_point_maximum_export_limitation",
+        key="plant_grid_point_maximum_export_limitation",
         name="Grid Export Limitation",
         icon="mdi:transmission-tower-export",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -149,11 +149,11 @@ PLANT_NUMBERS = [
         native_max_value=100,  # This will be adjusted dynamically based on rated power
         native_step=0.1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("grid_point_maximum_export_limitation", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("grid_point_maximum_export_limitation", value),
+        value_fn=lambda data, _: data["plant"].get("plant_grid_point_maximum_export_limitation", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_grid_point_maximum_export_limitation", value),
     ),
     SigenergyNumberEntityDescription(
-        key="grid_point_maximum_import_limitation",
+        key="plant_grid_maximum_import_limitation",
         name="Grid Import Limitation",
         icon="mdi:transmission-tower-import",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -161,14 +161,14 @@ PLANT_NUMBERS = [
         native_max_value=100,  # This will be adjusted dynamically based on rated power
         native_step=0.1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("grid_point_maximum_import_limitation", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("grid_point_maximum_import_limitation", value),
+        value_fn=lambda data, _: data["plant"].get("plant_grid_maximum_import_limitation", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_grid_maximum_import_limitation", value),
     ),
 ]
 
 INVERTER_NUMBERS = [
     SigenergyNumberEntityDescription(
-        key="active_power_fixed_value_adjustment",
+        key="inverter_active_power_fixed_adjustment",
         name="Active Power Fixed Adjustment",
         icon="mdi:flash",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -176,11 +176,11 @@ INVERTER_NUMBERS = [
         native_max_value=100,
         native_step=0.1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("active_power_fixed_value_adjustment", 0),
-        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "active_power_fixed_value_adjustment", value),
+        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_active_power_fixed_adjustment", 0),
+        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "inverter_active_power_fixed_adjustment", value),
     ),
     SigenergyNumberEntityDescription(
-        key="reactive_power_fixed_value_adjustment",
+        key="inverter_reactive_power_fixed_adjustment",
         name="Reactive Power Fixed Adjustment",
         icon="mdi:flash",
         native_unit_of_measurement="kVar",
@@ -188,11 +188,11 @@ INVERTER_NUMBERS = [
         native_max_value=100,
         native_step=0.1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("reactive_power_fixed_value_adjustment", 0),
-        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "reactive_power_fixed_value_adjustment", value),
+        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_reactive_power_fixed_adjustment", 0),
+        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "inverter_reactive_power_fixed_adjustment", value),
     ),
     SigenergyNumberEntityDescription(
-        key="active_power_percentage_adjustment",
+        key="inverter_active_power_percentage_adjustment",
         name="Active Power Percentage Adjustment",
         icon="mdi:percent",
         native_unit_of_measurement=PERCENTAGE,
@@ -200,11 +200,11 @@ INVERTER_NUMBERS = [
         native_max_value=100,
         native_step=1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("active_power_percentage_adjustment", 0),
-        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "active_power_percentage_adjustment", value),
+        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_active_power_percentage_adjustment", 0),
+        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "inverter_active_power_percentage_adjustment", value),
     ),
     SigenergyNumberEntityDescription(
-        key="reactive_power_q_s_adjustment",
+        key="inverter_reactive_power_qs_adjustment",
         name="Reactive Power Q/S Adjustment",
         icon="mdi:percent",
         native_unit_of_measurement=PERCENTAGE,
@@ -212,24 +212,24 @@ INVERTER_NUMBERS = [
         native_max_value=60,
         native_step=1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("reactive_power_q_s_adjustment", 0),
-        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "reactive_power_q_s_adjustment", value),
+        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_reactive_power_qs_adjustment", 0),
+        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "inverter_reactive_power_qs_adjustment", value),
     ),
     SigenergyNumberEntityDescription(
-        key="power_factor_adjustment",
+        key="inverter_power_factor_adjustment",
         name="Power Factor Adjustment",
         icon="mdi:sine-wave",
         native_min_value=-1,
         native_max_value=1,
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("power_factor_adjustment", 0) / 1000,
-        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "power_factor_adjustment", value),
+        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_power_factor_adjustment", 0) / 1000,
+        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "inverter_power_factor_adjustment", value),
     ),
 ]
 AC_CHARGER_NUMBERS = [
     SigenergyNumberEntityDescription(
-        key="charger_output_current",
+        key="ac_charger_output_current",
         name="Charger Output Current",
         icon="mdi:current-ac",
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
@@ -237,8 +237,8 @@ AC_CHARGER_NUMBERS = [
         native_max_value=32,  # This will be adjusted dynamically based on rated current
         native_step=1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("charger_output_current", 0),
-        set_value_fn=lambda hub, ac_charger_id, value: hub.async_write_ac_charger_parameter(ac_charger_id, "charger_output_current", value),
+        value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("ac_charger_output_current", 0),
+        set_value_fn=lambda hub, ac_charger_id, value: hub.async_write_ac_charger_parameter(ac_charger_id, "ac_charger_output_current", value),
     ),
 ]
 
@@ -377,10 +377,13 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
             # Get model and serial number if available
             model = None
             serial_number = None
+            sw_version = None
             if coordinator.data and "inverters" in coordinator.data:
                 inverter_data = coordinator.data["inverters"].get(device_id, {})
-                model = inverter_data.get("model_type")
-                serial_number = inverter_data.get("serial_number")
+                model = inverter_data.get("inverter_model_type")
+                serial_number = inverter_data.get("inverter_serial_number")
+                sw_version = inverter_data.get("inverter_machine_firmware_version")
+
 
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
@@ -388,6 +391,7 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
                 manufacturer="Sigenergy",
                 model=model,
                 serial_number=serial_number,
+                sw_version=sw_version,
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
         elif device_type == DEVICE_TYPE_AC_CHARGER:
