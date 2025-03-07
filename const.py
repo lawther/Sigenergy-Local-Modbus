@@ -809,7 +809,7 @@ PLANT_PARAMETER_REGISTERS = {
         description="PV max power limit",
         applicable_to=["hybrid_inverter"],
     ),
-    "grid_maximum_export_limitation": ModbusRegisterDefinition(
+    "grid_point_maximum_export_limitation": ModbusRegisterDefinition(
         address=40038,
         count=2,
         register_type=RegisterType.HOLDING,
