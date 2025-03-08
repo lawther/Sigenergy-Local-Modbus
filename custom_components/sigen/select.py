@@ -99,33 +99,6 @@ class SigenergySelectEntityDescription(SelectEntityDescription):
 
 PLANT_SELECTS = [
     SigenergySelectEntityDescription(
-        key="plant_ems_work_mode",
-        name="EMS Work Mode",
-        icon="mdi:home-battery",
-        options=[
-            "Maximum Self Consumption",
-            "AI Mode",
-            "Time of Use",
-            "Remote EMS",
-        ],
-        entity_category=EntityCategory.CONFIG,
-        current_option_fn=lambda data, _: {
-            EMSWorkMode.MAX_SELF_CONSUMPTION: "Maximum Self Consumption",
-            EMSWorkMode.AI_MODE: "AI Mode",
-            EMSWorkMode.TOU: "Time of Use",
-            EMSWorkMode.REMOTE_EMS: "Remote EMS",
-        }.get(data["plant"].get("plant_ems_work_mode"), "Unknown"),
-        select_option_fn=lambda hub, _, option: hub.async_write_plant_parameter(
-            "plant_ems_work_mode",
-            {
-                "Maximum Self Consumption": EMSWorkMode.MAX_SELF_CONSUMPTION,
-                "AI Mode": EMSWorkMode.AI_MODE,
-                "Time of Use": EMSWorkMode.TOU,
-                "Remote EMS": EMSWorkMode.REMOTE_EMS,
-            }.get(option, EMSWorkMode.MAX_SELF_CONSUMPTION),
-        ),
-    ),
-    SigenergySelectEntityDescription(
         key="plant_remote_ems_control_mode",
         name="Remote EMS Control Mode",
         icon="mdi:remote",

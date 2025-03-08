@@ -36,6 +36,7 @@ from .const import (
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
+    EMSWorkMode,
     RunningState,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
@@ -101,12 +102,18 @@ PLANT_SENSORS = [
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=minutes_to_gmt,
     ),
-    # Existing sensors
-    SensorEntityDescription(
+    # EMS Work Mode sensor with value mapping
+    SigenergySensorEntityDescription(
         key="plant_ems_work_mode",
         name="EMS Work Mode",
-        icon="mdi:cog",
+        icon="mdi:home-battery",
         entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda value: {
+            EMSWorkMode.MAX_SELF_CONSUMPTION: "Maximum Self Consumption",
+            EMSWorkMode.AI_MODE: "AI Mode",
+            EMSWorkMode.TOU: "Time of Use",
+            EMSWorkMode.REMOTE_EMS: "Remote EMS",
+        }.get(value, "Unknown"),
     ),
     SensorEntityDescription(
         key="plant_grid_sensor_status",
