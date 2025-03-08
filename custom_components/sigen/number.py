@@ -162,6 +162,190 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_grid_maximum_import_limitation", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_grid_maximum_import_limitation", value),
     ),
+    SigenergyNumberEntityDescription(
+        key="plant_pcs_maximum_export_limitation",
+        name="PCS Export Limitation",
+        icon="mdi:transmission-tower-export",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        native_min_value=0,
+        native_max_value=100,  # This will be adjusted dynamically based on rated power
+        native_step=0.1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_export_limitation", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pcs_maximum_export_limitation", value),
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_pcs_maximum_import_limitation",
+        name="PCS Import Limitation",
+        icon="mdi:transmission-tower-import",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        native_min_value=0,
+        native_max_value=100,  # This will be adjusted dynamically based on rated power
+        native_step=0.1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_import_limitation", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pcs_maximum_import_limitation", value),
+    ),
+    # Phase-specific active power targets
+    SigenergyNumberEntityDescription(
+        key="plant_phase_a_active_power_fixed_target",
+        name="Phase A Active Power Fixed Adjustment",
+        icon="mdi:flash",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        native_min_value=-100,
+        native_max_value=100,
+        native_step=0.1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_a_active_power_fixed_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_active_power_fixed_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_phase_b_active_power_fixed_target",
+        name="Phase B Active Power Fixed Adjustment",
+        icon="mdi:flash",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        native_min_value=-100,
+        native_max_value=100,
+        native_step=0.1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_b_active_power_fixed_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_active_power_fixed_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_phase_c_active_power_fixed_target",
+        name="Phase C Active Power Fixed Adjustment",
+        icon="mdi:flash",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        native_min_value=-100,
+        native_max_value=100,
+        native_step=0.1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_c_active_power_fixed_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_active_power_fixed_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    # Phase-specific reactive power targets
+    SigenergyNumberEntityDescription(
+        key="plant_phase_a_reactive_power_fixed_target",
+        name="Phase A Reactive Power Fixed Adjustment",
+        icon="mdi:flash",
+        native_unit_of_measurement="kVar",
+        native_min_value=-100,
+        native_max_value=100,
+        native_step=0.1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_a_reactive_power_fixed_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_reactive_power_fixed_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_phase_b_reactive_power_fixed_target",
+        name="Phase B Reactive Power Fixed Adjustment",
+        icon="mdi:flash",
+        native_unit_of_measurement="kVar",
+        native_min_value=-100,
+        native_max_value=100,
+        native_step=0.1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_b_reactive_power_fixed_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_reactive_power_fixed_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_phase_c_reactive_power_fixed_target",
+        name="Phase C Reactive Power Fixed Adjustment",
+        icon="mdi:flash",
+        native_unit_of_measurement="kVar",
+        native_min_value=-100,
+        native_max_value=100,
+        native_step=0.1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_c_reactive_power_fixed_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_reactive_power_fixed_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    # Phase-specific percentage targets
+    SigenergyNumberEntityDescription(
+        key="plant_phase_a_active_power_percentage_target",
+        name="Phase A Active Power Percentage",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=-100,
+        native_max_value=100,
+        native_step=1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_a_active_power_percentage_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_active_power_percentage_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_phase_b_active_power_percentage_target",
+        name="Phase B Active Power Percentage",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=-100,
+        native_max_value=100,
+        native_step=1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_b_active_power_percentage_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_active_power_percentage_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_phase_c_active_power_percentage_target",
+        name="Phase C Active Power Percentage",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=-100,
+        native_max_value=100,
+        native_step=1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_c_active_power_percentage_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_active_power_percentage_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    # Phase-specific Q/S ratio targets
+    SigenergyNumberEntityDescription(
+        key="plant_phase_a_qs_ratio_target",
+        name="Phase A Q/S Ratio",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=-60,
+        native_max_value=60,
+        native_step=1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_a_qs_ratio_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_qs_ratio_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_phase_b_qs_ratio_target",
+        name="Phase B Q/S Ratio",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=-60,
+        native_max_value=60,
+        native_step=1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_b_qs_ratio_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_qs_ratio_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_phase_c_qs_ratio_target",
+        name="Phase C Q/S Ratio",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=-60,
+        native_max_value=60,
+        native_step=1,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_phase_c_qs_ratio_target", 0),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_qs_ratio_target", value),
+        available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+    ),
 ]
 
 INVERTER_NUMBERS = [
@@ -424,25 +608,53 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
             return False
             
         if self._device_type == DEVICE_TYPE_PLANT:
-            return self.coordinator.data is not None and "plant" in self.coordinator.data
+            if not (self.coordinator.data is not None and "plant" in self.coordinator.data):
+                return False
+                
+            # Check if the entity has a specific availability function
+            if hasattr(self.entity_description, "available_fn"):
+                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
+                
+            return True
         elif self._device_type == DEVICE_TYPE_INVERTER:
-            return (
+            if not (
                 self.coordinator.data is not None
                 and "inverters" in self.coordinator.data
                 and self._device_id in self.coordinator.data["inverters"]
-            )
+            ):
+                return False
+                
+            # Check if the entity has a specific availability function
+            if hasattr(self.entity_description, "available_fn"):
+                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
+                
+            return True
         elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            return (
+            if not (
                 self.coordinator.data is not None
                 and "ac_chargers" in self.coordinator.data
                 and self._device_id in self.coordinator.data["ac_chargers"]
-            )
+            ):
+                return False
+                
+            # Check if the entity has a specific availability function
+            if hasattr(self.entity_description, "available_fn"):
+                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
+                
+            return True
         elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-            return (
+            if not (
                 self.coordinator.data is not None
                 and "dc_chargers" in self.coordinator.data
                 and self._device_id in self.coordinator.data["dc_chargers"]
-            )
+            ):
+                return False
+                
+            # Check if the entity has a specific availability function
+            if hasattr(self.entity_description, "available_fn"):
+                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
+                
+            return True
             
         return False
 

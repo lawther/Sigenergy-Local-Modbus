@@ -26,6 +26,66 @@ from .modbus import SigenergyModbusError
 
 _LOGGER = logging.getLogger(__name__)
 
+# Map of grid codes to country names
+GRID_CODE_MAP = {
+    1: "Germany",
+    2: "UK",
+    3: "Italy",
+    4: "Spain",
+    5: "Portugal",
+    6: "France",
+    7: "Poland",
+    8: "Hungary",
+    9: "Belgium",
+    10: "Norway",
+    11: "Sweden",
+    12: "Finland",
+    13: "Denmark",
+    # Add more mappings as they are discovered
+}
+
+# Reverse mapping for looking up codes by country name
+COUNTRY_TO_CODE_MAP = {country: code for code, country in GRID_CODE_MAP.items()}
+# Debug log the grid code map
+_LOGGER.debug("GRID_CODE_MAP: %s", GRID_CODE_MAP)
+
+def _get_grid_code_display(data, inverter_id):
+    """Get the display value for grid code with debug logging."""
+    # Log the available inverter data for debugging
+    if inverter_id in data.get("inverters", {}):
+        _LOGGER.debug("Available inverter data keys: %s", list(data["inverters"][inverter_id].keys()))
+    else:
+        _LOGGER.debug("No data available for inverter_id %s", inverter_id)
+        return "Unknown"
+    
+    # Get the raw grid code value
+    grid_code = data["inverters"].get(inverter_id, {}).get("inverter_grid_code")
+    
+    # Debug log the value and type
+    _LOGGER.debug("Grid code value: %s, type: %s", grid_code, type(grid_code))
+    
+    # Handle None case
+    if grid_code is None:
+        return "Unknown"
+        
+    # Try to convert to int and look up in map
+    try:
+        grid_code_int = int(grid_code)
+        _LOGGER.debug("Converted grid code to int: %s", grid_code_int)
+        
+        # Look up in map
+        result = GRID_CODE_MAP.get(grid_code_int)
+        _LOGGER.debug("Grid code map lookup result: %s", result)
+        
+        if result is not None:
+            return result
+        else:
+            return f"Unknown ({grid_code})"
+    except (ValueError, TypeError) as e:
+        _LOGGER.debug("Error converting grid code: %s", e)
+        return f"Unknown ({grid_code})"
+
+
 
 @dataclass
 class SigenergySelectEntityDescription(SelectEntityDescription):
@@ -104,6 +164,25 @@ PLANT_SELECTS = [
     ),
 ]
 
+INVERTER_SELECTS = [
+    SigenergySelectEntityDescription(
+        key="inverter_grid_code",
+        name="Grid Code",
+        icon="mdi:transmission-tower",
+        options=list(GRID_CODE_MAP.values()),
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, inverter_id: (
+            # Define a simple function to get grid code with debug logging
+            _get_grid_code_display(data, inverter_id)
+        ),
+        select_option_fn=lambda hub, inverter_id, option: hub.async_write_inverter_parameter(
+            inverter_id,
+            "inverter_grid_code",
+            COUNTRY_TO_CODE_MAP.get(option, 0)  # Default to 0 if country not found
+        ),
+    ),
+]
+
 AC_CHARGER_SELECTS = [
 ]
 
@@ -131,11 +210,29 @@ async def async_setup_entry(
                 device_name=plant_name,
             )
         )
+        
+    # Add inverter selects
+    inverter_no = 0
+    for inverter_id in coordinator.hub.inverter_slave_ids:
+        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
+        for description in INVERTER_SELECTS:
+            entities.append(
+                SigenergySelect(
+                    coordinator=coordinator,
+                    hub=hub,
+                    description=description,
+                    name=f"{inverter_name} {description.name}",
+                    device_type=DEVICE_TYPE_INVERTER,
+                    device_id=inverter_id,
+                    device_name=inverter_name,
+                )
+            )
+        inverter_no += 1
 
-    # Add DC charger selects
+    # Add AC charger selects
     ac_charger_no = 0
     for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
+        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
         _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
         for description in AC_CHARGER_SELECTS:
             entities.append(
@@ -225,7 +322,7 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
                 identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
                 name=device_name,
                 manufacturer="Sigenergy",
-                model="DC Charger",
+                model="AC Charger",
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
 

@@ -439,13 +439,25 @@ class SigenergyModbusHub:
         if not self.plant_registers_probed:
             try:
                 await self.async_probe_registers(self.plant_id, PLANT_RUNNING_INFO_REGISTERS)
+                # Also probe parameter registers that can be read
+                await self.async_probe_registers(self.plant_id, {
+                    name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
+                    if reg.register_type != RegisterType.WRITE_ONLY
+                })
                 self.plant_registers_probed = True
             except Exception as ex:
                 _LOGGER.error("Failed to probe plant registers: %s", ex)
                 # Continue with reading, some registers might still work
         
+        # Read registers from both running info and parameter registers
+        all_registers = {
+            **PLANT_RUNNING_INFO_REGISTERS,
+            **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
+               if reg.register_type != RegisterType.WRITE_ONLY}
+        }
+        
         # Read only supported registers
-        for register_name, register_def in PLANT_RUNNING_INFO_REGISTERS.items():
+        for register_name, register_def in all_registers.items():
             if register_def.is_supported is not False:  # Read if supported or unknown
                 try:
                     registers = await self.async_read_registers(
@@ -468,6 +480,7 @@ class SigenergyModbusHub:
                     )
                     
                     data[register_name] = value
+                    _LOGGER.debug("Read register %s = %s from plant", register_name, value)
                     
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
@@ -490,13 +503,25 @@ class SigenergyModbusHub:
         if inverter_id not in self.inverter_registers_probed:
             try:
                 await self.async_probe_registers(inverter_id, INVERTER_RUNNING_INFO_REGISTERS)
+                # Also probe parameter registers that can be read
+                await self.async_probe_registers(inverter_id, {
+                    name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
+                    if reg.register_type != RegisterType.WRITE_ONLY
+                })
                 self.inverter_registers_probed.add(inverter_id)
             except Exception as ex:
                 _LOGGER.error("Failed to probe inverter %d registers: %s", inverter_id, ex)
                 # Continue with reading, some registers might still work
 
+        # Read registers from both running info and parameter registers
+        all_registers = {
+            **INVERTER_RUNNING_INFO_REGISTERS,
+            **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
+               if reg.register_type != RegisterType.WRITE_ONLY}
+        }
+
         # Read only supported registers
-        for register_name, register_def in INVERTER_RUNNING_INFO_REGISTERS.items():
+        for register_name, register_def in all_registers.items():
             if register_def.is_supported is not False:  # Read if supported or unknown
                 try:
                     registers = await self.async_read_registers(
@@ -522,6 +547,7 @@ class SigenergyModbusHub:
                     )
 
                     data[register_name] = value
+                    _LOGGER.debug("Read register %s = %s from inverter %d", register_name, value, inverter_id)
 
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
@@ -534,11 +560,6 @@ class SigenergyModbusHub:
                     if register_def.is_supported is None:
                         register_def.is_supported = False
 
-                    # Log more details for PV voltage registers to help with debugging
-                    if register_name.startswith("pv") and register_name.endswith("_voltage"):
-                        _LOGGER.debug("PV voltage register %s is not supported for inverter %d",
-                                    register_name, inverter_id)
-
         return data
 
     async def async_read_ac_charger_data(self, ac_charger_id: int) -> Dict[str, Any]:
@@ -549,13 +570,25 @@ class SigenergyModbusHub:
         if ac_charger_id not in self.ac_charger_registers_probed:
             try:
                 await self.async_probe_registers(ac_charger_id, AC_CHARGER_RUNNING_INFO_REGISTERS)
+                # Also probe parameter registers that can be read
+                await self.async_probe_registers(ac_charger_id, {
+                    name: reg for name, reg in AC_CHARGER_PARAMETER_REGISTERS.items()
+                    if reg.register_type != RegisterType.WRITE_ONLY
+                })
                 self.ac_charger_registers_probed.add(ac_charger_id)
             except Exception as ex:
                 _LOGGER.error("Failed to probe AC charger %d registers: %s", ac_charger_id, ex)
                 # Continue with reading, some registers might still work
 
+        # Read registers from both running info and parameter registers
+        all_registers = {
+            **AC_CHARGER_RUNNING_INFO_REGISTERS,
+            **{name: reg for name, reg in AC_CHARGER_PARAMETER_REGISTERS.items()
+               if reg.register_type != RegisterType.WRITE_ONLY}
+        }
+
         # Read only supported registers
-        for register_name, register_def in AC_CHARGER_RUNNING_INFO_REGISTERS.items():
+        for register_name, register_def in all_registers.items():
             if register_def.is_supported is not False:  # Read if supported or unknown
                 try:
                     registers = await self.async_read_registers(
@@ -578,6 +611,7 @@ class SigenergyModbusHub:
                     )
 
                     data[register_name] = value
+                    _LOGGER.debug("Read register %s = %s from AC charger %d", register_name, value, ac_charger_id)
 
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
@@ -600,13 +634,25 @@ class SigenergyModbusHub:
         if dc_charger_id not in self.dc_charger_registers_probed:
             try:
                 await self.async_probe_registers(dc_charger_id, DC_CHARGER_RUNNING_INFO_REGISTERS)
+                # Also probe parameter registers that can be read
+                await self.async_probe_registers(dc_charger_id, {
+                    name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
+                    if reg.register_type != RegisterType.WRITE_ONLY
+                })
                 self.dc_charger_registers_probed.add(dc_charger_id)
             except Exception as ex:
                 _LOGGER.error("Failed to probe DC charger %d registers: %s", dc_charger_id, ex)
                 # Continue with reading, some registers might still work
 
+        # Read registers from both running info and parameter registers
+        all_registers = {
+            **DC_CHARGER_RUNNING_INFO_REGISTERS,
+            **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
+               if reg.register_type != RegisterType.WRITE_ONLY}
+        }
+
         # Read only supported registers
-        for register_name, register_def in DC_CHARGER_RUNNING_INFO_REGISTERS.items():
+        for register_name, register_def in all_registers.items():
             if register_def.is_supported is not False:  # Read if supported or unknown
                 try:
                     registers = await self.async_read_registers(
@@ -629,6 +675,7 @@ class SigenergyModbusHub:
                     )
 
                     data[register_name] = value
+                    _LOGGER.debug("Read register %s = %s from DC charger %d", register_name, value, dc_charger_id)
 
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
 from homeassistant.components.sensor import (
@@ -47,9 +48,60 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
     """Class describing Sigenergy sensor entities."""
 
     entity_registry_enabled_default: bool = True
+    value_fn: Optional[Callable[[Any], Any]] = None
+    extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
+
+def minutes_to_gmt(minutes: Any) -> str:
+    """Convert minutes offset to GMT format."""
+    if minutes is None:
+        return None
+    try:
+        hours = int(minutes) // 60
+        return f"GMT{'+' if hours >= 0 else ''}{hours}"
+    except (ValueError, TypeError):
+        return None
+
+def epoch_to_datetime(epoch: Any, coordinator_data: Optional[dict] = None) -> datetime:
+    """Convert epoch timestamp to datetime using system's configured timezone."""
+    if epoch is None or coordinator_data is None:
+        return None
+    try:
+        # Get timezone offset from plant data
+        tz_offset = coordinator_data.get("plant", {}).get("plant_system_timezone")
+        if tz_offset is None:
+            return datetime.fromtimestamp(int(epoch), tz=timezone.utc)
+            
+        # Create timezone with offset
+        tz_minutes = int(tz_offset)
+        tz_hours = tz_minutes // 60
+        tz_remaining_minutes = tz_minutes % 60
+        tz_delta = timezone(timedelta(hours=tz_hours, minutes=tz_remaining_minutes))
+        
+        # Convert timestamp using the system's timezone
+        return datetime.fromtimestamp(int(epoch), tz=tz_delta)
+    except (ValueError, TypeError):
+        return None
 
 
 PLANT_SENSORS = [
+    # System time and timezone
+    SigenergySensorEntityDescription(
+        key="plant_system_time",
+        name="System Time",
+        icon="mdi:clock",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=epoch_to_datetime,
+        extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
+    ),
+    SigenergySensorEntityDescription(
+        key="plant_system_timezone",
+        name="System Timezone",
+        icon="mdi:earth",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=minutes_to_gmt,
+    ),
+    # Existing sensors
     SensorEntityDescription(
         key="plant_ems_work_mode",
         name="EMS Work Mode",
@@ -81,12 +133,100 @@ PLANT_SENSORS = [
         icon="mdi:transmission-tower",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # Max power metrics
+    SensorEntityDescription(
+        key="plant_max_active_power",
+        name="Max Active Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="plant_max_apparent_power",
+        name="Max Apparent Power",
+        native_unit_of_measurement="kVar",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     SensorEntityDescription(
         key="plant_ess_soc",
         name="Battery State of Charge",
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+    ),
+    # Phase-specific active power
+    SensorEntityDescription(
+        key="plant_phase_a_active_power",
+        name="Phase A Active Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="plant_phase_b_active_power",
+        name="Phase B Active Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="plant_phase_c_active_power",
+        name="Phase C Active Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    # Phase-specific reactive power
+    SensorEntityDescription(
+        key="plant_phase_a_reactive_power",
+        name="Phase A Reactive Power",
+        native_unit_of_measurement="kVar",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="plant_phase_b_reactive_power",
+        name="Phase B Reactive Power",
+        native_unit_of_measurement="kVar",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="plant_phase_c_reactive_power",
+        name="Phase C Reactive Power",
+        native_unit_of_measurement="kVar",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    # Alarm registers
+    SensorEntityDescription(
+        key="plant_general_alarm1",
+        name="General Alarm 1",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="plant_general_alarm2",
+        name="General Alarm 2",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="plant_general_alarm3",
+        name="General Alarm 3",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="plant_general_alarm4",
+        name="General Alarm 4",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="plant_general_alarm5",
+        name="General Alarm 5",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="plant_active_power",
@@ -137,6 +277,63 @@ PLANT_SENSORS = [
         icon="mdi:power",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # Grid sensor phase-specific metrics
+    SensorEntityDescription(
+        key="plant_grid_sensor_phase_a_active_power",
+        name="Grid Phase A Active Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="plant_grid_sensor_phase_b_active_power",
+        name="Grid Phase B Active Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="plant_grid_sensor_phase_c_active_power",
+        name="Grid Phase C Active Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="plant_grid_sensor_phase_a_reactive_power",
+        name="Grid Phase A Reactive Power",
+        native_unit_of_measurement="kVar",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="plant_grid_sensor_phase_b_reactive_power",
+        name="Grid Phase B Reactive Power",
+        native_unit_of_measurement="kVar",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="plant_grid_sensor_phase_c_reactive_power",
+        name="Grid Phase C Reactive Power",
+        native_unit_of_measurement="kVar",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    # ESS rated power metrics
+    SensorEntityDescription(
+        key="plant_ess_rated_charging_power",
+        name="ESS Rated Charging Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="plant_ess_rated_discharging_power",
+        name="ESS Rated Discharging Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     SensorEntityDescription(
         key="plant_ess_available_max_charging_capacity",
         name="Available Max Charging Capacity",
@@ -183,6 +380,7 @@ PLANT_SENSORS = [
 ]
 
 INVERTER_SENSORS = [
+    # Power ratings
     SensorEntityDescription(
         key="inverter_model_type",
         name="Model Type",
@@ -201,6 +399,47 @@ INVERTER_SENSORS = [
     SensorEntityDescription(
         key="inverter_rated_active_power",
         name="Rated Active Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_max_apparent_power",
+        name="Max Apparent Power",
+        native_unit_of_measurement="kVA",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_max_active_power",
+        name="Max Active Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_max_absorption_power",
+        name="Max Absorption Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_rated_battery_capacity",
+        name="Rated Battery Capacity",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_ess_rated_charge_power",
+        name="ESS Rated Charge Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_ess_rated_discharge_power",
+        name="ESS Rated Discharge Power",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -239,6 +478,33 @@ INVERTER_SENSORS = [
         icon="mdi:power",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # Power adjustment values
+    SensorEntityDescription(
+        key="inverter_max_active_power_adjustment_value",
+        name="Max Active Power Adjustment",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_min_active_power_adjustment_value",
+        name="Min Active Power Adjustment",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_max_reactive_power_adjustment_value_fed",
+        name="Max Reactive Power Fed",
+        native_unit_of_measurement="kVar",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_max_reactive_power_adjustment_value_absorbed",
+        name="Max Reactive Power Absorbed",
+        native_unit_of_measurement="kVar",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     SensorEntityDescription(
         key="inverter_active_power",
         name="Active Power",
@@ -257,6 +523,35 @@ INVERTER_SENSORS = [
         name="Battery Power",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    # Battery power metrics
+    SensorEntityDescription(
+        key="inverter_ess_max_battery_charge_power",
+        name="Max Battery Charge Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_ess_max_battery_discharge_power",
+        name="Max Battery Discharge Power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_ess_available_battery_charge_energy",
+        name="Available Battery Charge Energy",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="inverter_ess_available_battery_discharge_energy",
+        name="Available Battery Discharge Energy",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(
@@ -320,6 +615,37 @@ INVERTER_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # Alarm registers
+    SensorEntityDescription(
+        key="inverter_alarm1",
+        name="Alarm 1",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_alarm2",
+        name="Alarm 2",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_alarm3",
+        name="Alarm 3",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_alarm4",
+        name="Alarm 4",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_alarm5",
+        name="Alarm 5",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     SensorEntityDescription(
         key="inverter_grid_frequency",
         name="Grid Frequency",
@@ -340,6 +666,43 @@ INVERTER_SENSORS = [
         key="inverter_output_type",
         name="Output Type",
         entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    # Grid metrics
+    SensorEntityDescription(
+        key="inverter_rated_grid_voltage",
+        name="Rated Grid Voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_rated_grid_frequency",
+        name="Rated Grid Frequency",
+        device_class=SensorDeviceClass.FREQUENCY,
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    # Line voltages
+    SensorEntityDescription(
+        key="inverter_ab_line_voltage",
+        name="A-B Line Voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="inverter_bc_line_voltage",
+        name="B-C Line Voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="inverter_ca_line_voltage",
+        name="C-A Line Voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(
         key="inverter_phase_a_voltage",
@@ -388,6 +751,22 @@ INVERTER_SENSORS = [
         name="Power Factor",
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    # PV system metrics
+    SensorEntityDescription(
+        key="inverter_pack_count",
+        name="PACK Count",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_pv_string_count",
+        name="PV String Count",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="inverter_mppt_count",
+        name="MPPT Count",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     SensorEntityDescription(
         key="inverter_pv_power",
         name="PV Power",
@@ -398,8 +777,25 @@ INVERTER_SENSORS = [
     SensorEntityDescription(
         key="inverter_insulation_resistance",
         name="Insulation Resistance",
+        native_unit_of_measurement="MΩ",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SigenergySensorEntityDescription(
+        key="inverter_startup_time",
+        name="Startup Time",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=epoch_to_datetime,
+        extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
+    ),
+    SigenergySensorEntityDescription(
+        key="inverter_shutdown_time",
+        name="Shutdown Time",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=epoch_to_datetime,
+        extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
     ),
 ]
 AC_CHARGER_SENSORS = [
@@ -441,6 +837,33 @@ AC_CHARGER_SENSORS = [
         name="Rated Voltage",
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    # Additional AC charger metrics
+    SensorEntityDescription(
+        key="ac_charger_input_breaker_rated_current",
+        name="Input Breaker Rated Current",
+        device_class=SensorDeviceClass.CURRENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    # Alarm registers
+    SensorEntityDescription(
+        key="ac_charger_alarm1",
+        name="Alarm 1",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="ac_charger_alarm2",
+        name="Alarm 2",
+        icon="mdi:alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="ac_charger_alarm3",
+        name="Alarm 3",
+        icon="mdi:alert",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 ]
@@ -676,7 +1099,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             # Use the key directly with plant_ prefix already included
             value = self.coordinator.data["plant"].get(self.entity_description.key)
         elif self._device_type == DEVICE_TYPE_INVERTER:
-            # Use the key directly with inverter_ prefix already included  
+            # Use the key directly with inverter_ prefix already included
             value = self.coordinator.data["inverters"].get(self._device_id, {}).get(
                 self.entity_description.key
             )
@@ -699,6 +1122,17 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 return None
             else:
                 return STATE_UNKNOWN
+                
+        # Apply value_fn if available
+        if hasattr(self.entity_description, "value_fn") and self.entity_description.value_fn is not None:
+            # Pass coordinator data if needed by the value_fn
+            if hasattr(self.entity_description, "extra_fn_data") and self.entity_description.extra_fn_data:
+                transformed_value = self.entity_description.value_fn(value, self.coordinator.data)
+            else:
+                transformed_value = self.entity_description.value_fn(value)
+                
+            if transformed_value is not None:
+                return transformed_value
 
         # Special handling for specific keys
         if self.entity_description.key == "plant_on_off_grid_status":
