@@ -199,7 +199,7 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
                 name=device_name,
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
+                # via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
         elif device_type == DEVICE_TYPE_INVERTER:
             # Get model and serial number if available

@@ -76,14 +76,6 @@ INVERTER_SWITCHES = [
         turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_start_stop", 0),
     ),
     SigenergySwitchEntityDescription(
-        key="dc_charger_start_stop",
-        name="DC Charger",
-        icon="mdi:ev-station",
-        is_on_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("dc_charger_start_stop") == 0,
-        turn_on_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "dc_charger_start_stop", 0),
-        turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "dc_charger_start_stop", 1),
-    ),
-    SigenergySwitchEntityDescription(
         key="inverter_remote_ems_dispatch_enable",
         name="Remote EMS Dispatch",
         icon="mdi:remote",
@@ -107,12 +99,12 @@ AC_CHARGER_SWITCHES = [
 DC_CHARGER_SWITCHES = [
     SigenergySwitchEntityDescription(
         key="dc_charger_start_stop",
-        # name="DC Charger Power",
-        name="Power",
+        name="DC Charger",
         icon="mdi:ev-station",
-        is_on_fn=lambda data, dc_charger_id: data["dc_chargers"].get(dc_charger_id, {}).get("running_state") == 1,
-        turn_on_fn=lambda hub, dc_charger_id: hub.async_write_dc_charger_parameter(dc_charger_id, "dc_charger_start_stop", 0),
-        turn_off_fn=lambda hub, dc_charger_id: hub.async_write_dc_charger_parameter(dc_charger_id, "dc_charger_start_stop", 1),
+        # consider changing is_on_fn to check for dc_charger_output_power > 0 if the below doesn't work
+        is_on_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("dc_charger_start_stop") == 0,
+        turn_on_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "dc_charger_start_stop", 0),
+        turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "dc_charger_start_stop", 1),
     ),
 ]
 
@@ -245,7 +237,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
                 name=device_name,
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
+                # via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
         elif device_type == DEVICE_TYPE_INVERTER:
             # Get model and serial number if available

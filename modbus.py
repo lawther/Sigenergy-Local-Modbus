@@ -147,14 +147,17 @@ class SigenergyModbusHub:
         """Validate if register response indicates support for the register."""
         # Handle error responses silently - these indicate unsupported registers
         if result is None or (hasattr(result, 'isError') and result.isError()):
+            _LOGGER.debug(f"Register validation failed for address {register_def.address} with error: %s", result)
             return False
             
         registers = getattr(result, 'registers', [])
         if not registers:
+            _LOGGER.debug(f"Register validation failed for address {register_def.address}: empty response")
             return False
             
         # For string type registers, check if all values are 0 (indicating no support)
         if register_def.data_type == DataType.STRING:
+            _LOGGER.debug(f"Register validation failed for address {register_def.address}: string type (not all string registers have to be filled)")
             return not all(reg == 0 for reg in registers)
             
         # For numeric registers, check if values are within reasonable bounds
@@ -169,7 +172,7 @@ class SigenergyModbusHub:
                     "power": 100,     # 100kW
                     "energy": 100000, # 100MWh
                     "temperature": 100, # 100°C
-                    "percentage": 100  # 100%
+                    "percentage": 120  # 120% Some batteries can go above 100% when charging
                 }
                 
                 # Determine max value based on unit if present
@@ -187,13 +190,12 @@ class SigenergyModbusHub:
                         return -50 <= value <= max_reasonable["temperature"]
                     elif "%" in unit:
                         return 0 <= value <= max_reasonable["percentage"]
-                
-                # Default validation if no specific unit match
-                return value != 0
+                # Default validation - accept any value including 0
+                return True
             
             return True
         except Exception as ex:
-            _LOGGER.debug("Register validation failed: %s", ex)
+            _LOGGER.debug("Register validation failed with exception: %s", ex)
             return False
             
     async def async_probe_registers(
@@ -236,13 +238,14 @@ class SigenergyModbusHub:
                 # Validate the response without raising exceptions for expected error cases
                 register.is_supported = self._validate_register_response(result, register)
                 
-                if _LOGGER.isEnabledFor(logging.DEBUG):
+                if _LOGGER.isEnabledFor(logging.DEBUG) and not register.is_supported:
                     _LOGGER.debug(
-                        "Register %s (0x%04X) for slave %d is %s",
+                        "Register %s (%s) for slave %d is not supported. Result: %s, registers: %s",
                         name,
                         register.address,
                         slave_id,
-                        "supported" if register.is_supported else "not supported"
+                        str(result),
+                        str(register)
                     )
                 
             except Exception as ex:
