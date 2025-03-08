@@ -47,9 +47,8 @@ PLANT_SWITCHES = [
     ),
     SigenergySwitchEntityDescription(
         key="plant_remote_ems_enable",
-        name="Remote EMS",
-        icon="mdi:remote",
-        entity_category=EntityCategory.CONFIG,
+        name="Remote EMS (Controled by Home Assistant)",
+        icon="mdi:home-assistant",
         is_on_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
         turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_remote_ems_enable", 1),
         turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_remote_ems_enable", 0),

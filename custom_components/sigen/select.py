@@ -111,7 +111,6 @@ PLANT_SELECTS = [
             "Command Discharging (PV First)",
             "Command Discharging (ESS First)",
         ],
-        entity_category=EntityCategory.CONFIG,
         current_option_fn=lambda data, _: {
             RemoteEMSControlMode.PCS_REMOTE_CONTROL: "PCS Remote Control",
             RemoteEMSControlMode.STANDBY: "Standby",
