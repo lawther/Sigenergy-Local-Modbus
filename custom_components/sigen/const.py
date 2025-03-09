@@ -71,6 +71,7 @@ DEVICE_TYPE_PLANT = "plant"
 DEVICE_TYPE_INVERTER = "inverter"
 DEVICE_TYPE_AC_CHARGER = "ac_charger"
 DEVICE_TYPE_DC_CHARGER = "dc_charger"
+DEVICE_TYPE_PV_STRING = "pv_string"
 
 # Modbus function codes
 FUNCTION_READ_HOLDING_REGISTERS = 3
