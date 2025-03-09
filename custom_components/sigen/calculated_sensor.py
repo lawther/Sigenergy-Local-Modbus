@@ -4,40 +4,22 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
-    SensorEntity,
+    # SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
+# from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONF_NAME,
     EntityCategory,
-    PERCENTAGE,
-    UnitOfElectricCurrent,
-    UnitOfElectricPotential,
-    UnitOfEnergy,
-    UnitOfFrequency,
     UnitOfPower,
-    UnitOfTemperature,
-    STATE_UNKNOWN,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
-    DEVICE_TYPE_AC_CHARGER,
-    DEVICE_TYPE_DC_CHARGER,
-    DEVICE_TYPE_INVERTER,
-    DEVICE_TYPE_PLANT,
-    DOMAIN,
     EMSWorkMode,
-    RunningState,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -225,3 +207,57 @@ class SigenergyCalculatedSensors:
         ),
     ]
 
+    PLANT_SENSORS = [
+        # System time and timezone
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_system_time",
+            name="System Time",
+            icon="mdi:clock",
+            device_class=SensorDeviceClass.TIMESTAMP,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=SigenergyCalculations.epoch_to_datetime,
+            extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_system_timezone",
+            name="System Timezone",
+            icon="mdi:earth",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=SigenergyCalculations.minutes_to_gmt,
+        ),
+        # EMS Work Mode sensor with value mapping
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_ems_work_mode",
+            name="EMS Work Mode",
+            icon="mdi:home-battery",
+            value_fn=lambda value: {
+                EMSWorkMode.MAX_SELF_CONSUMPTION: "Maximum Self Consumption",
+                EMSWorkMode.AI_MODE: "AI Mode",
+                EMSWorkMode.TOU: "Time of Use",
+                EMSWorkMode.REMOTE_EMS: "Remote EMS",
+            }.get(value, "Unknown"),
+        ),
+    ]
+
+    INVERTER_SENSORS = [
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="inverter_startup_time",
+            name="Startup Time",
+            device_class=SensorDeviceClass.TIMESTAMP,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=SigenergyCalculations.epoch_to_datetime,
+            extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="inverter_shutdown_time",
+            name="Shutdown Time",
+            device_class=SensorDeviceClass.TIMESTAMP,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=SigenergyCalculations.epoch_to_datetime,
+            extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
+        ),
+    ]
+
+    AC_CHARGER_SENSORS = []
+
+    DC_CHARGER_SENSORS = []
