@@ -160,6 +160,9 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         # Store the plant name generated based on the number of installed plants
         self._data[CONF_NAME] = f"{DEFAULT_PLANT_NAME}{'' if plant_no == 0 else f' {plant_no}'}"
+        
+        # Set the device type as plant
+        self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_PLANT
 
         # Create the configuration entry with the default name
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
@@ -353,13 +356,21 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 errors=errors,
             )
 
+        # Ensure we preserve the device type (especially important if it's DEVICE_TYPE_PLANT)
+        device_type = self._data.get(CONF_DEVICE_TYPE)
+        
         # Update the configuration entry with the new IDs
         new_data = {
             **self._data, 
             CONF_INVERTER_SLAVE_IDS: inverter_ids, 
             CONF_AC_CHARGER_SLAVE_IDS: ac_charger_ids, 
-            CONF_DC_CHARGER_SLAVE_IDS: dc_charger_ids
+            CONF_DC_CHARGER_SLAVE_IDS: dc_charger_ids,
         }
+        
+        # Ensure device type is preserved
+        if device_type:
+            new_data[CONF_DEVICE_TYPE] = device_type
+            
         self.hass.config_entries.async_update_entry(
             self.config_entry, data=new_data
         )
