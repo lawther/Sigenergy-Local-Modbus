@@ -154,7 +154,7 @@ def calculate_pv_power(_, coordinator_data: Optional[Dict[str, Any]] = None, ext
             _LOGGER.warning("Calculated power for PV string %d seems excessive: %s W",
                            pv_idx, power)
             
-        return power
+        return power / 1000  # Convert to kW
     except Exception as ex:
         _LOGGER.warning("Error calculating power for PV string %d: %s",
                        extra_params.get("pv_idx", "unknown"), ex)
@@ -1001,7 +1001,8 @@ PV_STRING_SENSORS = [
         key="power",
         name="Power",
         device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement=UnitOfPower.WATT,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        suggested_display_precision=2,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=calculate_pv_power,
         extra_fn_data=True,
