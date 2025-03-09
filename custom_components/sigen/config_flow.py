@@ -10,24 +10,18 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import selector
 
 from .const import (
-    DEVELOPER_MODE,
     CONF_AC_CHARGER_SLAVE_IDS,
     CONF_DC_CHARGER_SLAVE_IDS,
     CONF_DEVICE_TYPE,
     CONF_INVERTER_SLAVE_IDS,
-    CONF_PARENT_DEVICE_ID,
     CONF_PLANT_ID,
-    CONF_SLAVE_ID,
     DEFAULT_PORT,
     DEFAULT_SLAVE_ID,
-    DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
     STEP_USER,
-    DEFAULT_PLANT_NAME,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,7 +67,7 @@ def validate_slave_ids(raw_ids: str, field_name: str) -> Tuple[List[int], Dict[s
             break
             
     # Check for duplicate IDs
-    if not errors and not DEVELOPER_MODE:
+    if not errors and not _LOGGER.isEnabledFor(logging.DEBUG):
         if len(set(id_list)) != len(id_list):
             errors[field_name] = "duplicate_ids_found"
             
@@ -159,7 +153,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data[CONF_DC_CHARGER_SLAVE_IDS] = dc_charger_ids
         
         # Store the plant name generated based on the number of installed plants
-        self._data[CONF_NAME] = f"{DEFAULT_PLANT_NAME}{'' if plant_no == 0 else f' {plant_no}'}"
+        self._data[CONF_NAME] = f"Sigen{' ' if plant_no == 0 else f' {plant_no} '}Plant"
         
         # Set the device type as plant
         self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_PLANT
@@ -292,9 +286,9 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         self.options = dict(config_entry.options)
         self._data = dict(config_entry.data)
 
-    async def async_step_init(self, user_input=None):
+    async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Manage the options for the custom component."""
-        return await self.async_step_reconfigure()
+        return await self.async_step_reconfigure(user_input=user_input)
 
     async def async_step_reconfigure(self, user_input=None):
         """Handle reconfiguration of inverter and AC charger slave IDs."""

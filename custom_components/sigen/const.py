@@ -19,7 +19,6 @@ from homeassistant.const import (
 # Integration domain
 DOMAIN = "sigen"
 DEFAULT_NAME = "Sigenergy ESS"
-DEVELOPER_MODE = True
 
 # Configuration keys
 CONF_HOST = "host"
@@ -37,7 +36,6 @@ CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
 
 # Default names
-DEFAULT_PLANT_NAME = "Sigen Plant"
 DEFAULT_INVERTER_NAME = "Sigen Inverter"
 DEFAULT_AC_CHARGER_NAME = "Sigen AC Charger"
 DEFAULT_DC_CHARGER_NAME = "Sigen DC Charger"

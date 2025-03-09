@@ -35,7 +35,6 @@ from .const import (
     DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
-    DEVICE_TYPE_PV_STRING,
     DOMAIN,
     EMSWorkMode,
     RunningState,
@@ -1045,6 +1044,8 @@ async def async_setup_entry(
     # Set plant name
     plant_name : str = config_entry.data[CONF_NAME]
 
+    _LOGGER.debug("Setting up sensors for %s", plant_name)
+
     # Add plant sensors
     for description in PLANT_SENSORS:
         entities.append(
@@ -1062,7 +1063,7 @@ async def async_setup_entry(
     inverter_no = 0
     for inverter_id in coordinator.hub.inverter_slave_ids:
         inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
-        _LOGGER.debug("Adding inverter %s with inverter_no %s as %s", inverter_id, inverter_no, inverter_name)
+        _LOGGER.debug("Adding inverter %s for plant %s with inverter_no %s as %s", inverter_id, plant_name, inverter_no, inverter_name)
         
         # Add inverter sensors
         for description in INVERTER_SENSORS:
@@ -1083,13 +1084,14 @@ async def async_setup_entry(
             pv_string_count = inverter_data.get("inverter_pv_string_count", 0)
             
             if pv_string_count and isinstance(pv_string_count, (int, float)) and pv_string_count > 0:
-                _LOGGER.info("Adding %d PV string devices for inverter %s", pv_string_count, inverter_id)
+                _LOGGER.debug("Adding %d PV string devices for inverter %s with name %s", pv_string_count, inverter_id, inverter_name)
                 
                 # Create sensors for each PV string
                 for pv_idx in range(1, int(pv_string_count) + 1):
                     try:
                         pv_string_name = f"{inverter_name} PV {pv_idx}"
-                        pv_string_id = f"{coordinator.hub.config_entry.entry_id}_inverter_{inverter_id}_pv_string_{pv_idx}"
+                        pv_string_id = f"{coordinator.hub.config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}_pv{pv_idx}"
+                        _LOGGER.debug("Adding PV string %d with name %s and ID %s", pv_idx, pv_string_name, pv_string_id)
                         
                         # Create device info
                         pv_device_info = DeviceInfo(
@@ -1102,6 +1104,7 @@ async def async_setup_entry(
                         
                         # Add sensors for this PV string
                         for description in PV_STRING_SENSORS:
+                            _LOGGER.debug("Adding sensor %s for PV string %d", description.name, pv_string_name)
                             # Create a copy of the description to add extra parameters
                             if isinstance(description, SigenergySensorEntityDescription) and description.key == "power":
                                 # For power sensor, add the PV string index and device ID as extra parameters
@@ -1122,14 +1125,15 @@ async def async_setup_entry(
                                 PVStringSensor(
                                     coordinator=coordinator,
                                     description=sensor_desc,
-                                    name=f"{inverter_name} {pv_string_name} {description.name}",
+                                    name=f"{pv_string_name} {description.name}",
                                     device_type=DEVICE_TYPE_INVERTER,  # Use inverter as device type for data access
                                     device_id=inverter_id,
-                                    device_name=pv_string_name,
+                                    device_name=inverter_name,
                                     device_info=pv_device_info,
                                     pv_string_idx=pv_idx,
                                 )
                             )
+                            _LOGGER.debug("Added sensor id %s for PV string id %s", sensor_desc.key, pv_string_id)
                     except Exception as ex:
                         _LOGGER.error("Error creating device for PV string %d: %s", pv_idx, ex)
         
@@ -1203,10 +1207,15 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
         # Get the device number if any as a string for use in names
         device_number_str = device_name.split()[-1]
         device_number_str = f" {device_number_str}" if device_number_str.isdigit() else ""
+        # _LOGGER.debug("Device number string for %s: %s", device_name, device_number_str)
 
         # Set unique ID
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
+            _LOGGER.debug("Unique ID for plant sensor %s", self._attr_unique_id)
+        elif device_type == DEVICE_TYPE_INVERTER and pv_string_idx is not None:
+            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_pv{pv_string_idx}_{description.key}"
+            _LOGGER.debug("Unique ID for PV string sensor %s", self._attr_unique_id)
         else:
             self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
 
