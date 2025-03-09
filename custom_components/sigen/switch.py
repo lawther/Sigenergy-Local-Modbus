@@ -136,7 +136,7 @@ async def async_setup_entry(
     # Add inverter switches
     inverter_no = 0
     for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
+        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
         for description in INVERTER_SWITCHES:
             entities.append(
                 SigenergySwitch(
@@ -154,7 +154,7 @@ async def async_setup_entry(
     # Add AC charger switches
     ac_charger_no = 0
     for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
+        ac_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
         _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
         for description in AC_CHARGER_SWITCHES:
             entities.append(
@@ -173,7 +173,7 @@ async def async_setup_entry(
     # Add DC charger switches
     dc_charger_no = 0
     for dc_charger_id in coordinator.hub.dc_charger_slave_ids:
-        dc_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
+        dc_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
         _LOGGER.debug("Adding DC charger %s with dc_charger_no %s as %s", dc_charger_id, dc_charger_no, dc_charger_name)
         for description in DC_CHARGER_SWITCHES:
             entities.append(

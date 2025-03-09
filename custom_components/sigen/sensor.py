@@ -1062,8 +1062,9 @@ async def async_setup_entry(
     # Add inverter sensors
     inverter_no = 0
     for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
+        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
         _LOGGER.debug("Adding inverter %s for plant %s with inverter_no %s as %s", inverter_id, plant_name, inverter_no, inverter_name)
+        _LOGGER.debug("Plant name: %s divided by space first part: %s, second part: %s, last part: %s", plant_name, plant_name.split()[0], plant_name.split()[1], plant_name.split()[-1])
         
         # Add inverter sensors
         for description in INVERTER_SENSORS:
@@ -1143,7 +1144,7 @@ async def async_setup_entry(
     # Add AC charger sensors
     ac_charger_no = 0
     for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
+        ac_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
         _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
         for description in AC_CHARGER_SENSORS:
             entities.append(
@@ -1161,7 +1162,7 @@ async def async_setup_entry(
     # Add DC charger sensors
     dc_charger_no = 0
     for dc_charger_id in coordinator.hub.dc_charger_slave_ids:
-        dc_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
+        dc_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
         _LOGGER.debug("Adding DC charger %s with dc_charger_no %s as %s", dc_charger_id, dc_charger_no, dc_charger_name)
         for description in DC_CHARGER_SENSORS:
             entities.append(
