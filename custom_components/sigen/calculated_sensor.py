@@ -14,6 +14,7 @@ from homeassistant.components.sensor import (
 )
 # from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    UnitOfEnergy,
     EntityCategory,
     UnitOfPower,
 )
@@ -81,6 +82,57 @@ class SigenergyCalculations:
             
             return result
 
+
+    @staticmethod
+    def calculate_energy(_, coordinator_data: Optional[Dict[str, Any]], extra_params: Optional[Dict[str, Any]]) -> Optional[float]:
+        """Calculate energy production based on power values.
+        
+        Integration is handled by Home Assistant's integration platform.
+        This function just returns the appropriate power value for integration.
+        """
+        if not coordinator_data or not extra_params:
+            _LOGGER.debug("Missing required data for energy calculation")
+            return None
+
+        try:
+            level = extra_params.get("level")
+            
+            if level == "plant":
+                power_value = coordinator_data.get("plant", {}).get("plant_photovoltaic_power")
+            elif level == "inverter":
+                device_id = extra_params.get("device_id")
+                if not device_id:
+                    _LOGGER.debug("Missing device_id for inverter energy calculation")
+                    return None
+                power_value = coordinator_data.get("inverters", {}).get(device_id, {}).get("inverter_pv_power")
+            elif level == "pv_string":
+                device_id = extra_params.get("device_id")
+                pv_string_idx = extra_params.get("pv_string_idx")
+                if not device_id or not pv_string_idx:
+                    _LOGGER.debug("Missing device_id or pv_string_idx for PV string energy calculation")
+                    return None
+                # Use the power calculation function we already have
+                power_value = SigenergyCalculations.calculate_pv_power(None, coordinator_data, {
+                    "pv_idx": pv_string_idx,
+                    "device_id": device_id
+                })
+            else:
+                _LOGGER.debug("Invalid level for energy calculation: %s", level)
+                return None
+            
+            if power_value is None:
+                _LOGGER.debug("No power value available for energy calculation")
+                return None
+
+            if not isinstance(power_value, (int, float)):
+                _LOGGER.debug("Invalid power value type: %s", type(power_value))
+                return None
+
+            return power_value
+
+        except Exception as ex:
+            _LOGGER.error("Error calculating energy: %s", ex)
+            return None
 
     @staticmethod
     def minutes_to_gmt(minutes: Any) -> str:
@@ -192,6 +244,82 @@ class SigenergyCalculations:
             return None
 
 class SigenergyCalculatedSensors:
+    """Class for holding calculated sensor methods."""
+
+    PLANT_ENERGY_SENSORS = [
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_daily_energy",
+            name="Daily PV Energy Production",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            entity_registry_enabled_default=True,
+            value_fn=SigenergyCalculations.calculate_energy,
+            extra_fn_data=True,
+            extra_params={"level": "plant", "reset_at_midnight": True}
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_accumulated_energy",
+            name="Accumulated Energy Production",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            entity_registry_enabled_default=True,
+            value_fn=SigenergyCalculations.calculate_energy,
+            extra_fn_data=True,
+            extra_params={"level": "plant", "reset_at_midnight": False}
+        )
+    ]
+
+    INVERTER_ENERGY_SENSORS = [
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="inverter_daily_energy",
+            name="Daily PV Energy Production",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            entity_registry_enabled_default=True,
+            value_fn=SigenergyCalculations.calculate_energy,
+            extra_fn_data=True,
+            extra_params={"level": "inverter", "reset_at_midnight": True}
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="inverter_accumulated_energy",
+            name="Accumulated Energy Production",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            entity_registry_enabled_default=True,
+            value_fn=SigenergyCalculations.calculate_energy,
+            extra_fn_data=True,
+            extra_params={"level": "inverter", "reset_at_midnight": False}
+        )
+    ]
+
+    PV_STRING_ENERGY_SENSORS = [
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="pv_string_daily_energy",
+            name="Daily PV Energy Production",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            entity_registry_enabled_default=True,
+            value_fn=SigenergyCalculations.calculate_energy,
+            extra_fn_data=True,
+            extra_params={"level": "pv_string", "reset_at_midnight": True}
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="pv_string_accumulated_energy",
+            name="Accumulated Energy Production",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            entity_registry_enabled_default=True,
+            value_fn=SigenergyCalculations.calculate_energy,
+            extra_fn_data=True,
+            extra_params={"level": "pv_string", "reset_at_midnight": False}
+        )
+    ]
     """Class for holding calculated sensor methods."""
 
     PV_STRING_SENSORS = [

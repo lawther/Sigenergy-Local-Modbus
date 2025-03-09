@@ -3,11 +3,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
-from homeassistant.components.integration.sensor import IntegrationSensor
-import homeassistant.util.dt as dt_util
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -41,60 +38,6 @@ from .static_sensor import StaticSensors as SS
 _LOGGER = logging.getLogger(__name__)
 
 
-class SigenergyIntegrationSensor(IntegrationSensor):
-    """Representation of a Sigenergy integration sensor."""
-
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        source_entity_id: str,
-        name: str,
-        unique_id: str,
-        round_digits: int,
-        device_info: DeviceInfo,
-        reset_at_midnight: bool,
-    ) -> None:
-        """Initialize the integration sensor."""
-        super().__init__(
-            source_entity=source_entity_id,
-            name=name,
-            round_digits=round_digits,
-            unit_prefix=None,
-            unit_time="h",  # Use hours as the time unit for kWh
-            integration_method="trapezoidal",
-            unique_id=unique_id,
-            max_sub_interval=timedelta(minutes=20),  # Maximum time between updates before resetting
-        )
-        
-        self.hass = hass
-        self._attr_unique_id = unique_id
-        self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-        self._attr_device_info = device_info
-        self._reset_at_midnight = reset_at_midnight
-        
-        # Set up reset at midnight if needed
-        if self._reset_at_midnight:
-            self._setup_reset_at_midnight()
-    
-    def _setup_reset_at_midnight(self) -> None:
-        """Set up automatic reset at midnight."""
-        now = dt_util.now()
-        midnight = dt_util.start_of_local_day(now + timedelta(days=1))
-        
-        async def reset_at_midnight(_):
-            """Reset the integration at midnight."""
-            await self.async_reset_integration()
-            
-            # Schedule the next reset
-            self._setup_reset_at_midnight()
-        
-        # Schedule the reset
-        self.hass.helpers.event.async_track_point_in_time(
-            reset_at_midnight, midnight
-        )
-
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -120,7 +63,7 @@ async def async_setup_entry(
     _LOGGER.debug("Setting up sensors for %s", plant_name)
 
     # Add plant sensors
-    for description in SS.PLANT_SENSORS + SCS.PLANT_SENSORS:
+    for description in SS.PLANT_SENSORS + SCS.PLANT_SENSORS + SCS.PLANT_ENERGY_SENSORS:
         entities.append(
             SigenergySensor(
                 coordinator=coordinator,
@@ -249,97 +192,35 @@ async def async_setup_entry(
     # Set plant name
     plant_name: str = config_entry.data[CONF_NAME]
 
-    # Add plant energy sensors
-    if coordinator.data and "plant" in coordinator.data:
-        # Check if plant_photovoltaic_power exists
-        if "plant_photovoltaic_power" in coordinator.data["plant"]:
-            # Create source entity ID
-            source_entity_id = f"sensor.{plant_name.lower().replace(' ', '_')}_pv_power"
-            
-            # Create daily energy sensor
-            entities.append(
-                SigenergyIntegrationSensor(
-                    hass=hass,
-                    source_entity_id=source_entity_id,
-                    name=f"{plant_name} Daily PV Energy Production",
-                    unique_id=f"{config_entry.entry_id}_plant_daily_energy",
-                    round_digits=2,
-                    device_info=DeviceInfo(
-                        identifiers={(DOMAIN, f"{config_entry.entry_id}_plant")},
-                        name=plant_name,
-                        manufacturer="Sigenergy",
-                        model="Energy Storage System",
-                    ),
-                    reset_at_midnight=True,
-                )
-            )
-            
-            # Create total energy sensor
-            entities.append(
-                SigenergyIntegrationSensor(
-                    hass=hass,
-                    source_entity_id=source_entity_id,
-                    name=f"{plant_name} Accumulated Energy Production",
-                    unique_id=f"{config_entry.entry_id}_plant_total_energy",
-                    round_digits=2,
-                    device_info=DeviceInfo(
-                        identifiers={(DOMAIN, f"{config_entry.entry_id}_plant")},
-                        name=plant_name,
-                        manufacturer="Sigenergy",
-                        model="Energy Storage System",
-                    ),
-                    reset_at_midnight=False,
-                )
-            )
-
     # Add inverter energy sensors
     inverter_no = 0
     for inverter_id in coordinator.hub.inverter_slave_ids:
         inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if len(plant_name.split()) > 1 and plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
         
-        # Check if inverter_pv_power exists
+        # Add inverter energy sensors
         if (coordinator.data and "inverters" in coordinator.data and
             inverter_id in coordinator.data["inverters"] and
             "inverter_pv_power" in coordinator.data["inverters"][inverter_id]):
             
-            # Create source entity ID
-            source_entity_id = f"sensor.{inverter_name.lower().replace(' ', '_')}_pv_power"
-            
-            # Create daily energy sensor
-            entities.append(
-                SigenergyIntegrationSensor(
-                    hass=hass,
-                    source_entity_id=source_entity_id,
-                    name=f"{inverter_name} Daily PV Energy Production",
-                    unique_id=f"{config_entry.entry_id}_inverter_{inverter_id}_daily_energy",
-                    round_digits=2,
-                    device_info=DeviceInfo(
-                        identifiers={(DOMAIN, f"{config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}")},
-                        name=inverter_name,
-                        manufacturer="Sigenergy",
-                        via_device=(DOMAIN, f"{config_entry.entry_id}_plant"),
-                    ),
-                    reset_at_midnight=True,
+            for description in SCS.INVERTER_ENERGY_SENSORS:
+                energy_desc = SC.SigenergySensorEntityDescription.from_entity_description(
+                    description,
+                    extra_params={
+                        "level": "inverter",
+                        "device_id": inverter_id,
+                        "reset_at_midnight": description.extra_params.get("reset_at_midnight", False)
+                    }
                 )
-            )
-            
-            # Create total energy sensor
-            entities.append(
-                SigenergyIntegrationSensor(
-                    hass=hass,
-                    source_entity_id=source_entity_id,
-                    name=f"{inverter_name} Accumulated Energy Production",
-                    unique_id=f"{config_entry.entry_id}_inverter_{inverter_id}_total_energy",
-                    round_digits=2,
-                    device_info=DeviceInfo(
-                        identifiers={(DOMAIN, f"{config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}")},
-                        name=inverter_name,
-                        manufacturer="Sigenergy",
-                        via_device=(DOMAIN, f"{config_entry.entry_id}_plant"),
-                    ),
-                    reset_at_midnight=False,
+                entities.append(
+                    SigenergySensor(
+                        coordinator=coordinator,
+                        description=energy_desc,
+                        name=f"{inverter_name} {description.name}",
+                        device_type=DEVICE_TYPE_INVERTER,
+                        device_id=inverter_id,
+                        device_name=inverter_name,
+                    )
                 )
-            )
         
         # Add PV string energy sensors
         if coordinator.data and "inverters" in coordinator.data and inverter_id in coordinator.data["inverters"]:
@@ -352,46 +233,36 @@ async def async_setup_entry(
                         pv_string_name = f"{inverter_name} PV {pv_idx}"
                         pv_string_id = f"{config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}_pv{pv_idx}"
                         
-                        # Create source entity ID
-                        source_entity_id = f"sensor.{pv_string_name.lower().replace(' ', '_')}_power"
-                        
-                        # Create daily energy sensor
-                        entities.append(
-                            SigenergyIntegrationSensor(
-                                hass=hass,
-                                source_entity_id=source_entity_id,
-                                name=f"{pv_string_name} Daily PV Energy Production",
-                                unique_id=f"{pv_string_id}_daily_energy",
-                                round_digits=2,
-                                device_info=DeviceInfo(
-                                    identifiers={(DOMAIN, pv_string_id)},
-                                    name=pv_string_name,
-                                    manufacturer="Sigenergy",
-                                    model="PV String",
-                                    via_device=(DOMAIN, f"{config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}"),
-                                ),
-                                reset_at_midnight=True,
-                            )
+                        pv_device_info = DeviceInfo(
+                            identifiers={(DOMAIN, pv_string_id)},
+                            name=pv_string_name,
+                            manufacturer="Sigenergy",
+                            model="PV String",
+                            via_device=(DOMAIN, f"{config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}"),
                         )
-                        
-                        # Create total energy sensor
-                        entities.append(
-                            SigenergyIntegrationSensor(
-                                hass=hass,
-                                source_entity_id=source_entity_id,
-                                name=f"{pv_string_name} Accumulated Energy Production",
-                                unique_id=f"{pv_string_id}_total_energy",
-                                round_digits=2,
-                                device_info=DeviceInfo(
-                                    identifiers={(DOMAIN, pv_string_id)},
-                                    name=pv_string_name,
-                                    manufacturer="Sigenergy",
-                                    model="PV String",
-                                    via_device=(DOMAIN, f"{config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}"),
-                                ),
-                                reset_at_midnight=False,
+
+                        for description in SCS.PV_STRING_ENERGY_SENSORS:
+                            energy_desc = SC.SigenergySensorEntityDescription.from_entity_description(
+                                description,
+                                extra_params={
+                                    "level": "pv_string",
+                                    "device_id": inverter_id,
+                                    "pv_string_idx": pv_idx,
+                                    "reset_at_midnight": description.extra_params.get("reset_at_midnight", False)
+                                }
                             )
-                        )
+                            entities.append(
+                                PVStringSensor(
+                                    coordinator=coordinator,
+                                    description=energy_desc,
+                                    name=f"{pv_string_name} {description.name}",
+                                    device_type=DEVICE_TYPE_INVERTER,
+                                    device_id=inverter_id,
+                                    device_name=inverter_name,
+                                    device_info=pv_device_info,
+                                    pv_string_idx=pv_idx,
+                                )
+                            )
                     except Exception as ex:
                         _LOGGER.error("Error creating energy sensors for PV string %d: %s", pv_idx, ex)
         
@@ -519,12 +390,12 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             value = None
 
         if value is None or str(value).lower() == "unknown":
+            # Always return None for numeric sensors (ones with measurements or units)
             if (self.entity_description.native_unit_of_measurement is not None
-                or self.entity_description.state_class == SensorStateClass.MEASUREMENT):
+                or self.entity_description.state_class in [SensorStateClass.MEASUREMENT, SensorStateClass.TOTAL_INCREASING]):
                 return None
-            else:
-                return STATE_UNKNOWN
-                
+            return STATE_UNKNOWN
+
         # Special handling for timestamp sensors
         if self.entity_description.device_class == SensorDeviceClass.TIMESTAMP:
             try:
@@ -678,24 +549,24 @@ class PVStringSensor(SigenergySensor):
                 return STATE_UNKNOWN
                 
             # Handle different sensor types
-            if self.entity_description.key == "voltage":
-                value = inverter_data.get(f"inverter_pv{self._pv_string_idx}_voltage")
-            elif self.entity_description.key == "current":
-                value = inverter_data.get(f"inverter_pv{self._pv_string_idx}_current")
-            elif self.entity_description.key == "power" and hasattr(self.entity_description, "value_fn"):
-                # Use the value_fn for power calculation
+            # First check if we have a value_fn (for power and energy sensors)
+            if hasattr(self.entity_description, "value_fn") and self.entity_description.value_fn is not None:
                 return self.entity_description.value_fn(
                     None,
                     self.coordinator.data,
                     getattr(self.entity_description, "extra_params", {})
                 )
+            # Then handle other standard sensors
+            elif self.entity_description.key == "voltage":
+                value = inverter_data.get(f"inverter_pv{self._pv_string_idx}_voltage")
+            elif self.entity_description.key == "current":
+                value = inverter_data.get(f"inverter_pv{self._pv_string_idx}_current")
             else:
-                _LOGGER.warning("Unknown PV string sensor key: %s", self.entity_description.key)
-                return STATE_UNKNOWN
-                
-            if value is None or str(value).lower() == "unknown":
+                _LOGGER.debug("Unknown PV string sensor key: %s, returning None", self.entity_description.key)
                 return None
                 
+            if value is None:
+                return None
             return value
         except Exception as ex:
             _LOGGER.error("Error getting value for PV string sensor %s: %s", self.entity_id, ex)
