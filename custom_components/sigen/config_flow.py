@@ -122,7 +122,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors.update(dc_errors)
 
         # Check for conflicts between device types
-        if not errors:
+        if not errors and not _LOGGER.isEnabledFor(logging.DEBUG):
             # Check AC charger IDs don't conflict with inverter IDs
             # Note: Empty AC charger list is valid and means no AC chargers present
             if ac_charger_ids:
@@ -211,7 +211,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors.update(dc_errors)
 
         # Check for conflicts between device types
-        if not errors:
+        if not errors and not _LOGGER.isEnabledFor(logging.DEBUG):
             # Note: Empty AC charger list is valid and means no AC chargers present
             if ac_charger_ids:
                 for ac_id in ac_charger_ids:
@@ -322,7 +322,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         errors.update(dc_errors)
 
         # Check for conflicts between device types
-        if not errors:
+        if not errors and not _LOGGER.isEnabledFor(logging.DEBUG):
             # Note: Empty AC charger list is valid and means no AC chargers present
             if ac_charger_ids:
                 for ac_id in ac_charger_ids:
