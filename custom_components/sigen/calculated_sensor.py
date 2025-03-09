@@ -2,8 +2,43 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    CONF_NAME,
+    EntityCategory,
+    PERCENTAGE,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfFrequency,
+    UnitOfPower,
+    UnitOfTemperature,
+    STATE_UNKNOWN,
+)
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .const import (
+    DEVICE_TYPE_AC_CHARGER,
+    DEVICE_TYPE_DC_CHARGER,
+    DEVICE_TYPE_INVERTER,
+    DEVICE_TYPE_PLANT,
+    DOMAIN,
+    EMSWorkMode,
+    RunningState,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -11,6 +46,60 @@ _LOGGER = logging.getLogger(__name__)
 class SigenergyCalculations:
     """Static class for Sigenergy calculated sensor functions."""
     
+    @dataclass
+    class SigenergySensorEntityDescription(SensorEntityDescription):
+        """Class describing Sigenergy sensor entities."""
+
+        entity_registry_enabled_default: bool = True
+        value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None
+        extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
+        extra_params: Optional[Dict[str, Any]] = None  # Additional parameters for value_fn
+
+        @classmethod
+        def from_entity_description(cls, description, 
+                                    value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None,
+                                    extra_fn_data: Optional[bool] = False,
+                                    extra_params: Optional[Dict[str, Any]] = None):
+            """Create a SigenergySensorEntityDescription instance from a SensorEntityDescription."""
+            # Create a new instance with the base attributes
+            if isinstance(description, cls):
+                # If it's already our class, copy all attributes
+                result = cls(
+                    key=description.key,
+                    name=description.name,
+                    device_class=description.device_class,
+                    native_unit_of_measurement=description.native_unit_of_measurement,
+                    state_class=description.state_class,
+                    entity_registry_enabled_default=description.entity_registry_enabled_default,
+                    value_fn=value_fn or description.value_fn,
+                    extra_fn_data=extra_fn_data if extra_fn_data is not None else description.extra_fn_data,
+                    extra_params=extra_params or description.extra_params
+                )
+            else:
+                # It's a regular SensorEntityDescription
+                result = cls(
+                    key=description.key,
+                    name=description.name,
+                    device_class=getattr(description, "device_class", None),
+                    native_unit_of_measurement=getattr(description, "native_unit_of_measurement", None),
+                    state_class=getattr(description, "state_class", None),
+                    entity_registry_enabled_default=getattr(description, "entity_registry_enabled_default", True),
+                    value_fn=value_fn,
+                    extra_fn_data=extra_fn_data,
+                    extra_params=extra_params
+                )
+            
+            # Copy any other attributes that might exist
+            for attr_name in dir(description):
+                if not attr_name.startswith('_') and attr_name not in ['key', 'name', 'device_class', 
+                                                                    'native_unit_of_measurement', 'state_class', 
+                                                                    'entity_registry_enabled_default', 'value_fn',
+                                                                    'extra_fn_data', 'extra_params']:
+                    setattr(result, attr_name, getattr(description, attr_name))
+            
+            return result
+
+
     @staticmethod
     def minutes_to_gmt(minutes: Any) -> str:
         """Convert minutes offset to GMT format."""
@@ -119,3 +208,20 @@ class SigenergyCalculations:
             _LOGGER.warning("Error calculating power for PV string %d: %s",
                         extra_params.get("pv_idx", "unknown"), ex)
             return None
+
+class SigenergyCalculatedSensors:
+    """Class for holding calculated sensor methods."""
+
+    PV_STRING_SENSORS = [
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="power",
+            name="Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.MEASUREMENT,
+            value_fn=SigenergyCalculations.calculate_pv_power,
+            extra_fn_data=True,
+        ),
+    ]
+

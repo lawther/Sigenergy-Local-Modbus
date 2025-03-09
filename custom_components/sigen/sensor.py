@@ -43,7 +43,7 @@ from .const import (
     RunningState,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
-from .calculated_sensor import SigenergyCalculations
+from .calculated_sensor import SigenergyCalculations as SC, SigenergyCalculatedSensors as SCS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,16 +59,6 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 
 # PV string sensor descriptions
 PV_STRING_SENSORS = [
-    SigenergySensorEntityDescription(
-        key="power",
-        name="Power",
-        device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement=UnitOfPower.KILO_WATT,
-        suggested_display_precision=2,
-        state_class=SensorStateClass.MEASUREMENT,
-        value_fn=SigenergyCalculations.calculate_pv_power,
-        extra_fn_data=True,
-    ),
     SensorEntityDescription(
         key="voltage",
         name="Voltage",
@@ -93,7 +83,7 @@ PLANT_SENSORS = [
         icon="mdi:clock",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=SigenergyCalculations.epoch_to_datetime,
+        value_fn=SC.epoch_to_datetime,
         extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
     ),
     SigenergySensorEntityDescription(
@@ -101,7 +91,7 @@ PLANT_SENSORS = [
         name="System Timezone",
         icon="mdi:earth",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=SigenergyCalculations.minutes_to_gmt,
+        value_fn=SC.minutes_to_gmt,
     ),
     # EMS Work Mode sensor with value mapping
     SigenergySensorEntityDescription(
@@ -794,7 +784,7 @@ INVERTER_SENSORS = [
         name="Startup Time",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=SigenergyCalculations.epoch_to_datetime,
+        value_fn=SC.epoch_to_datetime,
         extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
     ),
     SigenergySensorEntityDescription(
@@ -802,7 +792,7 @@ INVERTER_SENSORS = [
         name="Shutdown Time",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=SigenergyCalculations.epoch_to_datetime,
+        value_fn=SC.epoch_to_datetime,
         extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
     ),
 ]
@@ -1056,19 +1046,12 @@ async def async_setup_entry(
                         )
                         
                         # Add sensors for this PV string
-                        for description in PV_STRING_SENSORS:
+                        for description in PV_STRING_SENSORS + SCS.PV_STRING_SENSORS:
                             _LOGGER.debug("Adding sensor %s for PV string %d", description.name, pv_string_name)
                             # Create a copy of the description to add extra parameters
-                            if isinstance(description, SigenergySensorEntityDescription) and description.key == "power":
-                                # For power sensor, add the PV string index and device ID as extra parameters
-                                sensor_desc = SigenergySensorEntityDescription(
-                                    key=description.key,
-                                    name=description.name,
-                                    device_class=description.device_class,
-                                    native_unit_of_measurement=description.native_unit_of_measurement,
-                                    state_class=description.state_class,
-                                    value_fn=description.value_fn,
-                                    extra_fn_data=description.extra_fn_data,
+                            if isinstance(description, SC.SigenergySensorEntityDescription):
+                                sensor_desc = SC.SigenergySensorEntityDescription.from_entity_description(
+                                    description,
                                     extra_params={"pv_idx": pv_idx, "device_id": inverter_id},
                                 )
                             else:
@@ -1419,7 +1402,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     return None
                     
                 # Use epoch_to_datetime for timestamp conversion
-                converted_timestamp = SigenergyCalculations.epoch_to_datetime(value, self.coordinator.data)
+                converted_timestamp = SC.epoch_to_datetime(value, self.coordinator.data)
                 _LOGGER.debug("Timestamp conversion for %s: %s -> %s",
                             self.entity_id, value, converted_timestamp)
                 return converted_timestamp
@@ -1586,4 +1569,4 @@ class PVStringSensor(SigenergySensor):
         except Exception as ex:
             _LOGGER.error("Error getting value for PV string sensor %s: %s", self.entity_id, ex)
             return STATE_UNKNOWN
-</copilot-edited-file>
+
