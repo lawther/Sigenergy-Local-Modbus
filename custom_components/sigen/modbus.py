@@ -480,7 +480,7 @@ class SigenergyModbusHub:
                     )
                     
                     data[register_name] = value
-                    _LOGGER.debug("Read register %s = %s from plant", register_name, value)
+                    # _LOGGER.debug("Read register %s = %s from plant", register_name, value)
                     
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
@@ -547,7 +547,7 @@ class SigenergyModbusHub:
                     )
 
                     data[register_name] = value
-                    _LOGGER.debug("Read register %s = %s from inverter %d", register_name, value, inverter_id)
+                    # _LOGGER.debug("Read register %s = %s from inverter %d", register_name, value, inverter_id)
 
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
@@ -611,7 +611,7 @@ class SigenergyModbusHub:
                     )
 
                     data[register_name] = value
-                    _LOGGER.debug("Read register %s = %s from AC charger %d", register_name, value, ac_charger_id)
+                    # _LOGGER.debug("Read register %s = %s from AC charger %d", register_name, value, ac_charger_id)
 
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
@@ -675,7 +675,7 @@ class SigenergyModbusHub:
                     )
 
                     data[register_name] = value
-                    _LOGGER.debug("Read register %s = %s from DC charger %d", register_name, value, dc_charger_id)
+                    # _LOGGER.debug("Read register %s = %s from DC charger %d", register_name, value, dc_charger_id)
 
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
