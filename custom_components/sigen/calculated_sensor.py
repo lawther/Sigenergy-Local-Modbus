@@ -190,6 +190,21 @@ class SigenergyCalculations:
                         extra_params.get("pv_idx", "unknown"), ex)
             return None
 
+    @staticmethod
+    def calculate_accumulated_energy(value: Any, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
+        """Calculate accumulated energy for a PV string based on integration of power over time.
+        
+        This is a placeholder function that returns the most recent power value.
+        The actual energy integration is handled by Home Assistant's integration sensor platform
+        which should use the power sensor as its source.
+        """
+        # This function is mainly to provide the sensor with the right attributes
+        # The actual integration from power to energy happens in HA's integration platform
+        if coordinator_data and extra_params:
+            # Just use the same logic as calculate_pv_power to ensure consistency
+            return SigenergyCalculations.calculate_pv_power(value, coordinator_data, extra_params)
+        return None
+
 class SigenergyCalculatedSensors:
     """Class for holding calculated sensor methods."""
 
@@ -202,6 +217,16 @@ class SigenergyCalculatedSensors:
             suggested_display_precision=2,
             state_class=SensorStateClass.MEASUREMENT,
             value_fn=SigenergyCalculations.calculate_pv_power,
+            extra_fn_data=True,
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="accumulated_energy",
+            name="Accumulated Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            suggested_display_precision=3,
+            value_fn=SigenergyCalculations.calculate_accumulated_energy,
             extra_fn_data=True,
         ),
     ]
