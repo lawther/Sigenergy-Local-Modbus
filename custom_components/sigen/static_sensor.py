@@ -202,6 +202,7 @@ class StaticSensors:
             name="Plant Reactive Power",
             native_unit_of_measurement="kVar",
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="plant_photovoltaic_power",
@@ -444,7 +445,6 @@ class StaticSensors:
             key="inverter_running_state",
             name="Running State",
             icon="mdi:power",
-            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         # Power adjustment values
         SensorEntityDescription(
@@ -485,6 +485,7 @@ class StaticSensors:
             name="Reactive Power",
             native_unit_of_measurement="kVar",
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_ess_charge_discharge_power",
@@ -514,6 +515,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_ess_available_battery_discharge_energy",
@@ -521,6 +523,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_ess_battery_soc",
@@ -542,6 +545,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.TEMPERATURE,
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_ess_average_cell_voltage",
@@ -657,6 +661,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_bc_line_voltage",
@@ -664,6 +669,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_ca_line_voltage",
@@ -671,6 +677,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_phase_a_voltage",
@@ -678,6 +685,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_phase_b_voltage",
@@ -685,6 +693,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_phase_c_voltage",
@@ -692,6 +701,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_phase_a_current",
@@ -699,6 +709,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_phase_b_current",
@@ -706,6 +717,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_phase_c_current",
@@ -713,11 +725,13 @@ class StaticSensors:
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
             key="inverter_power_factor",
             name="Power Factor",
             state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         # PV system metrics
         SensorEntityDescription(
