@@ -63,7 +63,7 @@ async def async_setup_entry(
     _LOGGER.debug("Setting up sensors for %s", plant_name)
 
     # Add plant sensors
-    for description in SS.PLANT_SENSORS + SCS.PLANT_SENSORS + SCS.PLANT_ENERGY_SENSORS:
+    for description in SS.PLANT_SENSORS + SCS.PLANT_SENSORS:
         entities.append(
             SigenergySensor(
                 coordinator=coordinator,
@@ -186,91 +186,7 @@ async def async_setup_entry(
             )
         dc_charger_no += 1
 
-    # Add energy sensors after all regular sensors are set up
-    # This ensures the power sensors are already registered
-    
-    # Set plant name
-    plant_name: str = config_entry.data[CONF_NAME]
-
-    # Add inverter energy sensors
-    inverter_no = 0
-    for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if len(plant_name.split()) > 1 and plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
-        
-        # Add inverter energy sensors
-        if (coordinator.data and "inverters" in coordinator.data and
-            inverter_id in coordinator.data["inverters"] and
-            "inverter_pv_power" in coordinator.data["inverters"][inverter_id]):
-            
-            for description in SCS.INVERTER_ENERGY_SENSORS:
-                energy_desc = SC.SigenergySensorEntityDescription.from_entity_description(
-                    description,
-                    extra_params={
-                        "level": "inverter",
-                        "device_id": inverter_id,
-                        "reset_at_midnight": description.extra_params.get("reset_at_midnight", False)
-                    }
-                )
-                entities.append(
-                    SigenergySensor(
-                        coordinator=coordinator,
-                        description=energy_desc,
-                        name=f"{inverter_name} {description.name}",
-                        device_type=DEVICE_TYPE_INVERTER,
-                        device_id=inverter_id,
-                        device_name=inverter_name,
-                    )
-                )
-        
-        # Add PV string energy sensors
-        if coordinator.data and "inverters" in coordinator.data and inverter_id in coordinator.data["inverters"]:
-            inverter_data = coordinator.data["inverters"][inverter_id]
-            pv_string_count = inverter_data.get("inverter_pv_string_count", 0)
-            
-            if pv_string_count and isinstance(pv_string_count, (int, float)) and pv_string_count > 0:
-                for pv_idx in range(1, int(pv_string_count) + 1):
-                    try:
-                        pv_string_name = f"{inverter_name} PV {pv_idx}"
-                        pv_string_id = f"{config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}_pv{pv_idx}"
-                        
-                        pv_device_info = DeviceInfo(
-                            identifiers={(DOMAIN, pv_string_id)},
-                            name=pv_string_name,
-                            manufacturer="Sigenergy",
-                            model="PV String",
-                            via_device=(DOMAIN, f"{config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}"),
-                        )
-
-                        for description in SCS.PV_STRING_ENERGY_SENSORS:
-                            energy_desc = SC.SigenergySensorEntityDescription.from_entity_description(
-                                description,
-                                extra_params={
-                                    "level": "pv_string",
-                                    "device_id": inverter_id,
-                                    "pv_string_idx": pv_idx,
-                                    "reset_at_midnight": description.extra_params.get("reset_at_midnight", False)
-                                }
-                            )
-                            entities.append(
-                                PVStringSensor(
-                                    coordinator=coordinator,
-                                    description=energy_desc,
-                                    name=f"{pv_string_name} {description.name}",
-                                    device_type=DEVICE_TYPE_INVERTER,
-                                    device_id=inverter_id,
-                                    device_name=inverter_name,
-                                    device_info=pv_device_info,
-                                    pv_string_idx=pv_idx,
-                                )
-                            )
-                    except Exception as ex:
-                        _LOGGER.error("Error creating energy sensors for PV string %d: %s", pv_idx, ex)
-        
-        # Increment inverter counter for the next iteration
-        inverter_no += 1
-
     async_add_entities(entities)
-
 
 class SigenergySensor(CoordinatorEntity, SensorEntity):
     """Representation of a Sigenergy sensor."""
@@ -289,78 +205,85 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        self._attr_name = name
-        self._device_type = device_type
-        self._device_id = device_id
-        self._pv_string_idx = pv_string_idx
-        self._device_info_override = device_info
+        try:
 
-        # Get the device number if any as a string for use in names
-        device_number_str = device_name.split()[-1]
-        device_number_str = f" {device_number_str}" if device_number_str.isdigit() else ""
-        # _LOGGER.debug("Device number string for %s: %s", device_name, device_number_str)
+            super().__init__(coordinator)
+            self.entity_description = description
+            self._attr_name = name
+            self._device_type = device_type
+            self._device_id = device_id
+            self._pv_string_idx = pv_string_idx
+            self._device_info_override = device_info
 
-        # Set unique ID
-        if device_type == DEVICE_TYPE_PLANT:
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
-            _LOGGER.debug("Unique ID for plant sensor %s", self._attr_unique_id)
-        elif device_type == DEVICE_TYPE_INVERTER and pv_string_idx is not None:
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_pv{pv_string_idx}_{description.key}"
-            _LOGGER.debug("Unique ID for PV string sensor %s", self._attr_unique_id)
-        else:
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
+            # Get the device number if any as a string for use in names
+            device_number_str = device_name.split()[-1]
+            device_number_str = f" {device_number_str}" if device_number_str.isdigit() else ""
+            # _LOGGER.debug("Device number string for %s: %s", device_name, device_number_str)
 
-        # Set device info (use provided device_info if available)
-        if self._device_info_override:
-            self._attr_device_info = self._device_info_override
-            return
-            
-        # Otherwise, use default device info logic
-        if device_type == DEVICE_TYPE_PLANT:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="Energy Storage System",
-            )
-        elif device_type == DEVICE_TYPE_INVERTER:
-            # Get model and serial number if available
-            model = None
-            serial_number = None
-            sw_version = None
-            if coordinator.data and "inverters" in coordinator.data:
-                inverter_data = coordinator.data["inverters"].get(device_id, {})
-                model = inverter_data.get("inverter_model_type")
-                serial_number = inverter_data.get("inverter_serial_number")
-                sw_version = inverter_data.get("inverter_machine_firmware_version")
+            # Set unique ID
+            if device_type == DEVICE_TYPE_PLANT:
+                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
+                _LOGGER.debug("Unique ID for plant sensor %s", self._attr_unique_id)
+            elif device_type == DEVICE_TYPE_INVERTER and pv_string_idx is not None:
+                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_pv{pv_string_idx}_{description.key}"
+                _LOGGER.debug("Unique ID for PV string sensor %s", self._attr_unique_id)
+            else:
+                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
+                _LOGGER.debug("Unique ID for %s sensor %s", device_type, self._attr_unique_id)
 
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model=model,
-                serial_number=serial_number,
-                sw_version=sw_version,
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_AC_CHARGER:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="AC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_DC_CHARGER:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="DC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
+            # Set device info (use provided device_info if available)
+            if self._device_info_override:
+                self._attr_device_info = self._device_info_override
+                return
+                
+            # Otherwise, use default device info logic
+            if device_type == DEVICE_TYPE_PLANT:
+                self._attr_device_info = DeviceInfo(
+                    identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
+                    name=device_name,
+                    manufacturer="Sigenergy",
+                    model="Energy Storage System",
+                )
+            elif device_type == DEVICE_TYPE_INVERTER:
+                # Get model and serial number if available
+                model = None
+                serial_number = None
+                sw_version = None
+                if coordinator.data and "inverters" in coordinator.data:
+                    inverter_data = coordinator.data["inverters"].get(device_id, {})
+                    model = inverter_data.get("inverter_model_type")
+                    serial_number = inverter_data.get("inverter_serial_number")
+                    sw_version = inverter_data.get("inverter_machine_firmware_version")
+
+                self._attr_device_info = DeviceInfo(
+                    identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
+                    name=device_name,
+                    manufacturer="Sigenergy",
+                    model=model,
+                    serial_number=serial_number,
+                    sw_version=sw_version,
+                    via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
+                )
+            elif device_type == DEVICE_TYPE_AC_CHARGER:
+                self._attr_device_info = DeviceInfo(
+                    identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
+                    name=device_name,
+                    manufacturer="Sigenergy",
+                    model="AC Charger",
+                    via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
+                )
+            elif device_type == DEVICE_TYPE_DC_CHARGER:
+                self._attr_device_info = DeviceInfo(
+                    identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
+                    name=device_name,
+                    manufacturer="Sigenergy",
+                    model="DC Charger",
+                    via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
+                )
+            else:
+                _LOGGER.error("Unknown device type for sensor: %s", device_type)
+        except Exception as ex:
+            _LOGGER.error("Error initializing SigenergySensor: %s", ex)
 
     @property
     def native_value(self) -> Any:
