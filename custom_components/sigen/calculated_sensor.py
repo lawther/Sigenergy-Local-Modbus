@@ -28,6 +28,9 @@ _LOGGER = logging.getLogger(__name__)
 class SigenergyCalculations:
     """Static class for Sigenergy calculated sensor functions."""
     
+    # Class variable to store last power readings and timestamps for energy calculation
+    _power_history = {}  # Format: {(device_id, pv_idx): {'last_timestamp': datetime, 'last_power': float, 'accumulated_energy': float}}
+    
     @dataclass
     class SigenergySensorEntityDescription(SensorEntityDescription):
         """Class describing Sigenergy sensor entities."""
@@ -194,16 +197,109 @@ class SigenergyCalculations:
     def calculate_accumulated_energy(value: Any, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
         """Calculate accumulated energy for a PV string based on integration of power over time.
         
-        This is a placeholder function that returns the most recent power value.
-        The actual energy integration is handled by Home Assistant's integration sensor platform
-        which should use the power sensor as its source.
+        This function integrates power over time to calculate accumulated energy (kWh).
+        It stores the last power reading and timestamp for each PV string to calculate
+        energy between consecutive readings.
         """
-        # This function is mainly to provide the sensor with the right attributes
-        # The actual integration from power to energy happens in HA's integration platform
-        if coordinator_data and extra_params:
-            # Just use the same logic as calculate_pv_power to ensure consistency
-            return SigenergyCalculations.calculate_pv_power(value, coordinator_data, extra_params)
-        return None
+        if not coordinator_data or not extra_params:
+            _LOGGER.debug("Missing required data for energy calculation")
+            return None
+            
+        try:
+            pv_idx = extra_params.get("pv_idx")
+            device_id = extra_params.get("device_id")
+            
+            if not pv_idx or not device_id:
+                _LOGGER.debug("Missing PV string index or device ID for energy calculation")
+                return None
+                
+            # Calculate current power using the same method as calculate_pv_power
+            inverter_data = coordinator_data.get("inverters", {}).get(device_id, {})
+            if not inverter_data:
+                _LOGGER.debug("No inverter data available for energy calculation")
+                return None
+                
+            v_key = f"inverter_pv{pv_idx}_voltage"
+            c_key = f"inverter_pv{pv_idx}_current"
+            
+            pv_voltage = inverter_data.get(v_key)
+            pv_current = inverter_data.get(c_key)
+            
+            # Validate inputs
+            if pv_voltage is None or pv_current is None:
+                _LOGGER.debug("Missing voltage or current data for PV string %s", pv_idx)
+                return None
+                
+            if not isinstance(pv_voltage, (int, float)) or not isinstance(pv_current, (int, float)):
+                _LOGGER.debug("Invalid data types for PV string %s: voltage=%s, current=%s",
+                            pv_idx, type(pv_voltage), type(pv_current))
+                return None
+                
+            # Calculate current power in kW
+            current_power = (pv_voltage * pv_current) / 1000  # Convert W to kW
+            
+            # Apply some reasonable bounds
+            MAX_REASONABLE_POWER = 20  # 20kW per string is very high already
+            if abs(current_power) > MAX_REASONABLE_POWER:
+                _LOGGER.warning("Calculated power for PV string %s seems excessive: %s kW",
+                            pv_idx, current_power)
+            
+            # Get current time
+            current_time = datetime.now(timezone.utc)
+            
+            # Create a unique key for this PV string
+            key = (device_id, pv_idx)
+            
+            # Initialize entry in history if it doesn't exist
+            if key not in SigenergyCalculations._power_history:
+                SigenergyCalculations._power_history[key] = {
+                    'last_timestamp': current_time,
+                    'last_power': current_power,
+                    'accumulated_energy': 0.0
+                }
+                _LOGGER.debug("Initialized energy tracking for PV string %s on device %s", 
+                             pv_idx, device_id)
+                return 0.0
+            
+            # Retrieve history for this PV string
+            history = SigenergyCalculations._power_history[key]
+            
+            # Calculate time difference in hours
+            time_diff_hours = (current_time - history['last_timestamp']).total_seconds() / 3600
+            
+            # If the time difference is too large, it might indicate a system restart or another issue
+            # In this case, don't calculate energy for this interval
+            MAX_REASONABLE_TIME_DIFF = 12  # 12 hours max between readings seems reasonable
+            if time_diff_hours <= 0 or time_diff_hours > MAX_REASONABLE_TIME_DIFF:
+                _LOGGER.debug("Unreasonable time difference for energy calculation: %s hours",
+                            time_diff_hours)
+                history['last_timestamp'] = current_time
+                history['last_power'] = current_power
+                return history['accumulated_energy']
+            
+            # Calculate energy for this time period using average power (trapezoidal integration)
+            # E = P_avg * t where P_avg = (P1 + P2) / 2 and t is time in hours
+            average_power = (history['last_power'] + current_power) / 2
+            
+            # Only accumulate positive energy values (when PV is generating power)
+            energy_this_period = max(0, average_power * time_diff_hours)
+            
+            # Add to accumulated energy
+            history['accumulated_energy'] += energy_this_period
+            
+            # Update history with current values for next calculation
+            history['last_timestamp'] = current_time
+            history['last_power'] = current_power
+            
+            _LOGGER.debug("PV string %s energy calculation: +%s kWh this period, total: %s kWh", 
+                         pv_idx, energy_this_period, history['accumulated_energy'])
+            
+            return history['accumulated_energy']
+            
+        except Exception as ex:
+            _LOGGER.warning("Error calculating accumulated energy for PV string %s: %s",
+                        extra_params.get("pv_idx", "unknown"), ex)
+            return None
 
 class SigenergyCalculatedSensors:
     """Class for holding calculated sensor methods."""
