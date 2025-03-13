@@ -1,6 +1,6 @@
 # Refined Implementation Plan for Accumulated Energy Sensors
 
-Based on the extracted data and your feedback, this document outlines a refined plan for implementing the 'Accumulated energy' sensors in your Python-based custom component.
+Based on the extracted data and your feedback, this document outlines a refined plan for implementing the 'Accumulated energy' sensors in your Python-based custom component. After analyzing the Home Assistant core integration sensor implementation, we'll ensure identical mathematical integration algorithms for consistent results.
 
 ## 1. Architecture Overview
 
@@ -21,11 +21,13 @@ We'll create a new class for integration sensors that will:
 - Subscribe to state changes of the source power sensor
 - Calculate accumulated energy using the trapezoidal method
 - Handle state restoration on Home Assistant restart
+- Implement identical mathematical algorithms as the core integration component
 
 ### 2.2 Integration Method
 
-Implement only the trapezoidal method for all sensors:
-- **Trapezoidal Method**: Calculates the area under the curve using the average of consecutive power readings
+Implement the trapezoidal method for all sensors, using the exact same algorithm as in Home Assistant core:
+- **Trapezoidal Method**: `elapsed_time * (left + right) / 2`
+- Use Decimal for precise calculations to match core implementation
 
 ### 2.3 Configuration and Registration
 
@@ -39,21 +41,30 @@ Create separate lists of integration sensors in the calculated_sensor.py file fo
 """Calculated sensor implementations for Sigenergy integration."""
 # Existing imports...
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntityDescription,
     SensorStateClass,
+    RestoreSensor,
 )
 from homeassistant.const import (
     UnitOfEnergy,
     UnitOfPower,
+    STATE_UNAVAILABLE,
 )
+from homeassistant.core import callback
+from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.util import dt as dt_util
 
 # Existing code...
 
-class SigenergyIntegrationSensor(SensorEntity, RestoreEntity):
+class SigenergyIntegrationSensor(RestoreSensor):
     """Implementation of an Integration Sensor."""
+    
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_should_poll = False
 
     def __init__(
         self,
@@ -79,7 +90,8 @@ class SigenergyIntegrationSensor(SensorEntity, RestoreEntity):
         self._round_digits = round_digits
         self._max_sub_interval = max_sub_interval or timedelta(hours=1)
         
-        self._attr_native_value = None
+        self._state: Decimal | None = None
+        self._last_valid_state: Decimal | None = None
         self._last_updated = None
         self._last_value = None
         
@@ -98,8 +110,139 @@ class SigenergyIntegrationSensor(SensorEntity, RestoreEntity):
             # Use the same device info logic as in SigenergySensor class
             # ...
 
-    # Integration methods and state management implementation
-    # ...
+    def _decimal_state(self, state: str) -> Decimal | None:
+        """Convert state to Decimal or return None if not possible."""
+        try:
+            return Decimal(state)
+        except (InvalidOperation, TypeError):
+            return None
+
+    def _calculate_trapezoidal(self, elapsed_time: Decimal, left: Decimal, right: Decimal) -> Decimal:
+        """Calculate area using the trapezoidal method."""
+        return elapsed_time * (left + right) / 2
+
+    def _update_integral(self, area: Decimal) -> None:
+        """Update the integral with the calculated area."""
+        if isinstance(self._state, Decimal):
+            self._state += area
+        else:
+            self._state = area
+        self._last_valid_state = self._state
+
+    async def async_added_to_hass(self):
+        """Handle entity which will be added."""
+        await super().async_added_to_hass()
+        
+        # Restore previous state if available
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in (None, "unknown", "unavailable"):
+            try:
+                self._state = Decimal(last_state.state)
+                self._last_updated = dt_util.utcnow()
+                self._last_valid_state = self._state
+            except (ValueError, TypeError, InvalidOperation):
+                _LOGGER.warning("Could not restore last state for %s", self.entity_id)
+        
+        # Register to track source sensor state changes
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass, [self._source_entity_id], self._async_source_changed
+            )
+        )
+
+    @callback
+    def _async_source_changed(self, event):
+        """Handle source sensor state changes."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        
+        if new_state is None or new_state.state == STATE_UNAVAILABLE:
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+            
+        if old_state is None or old_state.state in ("unknown", "unavailable"):
+            self._attr_available = True
+            self._last_updated = new_state.last_updated
+            self.async_write_ha_state()
+            return
+            
+        try:
+            current_value = self._decimal_state(new_state.state)
+            previous_value = self._decimal_state(old_state.state)
+            
+            if current_value is None or previous_value is None:
+                self._attr_available = True
+                self.async_write_ha_state()
+                return
+                
+            current_time = dt_util.utcnow()
+            if self._last_updated:
+                time_delta = current_time - self._last_updated
+                time_delta_seconds = Decimal(time_delta.total_seconds())
+                
+                # Handle max_sub_interval
+                if self._max_sub_interval and time_delta > self._max_sub_interval:
+                    # Split into smaller intervals
+                    energy = self._handle_max_sub_interval(previous_value, current_value, time_delta_seconds)
+                else:
+                    # Calculate energy using trapezoidal method
+                    energy = self._calculate_trapezoidal(time_delta_seconds, previous_value, current_value)
+                
+                # Update the integral
+                self._update_integral(energy / 3600)  # Convert seconds to hours
+                
+                # Round to specified precision
+                if self._round_digits is not None:
+                    self._attr_native_value = round(self._state, self._round_digits)
+                else:
+                    self._attr_native_value = self._state
+            
+            self._last_updated = current_time
+            self._attr_available = True
+            self.async_write_ha_state()
+            
+        except (ValueError, TypeError, InvalidOperation) as ex:
+            _LOGGER.warning("Error calculating integral for %s: %s", self.entity_id, ex)
+            self.async_write_ha_state()
+
+    def _handle_max_sub_interval(self, previous_value: Decimal, current_value: Decimal, time_delta_seconds: Decimal) -> Decimal:
+        """Handle max_sub_interval by splitting calculation if needed."""
+        max_sub_interval_seconds = Decimal(self._max_sub_interval.total_seconds())
+        
+        if time_delta_seconds <= max_sub_interval_seconds:
+            # No need to split
+            return self._calculate_trapezoidal(time_delta_seconds, previous_value, current_value)
+        else:
+            # Split into smaller intervals
+            energy = Decimal(0)
+            remaining_seconds = time_delta_seconds
+            
+            # Calculate how many complete intervals
+            num_complete_intervals = int(remaining_seconds // max_sub_interval_seconds)
+            
+            # For each complete interval, interpolate the value and calculate
+            for i in range(num_complete_intervals):
+                fraction = Decimal(i + 1) / Decimal(num_complete_intervals + 1)
+                interpolated_value = previous_value + (current_value - previous_value) * fraction
+                energy += self._calculate_trapezoidal(max_sub_interval_seconds, 
+                                                     previous_value + (current_value - previous_value) * (Decimal(i) / Decimal(num_complete_intervals + 1)),
+                                                     interpolated_value)
+            
+            # Calculate the final partial interval
+            remaining_partial = remaining_seconds - (max_sub_interval_seconds * num_complete_intervals)
+            if remaining_partial > 0:
+                last_interpolated = previous_value + (current_value - previous_value) * (Decimal(num_complete_intervals) / Decimal(num_complete_intervals + 1))
+                energy += self._calculate_trapezoidal(remaining_partial, last_interpolated, current_value)
+            
+            return energy
+
+    @property
+    def native_value(self):
+        """Return the state of the sensor."""
+        if isinstance(self._state, Decimal) and self._round_digits is not None:
+            return round(self._state, self._round_digits)
+        return self._state
 
 class SigenergyCalculatedSensors:
     """Class for holding calculated sensor methods."""
@@ -212,115 +355,47 @@ async def async_setup_entry(
     async_add_entities(entities)
 ```
 
-### 3.3 Trapezoidal Method Implementation
-
-```python
-def _calculate_trapezoidal(self, previous_value, current_value, time_delta_seconds):
-    """Calculate energy using the trapezoidal method."""
-    # Average the power values and multiply by time
-    return ((previous_value + current_value) / 2) * (time_delta_seconds / 3600)
-```
-
-### 3.4 State Management
-
-```python
-async def async_added_to_hass(self):
-    """Handle entity which will be added."""
-    await super().async_added_to_hass()
-    
-    # Restore previous state if available
-    last_state = await self.async_get_last_state()
-    if last_state and last_state.state not in (None, "unknown", "unavailable"):
-        try:
-            self._attr_native_value = float(last_state.state)
-            self._last_updated = dt_util.utcnow()
-        except (ValueError, TypeError):
-            _LOGGER.warning("Could not restore last state for %s", self.entity_id)
-    
-    # Register to track source sensor state changes
-    self.async_on_remove(
-        async_track_state_change_event(
-            self.hass, [self._source_entity_id], self._async_source_changed
-        )
-    )
-```
-
 ## 4. Implementation Details
 
-### 4.1 Handling Max Sub Interval
+### 4.1 Trapezoidal Integration Method
 
-The `max_sub_interval` parameter limits the maximum time between updates for accurate integration. If the time between updates exceeds this value, we'll need to split the calculation into smaller intervals.
+The trapezoidal method calculates the area under the curve using the average of consecutive power readings. The formula is:
 
-```python
-def _handle_max_sub_interval(self, previous_value, current_value, time_delta):
-    """Handle max_sub_interval by splitting calculation if needed."""
-    if time_delta <= self._max_sub_interval:
-        # No need to split
-        return self._calculate_trapezoidal(previous_value, current_value, time_delta.total_seconds())
-    else:
-        # Split into smaller intervals
-        energy = 0
-        remaining_delta = time_delta
-        current_time = self._last_updated
-        
-        while remaining_delta > self._max_sub_interval:
-            interval_end = current_time + self._max_sub_interval
-            # For trapezoidal method, we need to interpolate the value at interval_end
-            interval_fraction = self._max_sub_interval / time_delta
-            interpolated_value = previous_value + (current_value - previous_value) * interval_fraction
-            energy += self._calculate_trapezoidal(previous_value, interpolated_value, self._max_sub_interval.total_seconds())
-            
-            previous_value = interpolated_value
-            current_time = interval_end
-            remaining_delta -= self._max_sub_interval
-        
-        # Calculate the final partial interval
-        if remaining_delta.total_seconds() > 0:
-            energy += self._calculate_trapezoidal(previous_value, current_value, remaining_delta.total_seconds())
-        
-        return energy
+```
+area = elapsed_time * (previous_value + current_value) / 2
 ```
 
-### 4.2 Source Sensor State Change Handler
+This is identical to the core Home Assistant implementation (line 137 in the core integration sensor.py).
 
-```python
-@callback
-def _async_source_changed(self, event):
-    """Handle source sensor state changes."""
-    if (
-        (new_state := event.data.get("new_state")) is None
-        or new_state.state in ("unknown", "unavailable")
-        or (old_state := event.data.get("old_state")) is None
-        or old_state.state in ("unknown", "unavailable")
-    ):
-        return
+### 4.2 Handling Max Sub Interval
 
-    try:
-        current_value = float(new_state.state)
-        previous_value = float(old_state.state)
-    except (ValueError, TypeError):
-        _LOGGER.warning("Could not parse state for %s", self.entity_id)
-        return
+When the time between updates exceeds the max_sub_interval, we split the calculation into smaller intervals and interpolate values:
 
-    current_time = dt_util.utcnow()
-    if self._last_updated:
-        time_delta = current_time - self._last_updated
-        
-        # Calculate energy
-        energy = self._handle_max_sub_interval(previous_value, current_value, time_delta)
-        
-        # Add to accumulated energy
-        if self._attr_native_value is None:
-            self._attr_native_value = 0
-        self._attr_native_value += energy
-        
-        # Round to specified precision
-        if self._round_digits is not None:
-            self._attr_native_value = round(self._attr_native_value, self._round_digits)
-    
-    self._last_updated = current_time
-    self.async_write_ha_state()
-```
+1. Calculate how many complete intervals fit within the time delta
+2. For each complete interval, interpolate the value and calculate the area
+3. Calculate the final partial interval if needed
+
+This approach ensures accurate integration even with infrequent updates, matching the core implementation's behavior.
+
+### 4.3 Decimal Precision
+
+We use the Decimal class for all calculations to ensure precise numerical results, matching the core implementation. This avoids floating-point errors that could accumulate over time.
+
+### 4.4 State Restoration
+
+We implement proper state restoration to maintain accumulated values across Home Assistant restarts:
+
+1. Restore the previous state when the entity is added to Home Assistant
+2. Convert the restored state to Decimal for precise calculations
+3. Handle invalid states gracefully
+
+### 4.5 Error Handling
+
+We implement robust error handling for all calculations and state conversions:
+
+1. Handle unavailable states
+2. Handle invalid numerical values
+3. Log warnings for calculation errors
 
 ## 5. Configuration for Your Component
 
@@ -367,3 +442,7 @@ Based on the extracted data and your feedback, you'll need to create these integ
 4. **Testing**: Create tests to verify the accuracy of the integration method.
 
 5. **Documentation**: Document the integration sensor functionality in your component's documentation.
+
+6. **Numerical Precision**: Use Decimal for all calculations to ensure precise results.
+
+7. **Time Handling**: Properly handle time differences and interpolation for accurate integration.
