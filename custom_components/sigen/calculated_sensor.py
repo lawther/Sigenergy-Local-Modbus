@@ -4,22 +4,34 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
-from typing import Any, Callable, Dict, Optional
+from decimal import Decimal, InvalidOperation
+from enum import Enum
+from typing import Any, Callable, Dict, Optional, Union
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntityDescription,
     SensorStateClass,
+    RestoreSensor,
 )
 # from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     UnitOfEnergy,
     EntityCategory,
     UnitOfPower,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
 )
+from homeassistant.core import callback, State
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.event import async_track_state_change_event, async_call_later
+from homeassistant.util import dt as dt_util
 
 from .const import (
     EMSWorkMode,
+    DEVICE_TYPE_PLANT,
+    DEVICE_TYPE_INVERTER,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,12 +51,15 @@ class SigenergyCalculations:
         value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None
         extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
         extra_params: Optional[Dict[str, Any]] = None  # Additional parameters for value_fn
+        source_entity_id: Optional[str] = None
+        max_sub_interval: Optional[timedelta] = None
+        round_digits: Optional[int] = None
 
         @classmethod
         def from_entity_description(cls, description, 
-                                    value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None,
-                                    extra_fn_data: Optional[bool] = False,
-                                    extra_params: Optional[Dict[str, Any]] = None):
+                                     value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None,
+                                     extra_fn_data: Optional[bool] = False,
+                                     extra_params: Optional[Dict[str, Any]] = None):
             """Create a SigenergySensorEntityDescription instance from a SensorEntityDescription."""
             # Create a new instance with the base attributes
             if isinstance(description, cls):
@@ -77,15 +92,15 @@ class SigenergyCalculations:
             # Copy any other attributes that might exist
             for attr_name in dir(description):
                 if not attr_name.startswith('_') and attr_name not in ['key', 'name', 'device_class', 
-                                                                    'native_unit_of_measurement', 'state_class', 
-                                                                    'entity_registry_enabled_default', 'value_fn',
-                                                                    'extra_fn_data', 'extra_params']:
+                                                                     'native_unit_of_measurement', 'state_class', 
+                                                                     'entity_registry_enabled_default', 'value_fn',
+                                                                     'extra_fn_data', 'extra_params']:
                     setattr(result, attr_name, getattr(description, attr_name))
             
             return result
 
     @staticmethod
-    def minutes_to_gmt(minutes: Any) -> str:
+    def minutes_to_gmt(minutes: Any) -> Optional[str]:
         """Convert minutes offset to GMT format."""
         if minutes is None:
             return None
@@ -193,6 +208,281 @@ class SigenergyCalculations:
                         extra_params.get("pv_idx", "unknown"), ex)
             return None
 
+
+class IntegrationTrigger(Enum):
+    """Trigger type for integration calculations."""
+    
+    STATE_EVENT = "state_event"
+    TIME_ELAPSED = "time_elapsed"
+
+
+class SigenergyIntegrationSensor(RestoreSensor):
+    """Implementation of an Integration Sensor with identical behavior to HA core."""
+    
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        coordinator,
+        description: SensorEntityDescription,
+        name: str,
+        device_type: str,
+        device_id: Optional[int],
+        device_name: Optional[str] = "",
+        device_info: Optional[DeviceInfo] = None,
+        source_entity_id: Optional[str] = None,
+        round_digits: Optional[int] = None,
+        max_sub_interval: Optional[timedelta] = None,
+    ) -> None:
+        """Initialize the integration sensor."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_name = name
+        self._device_type = device_type
+        self._device_id = device_id
+        self._device_info_override = device_info
+        self._source_entity_id = source_entity_id
+        self._round_digits = round_digits
+        
+        # Initialize state variables
+        self._state: Decimal | None = None
+        self._last_valid_state: Decimal | None = None
+        
+        # Time tracking variables
+        self._max_sub_interval = (
+            None  # disable time based integration
+            if max_sub_interval is None or max_sub_interval.total_seconds() == 0
+            else max_sub_interval
+        )
+        self._max_sub_interval_exceeded_callback = lambda *args: None
+        self._last_integration_time = dt_util.utcnow()
+        self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
+        
+        # Set unique ID
+        if device_type == DEVICE_TYPE_PLANT:
+            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
+        else:
+            if device_name:
+                device_number_str = device_name.split()[-1]
+                device_number_str = f" {device_number_str}" if device_number_str.isdigit() else ""
+                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
+            else:
+                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
+        
+        # Set device info
+        if self._device_info_override:
+            self._attr_device_info = self._device_info_override
+        else:
+            # Use the same device info logic as in SigenergySensor class
+            if device_type == DEVICE_TYPE_PLANT:
+                self._attr_device_info = DeviceInfo(
+                    identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
+                    name=device_name,
+                    manufacturer="Sigenergy",
+                    model="Energy Storage System",
+                )
+            elif device_type == DEVICE_TYPE_INVERTER:
+                # Get model and serial number if available
+                model = None
+                serial_number = None
+                sw_version = None
+                if coordinator.data and "inverters" in coordinator.data:
+                    inverter_data = coordinator.data["inverters"].get(device_id, {})
+                    model = inverter_data.get("inverter_model_type")
+                    serial_number = inverter_data.get("inverter_serial_number")
+                    sw_version = inverter_data.get("inverter_machine_firmware_version")
+
+                self._attr_device_info = DeviceInfo(
+                    identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
+                    name=device_name,
+                    manufacturer="Sigenergy",
+                    model=model,
+                    serial_number=serial_number,
+                    sw_version=sw_version,
+                    via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
+                )
+
+    def _decimal_state(self, state: str) -> Optional[Decimal]:
+        """Convert state to Decimal or return None if not possible."""
+        try:
+            return Decimal(state)
+        except (InvalidOperation, TypeError):
+            return None
+
+    def _validate_states(self, left: str, right: str) -> Optional[tuple[Decimal, Decimal]]:
+        """Validate states and convert to Decimal."""
+        if (left_dec := self._decimal_state(left)) is None or (right_dec := self._decimal_state(right)) is None:
+            return None
+        return (left_dec, right_dec)
+
+    def _calculate_trapezoidal(self, elapsed_time: Decimal, left: Decimal, right: Decimal) -> Decimal:
+        """Calculate area using the trapezoidal method."""
+        return elapsed_time * (left + right) / Decimal(2)
+
+    def _calculate_area_with_one_state(self, elapsed_time: Decimal, constant_state: Decimal) -> Decimal:
+        """Calculate area given one state (constant value)."""
+        return constant_state * elapsed_time
+
+    def _update_integral(self, area: Decimal) -> None:
+        """Update the integral with the calculated area."""
+        # Convert seconds to hours
+        area_scaled = area / Decimal(3600)
+        
+        if isinstance(self._state, Decimal):
+            self._state += area_scaled
+        else:
+            self._state = area_scaled
+            
+        _LOGGER.debug(
+            "area = %s, area_scaled = %s new state = %s", area, area_scaled, self._state
+        )
+        self._last_valid_state = self._state
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added."""
+        await super().async_added_to_hass()
+        
+        # Restore previous state if available
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
+            try:
+                self._state = Decimal(last_state.state)
+                self._last_valid_state = self._state
+                self._last_integration_time = dt_util.utcnow()
+            except (ValueError, TypeError, InvalidOperation):
+                _LOGGER.warning("Could not restore last state for %s", self.entity_id)
+        
+        # Set up appropriate handlers based on max_sub_interval
+        if self._max_sub_interval is not None:
+            source_state = self.hass.states.get(self._source_entity_id)
+            self._schedule_max_sub_interval_exceeded_if_state_is_numeric(source_state)
+            self.async_on_remove(self._cancel_max_sub_interval_exceeded_callback)
+            handle_state_change = self._integrate_on_state_change_with_max_sub_interval
+        else:
+            handle_state_change = self._integrate_on_state_change_callback
+        
+        # Register to track source sensor state changes
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass, [self._source_entity_id], handle_state_change
+            )
+        )
+
+    @callback
+    def _integrate_on_state_change_callback(self, event) -> None:
+        """Handle sensor state change without max_sub_interval."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        
+        self._integrate_on_state_change(old_state, new_state)
+
+    @callback
+    def _integrate_on_state_change_with_max_sub_interval(self, event) -> None:
+        """Handle sensor state change with max_sub_interval."""
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        
+        # Cancel any pending callbacks
+        self._cancel_max_sub_interval_exceeded_callback()
+        
+        try:
+            self._integrate_on_state_change(old_state, new_state)
+            self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
+            self._last_integration_time = dt_util.utcnow()
+        finally:
+            # Schedule the next time-based integration
+            self._schedule_max_sub_interval_exceeded_if_state_is_numeric(new_state)
+
+    def _integrate_on_state_change(self, old_state: State | None, new_state: State | None) -> None:
+        """Perform integration based on state change."""
+        if new_state is None:
+            return
+            
+        if new_state.state == STATE_UNAVAILABLE:
+            self._attr_available = False
+            self.async_write_ha_state()
+            return
+            
+        self._attr_available = True
+        
+        if old_state is None or old_state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            self.async_write_ha_state()
+            return
+            
+        # Validate states
+        if not (states := self._validate_states(old_state.state, new_state.state)):
+            self.async_write_ha_state()
+            return
+            
+        # Calculate elapsed time
+        elapsed_seconds = Decimal(
+            (new_state.last_updated - old_state.last_updated).total_seconds()
+            if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT
+            else (new_state.last_updated - self._last_integration_time).total_seconds()
+        )
+        
+        # Calculate area
+        area = self._calculate_trapezoidal(elapsed_seconds, *states)
+        
+        # Update the integral
+        self._update_integral(area)
+        self.async_write_ha_state()
+
+    def _schedule_max_sub_interval_exceeded_if_state_is_numeric(self, source_state: State | None) -> None:
+        """Schedule integration based on max_sub_interval."""
+        if (
+            self._max_sub_interval is not None
+            and source_state is not None
+            and (source_state_dec := self._decimal_state(source_state.state)) is not None
+        ):
+            @callback
+            def _integrate_on_max_sub_interval_exceeded_callback(now: datetime) -> None:
+                """Integrate based on time and reschedule."""
+                elapsed_seconds = Decimal(
+                    (now - self._last_integration_time).total_seconds()
+                )
+                
+                # Calculate area with constant state
+                area = self._calculate_area_with_one_state(elapsed_seconds, source_state_dec)
+                
+                # Update the integral
+                self._update_integral(area)
+                self.async_write_ha_state()
+                
+                # Update tracking variables
+                self._last_integration_time = dt_util.utcnow()
+                self._last_integration_trigger = IntegrationTrigger.TIME_ELAPSED
+                
+                # Schedule the next integration
+                self._schedule_max_sub_interval_exceeded_if_state_is_numeric(source_state)
+                
+            # Schedule the callback
+            self._max_sub_interval_exceeded_callback = async_call_later(
+                self.hass,
+                self._max_sub_interval,
+                _integrate_on_max_sub_interval_exceeded_callback,
+            )
+
+    def _cancel_max_sub_interval_exceeded_callback(self) -> None:
+        """Cancel the scheduled callback."""
+        self._max_sub_interval_exceeded_callback()
+
+    @property
+    def native_value(self) -> Decimal | None:
+        """Return the state of the sensor."""
+        if isinstance(self._state, Decimal) and self._round_digits is not None:
+            return round(self._state, self._round_digits)
+        return self._state
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes of the sensor."""
+        return {
+            "source_entity": self._source_entity_id,
+        }
+
+
 class SigenergyCalculatedSensors:
     """Class for holding calculated sensor methods."""
 
@@ -263,3 +553,51 @@ class SigenergyCalculatedSensors:
     AC_CHARGER_SENSORS = []
 
     DC_CHARGER_SENSORS = []
+
+    # Add the plant integration sensors list
+    PLANT_INTEGRATION_SENSORS = [
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_accumulated_pv_energy",
+            name="Accumulated PV Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL,
+            source_entity_id="sensor.sigen_plant_photovoltaic_power",
+            round_digits=3,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_accumulated_grid_export_energy",
+            name="Accumulated Grid Export Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL,
+            source_entity_id="sensor.sigen_grid_sensor_export_power",
+            round_digits=3,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_accumulated_grid_import_energy",
+            name="Accumulated Grid Import Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL,
+            source_entity_id="sensor.sigen_grid_sensor_import_power",
+            round_digits=3,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+    ]
+    
+    # Add the inverter integration sensors list
+    INVERTER_INTEGRATION_SENSORS = [
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="inverter_accumulated_pv_energy",
+            name="Accumulated PV Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL,
+            source_entity_id="sensor.sigen_inverter_pv_power",
+            round_digits=3,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+    ]

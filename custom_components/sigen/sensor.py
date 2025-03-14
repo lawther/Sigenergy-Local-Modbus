@@ -32,7 +32,7 @@ from .const import (
     RunningState,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
-from .calculated_sensor import SigenergyCalculations as SC, SigenergyCalculatedSensors as SCS
+from .calculated_sensor import SigenergyCalculations as SC, SigenergyCalculatedSensors as SCS, SigenergyIntegrationSensor
 from .static_sensor import StaticSensors as SS
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,6 +74,22 @@ async def async_setup_entry(
                 device_name=plant_name,
             )
         )
+    
+    # Add plant integration sensors
+    for description in SCS.PLANT_INTEGRATION_SENSORS:
+        entities.append(
+            SigenergyIntegrationSensor(
+                coordinator=coordinator,
+                description=description,
+                name=f"{plant_name} {description.name}",
+                device_type=DEVICE_TYPE_PLANT,
+                device_id=None,
+                device_name=plant_name,
+                source_entity_id=description.source_entity_id,
+                round_digits=description.round_digits,
+                max_sub_interval=description.max_sub_interval,
+            )
+        )
 
     # Add inverter sensors
     inverter_no = 0
@@ -92,6 +108,25 @@ async def async_setup_entry(
                     device_type=DEVICE_TYPE_INVERTER,
                     device_id=inverter_id,
                     device_name=inverter_name,
+                )
+            )
+            
+        # Add inverter integration sensors
+        for description in SCS.INVERTER_INTEGRATION_SENSORS:
+            # Create the source entity ID for this specific inverter
+            source_entity_id = f"sensor.sigen{'' if inverter_no == 0 else f'_{inverter_no}'}_inverter_pv_power"
+            
+            entities.append(
+                SigenergyIntegrationSensor(
+                    coordinator=coordinator,
+                    description=description,
+                    name=f"{inverter_name} {description.name}",
+                    device_type=DEVICE_TYPE_INVERTER,
+                    device_id=inverter_id,
+                    device_name=inverter_name,
+                    source_entity_id=source_entity_id,
+                    round_digits=description.round_digits,
+                    max_sub_interval=description.max_sub_interval,
                 )
             )
             
