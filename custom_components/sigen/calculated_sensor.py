@@ -14,6 +14,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
     RestoreSensor,
 )
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 # from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     UnitOfEnergy,
@@ -216,7 +217,7 @@ class IntegrationTrigger(Enum):
     TIME_ELAPSED = "time_elapsed"
 
 
-class SigenergyIntegrationSensor(RestoreSensor):
+class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
     """Implementation of an Integration Sensor with identical behavior to HA core."""
     
     _attr_state_class = SensorStateClass.TOTAL
@@ -236,7 +237,8 @@ class SigenergyIntegrationSensor(RestoreSensor):
         max_sub_interval: Optional[timedelta] = None,
     ) -> None:
         """Initialize the integration sensor."""
-        super().__init__(coordinator)
+        CoordinatorEntity.__init__(self, coordinator)
+        RestoreSensor.__init__(self)
         self.entity_description = description
         self._attr_name = name
         self._device_type = device_type
