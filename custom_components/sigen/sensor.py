@@ -64,11 +64,16 @@ async def async_setup_entry(
 
     # Add plant sensors
     for description in SS.PLANT_SENSORS + SCS.PLANT_SENSORS:
+        sensor_name = f"{plant_name} {description.name}"
+        entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
+        _LOGGER.debug("Creating plant sensor with name: %s, expected entity_id: %s, key: %s",
+                     sensor_name, entity_id, description.key)
+        
         entities.append(
             SigenergySensor(
                 coordinator=coordinator,
                 description=description,
-                name=f"{plant_name} {description.name}",
+                name=sensor_name,
                 device_type=DEVICE_TYPE_PLANT,
                 device_id=None,
                 device_name=plant_name,
@@ -323,6 +328,31 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the state of the sensor."""
+        # Special handling for grid import/export power sensors
+        if self.entity_description.key in ["plant_grid_import_power", "plant_grid_export_power"]:
+            if self.coordinator.data is None or "plant" not in self.coordinator.data:
+                _LOGGER.debug("[CS][GridSensor] No coordinator data available for %s", self.entity_id)
+                return None
+                
+            # Call the value_fn directly with the coordinator data
+            if hasattr(self.entity_description, "value_fn") and self.entity_description.value_fn is not None:
+                try:
+                    # Always pass coordinator data to the value_fn
+                    transformed_value = self.entity_description.value_fn(
+                        None, self.coordinator.data, None
+                    )
+                    _LOGGER.debug("[CS][GridSensor] Calculated value for %s: %s",
+                                 self.entity_id, transformed_value)
+                    return transformed_value
+                except Exception as ex:
+                    _LOGGER.error(
+                        "Error applying value_fn for %s: %s",
+                        self.entity_id,
+                        ex,
+                    )
+                    return None
+        
+        # Standard handling for other sensors
         if self.coordinator.data is None:
             return STATE_UNKNOWN
             

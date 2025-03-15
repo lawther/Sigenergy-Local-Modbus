@@ -114,8 +114,9 @@ class SigenergyCalculations:
     @staticmethod
     def epoch_to_datetime(epoch: Any, coordinator_data: Optional[dict] = None) -> Optional[datetime]:
         """Convert epoch timestamp to datetime using system's configured timezone."""
-        _LOGGER.debug("Converting epoch timestamp: %s (type: %s)", epoch, type(epoch))
+        _LOGGER.debug("[CS][Timestamp] Converting epoch: %s (type: %s)", epoch, type(epoch))
         if epoch is None or epoch == 0:  # Also treat 0 as None for timestamps
+            _LOGGER.debug("[CS][Timestamp] Received null or zero timestamp")
             return None
 
         try:
@@ -126,40 +127,49 @@ class SigenergyCalculations:
             if coordinator_data and "plant" in coordinator_data:
                 try:
                     tz_offset = coordinator_data["plant"].get("plant_system_timezone")
+                    _LOGGER.debug("[CS][Timestamp] Found timezone offset: %s", tz_offset)
                     if tz_offset is not None:
                         tz_minutes = int(tz_offset)
                         tz_hours = tz_minutes // 60
                         tz_remaining_minutes = tz_minutes % 60
                         tz = timezone(timedelta(hours=tz_hours, minutes=tz_remaining_minutes))
+                        _LOGGER.debug("[CS][Timestamp] Calculated timezone: UTC%+d:%02d",
+                                    tz_hours, abs(tz_remaining_minutes))
                     else:
+                        _LOGGER.debug("[CS][Timestamp] No timezone offset found, using UTC")
                         tz = timezone.utc
-                except (ValueError, TypeError):
-                    _LOGGER.warning("Invalid timezone offset in coordinator data, using UTC")
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning("[CS][Timestamp] Invalid timezone offset in coordinator data: %s", e)
                     tz = timezone.utc
             else:
+                _LOGGER.debug("[CS][Timestamp] No plant data available, using UTC")
                 tz = timezone.utc
                 
             # Additional validation for timestamp range
             if epoch_int < 0 or epoch_int > 32503680000:  # Jan 1, 3000
-                _LOGGER.warning("Timestamp %s out of reasonable range", epoch_int)
+                _LOGGER.warning("[CS][Timestamp] Value %s out of reasonable range [0, 32503680000]",
+                              epoch_int)
                 return None
 
             try:
                 # Convert timestamp using the determined timezone
                 dt = datetime.fromtimestamp(epoch_int, tz=tz)
-                _LOGGER.debug("Converted epoch %s to datetime %s with timezone %s", epoch_int, dt, tz)
+                _LOGGER.debug("[CS][Timestamp] Successfully converted %s to %s (timezone: %s)",
+                            epoch_int, dt.isoformat(), tz)
                 return dt
             except (OSError, OverflowError) as ex:
-                _LOGGER.warning("Invalid timestamp value %s: %s", epoch_int, ex)
+                _LOGGER.warning("[CS][Timestamp] Invalid timestamp %s: %s", epoch_int, ex)
                 return None
             
         except (ValueError, TypeError, OSError) as ex:
-            _LOGGER.warning("Error converting epoch %s to datetime: %s", epoch, ex)
+            _LOGGER.warning("[CS][Timestamp] Conversion error for %s: %s", epoch, ex)
             return None
 
     @staticmethod
     def calculate_pv_power(_, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
         """Calculate PV string power with proper error handling."""
+        _LOGGER.debug("[CS][PV Power] Starting calculation with coordinator_data=%s, extra_params=%s",
+                    bool(coordinator_data), extra_params)
         if not coordinator_data or not extra_params:
             _LOGGER.debug("Missing required data for PV power calculation")
             return None
@@ -173,8 +183,10 @@ class SigenergyCalculations:
                 return None
                 
             inverter_data = coordinator_data.get("inverters", {}).get(device_id, {})
+            _LOGGER.debug("[CS][PV Power] Retrieved inverter data for device %s: %s",
+                        device_id, bool(inverter_data))
             if not inverter_data:
-                _LOGGER.debug("No inverter data available for power calculation")
+                _LOGGER.debug("[CS][PV Power] No inverter data available for power calculation")
                 return None
                 
             v_key = f"inverter_pv{pv_idx}_voltage"
@@ -184,8 +196,10 @@ class SigenergyCalculations:
             pv_current = inverter_data.get(c_key)
             
             # Validate inputs
+            _LOGGER.debug("[CS][PV Power] Raw values for PV%d - voltage: %s, current: %s",
+                        pv_idx, pv_voltage, pv_current)
             if pv_voltage is None or pv_current is None:
-                _LOGGER.debug("Missing voltage or current data for PV string %d", pv_idx)
+                _LOGGER.debug("[CS][PV Power] Missing voltage or current data for PV string %d", pv_idx)
                 return None
                 
             if not isinstance(pv_voltage, (int, float)) or not isinstance(pv_current, (int, float)):
@@ -197,17 +211,58 @@ class SigenergyCalculations:
             # Make sure we don't return unreasonable values
             power = pv_voltage * pv_current  # Already in Watts since voltage is in V and current in A
             
+            _LOGGER.debug("[CS][PV Power] Calculated raw power for PV%d: %s W (V=%s, I=%s)",
+                        pv_idx, power, pv_voltage, pv_current)
+            
             # Apply some reasonable bounds
             MAX_REASONABLE_POWER = 20000  # 20kW per string is very high already
             if abs(power) > MAX_REASONABLE_POWER:
-                _LOGGER.warning("Calculated power for PV string %d seems excessive: %s W",
+                _LOGGER.warning("[CS][PV Power] Calculated power for PV string %d seems excessive: %s W",
                             pv_idx, power)
-                
-            return power / 1000  # Convert to kW
+            
+            final_power = power / 1000  # Convert to kW
+            _LOGGER.debug("[CS][PV Power] Final power for PV%d: %s kW", pv_idx, final_power)
+            return final_power
         except Exception as ex:
-            _LOGGER.warning("Error calculating power for PV string %d: %s",
+            _LOGGER.warning("[CS]Error calculating power for PV string %d: %s",
                         extra_params.get("pv_idx", "unknown"), ex)
             return None
+
+    @staticmethod
+    def calculate_grid_import_power(value, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
+        """Calculate grid import power (positive values only)."""
+        if coordinator_data is None or "plant" not in coordinator_data:
+            _LOGGER.debug("[CS][Grid Import] No plant data available")
+            return None
+            
+        # Get the grid active power value from coordinator data
+        grid_power = coordinator_data["plant"].get("plant_grid_sensor_active_power")
+        _LOGGER.debug("[CS][Grid Import] Starting calculation with grid_power=%s", grid_power)
+        
+        if grid_power is None or not isinstance(grid_power, (int, float)):
+            _LOGGER.debug("[CS][Grid Import] Invalid grid power value: %s", grid_power)
+            return None
+            
+        # Return value if positive, otherwise 0
+        return grid_power if grid_power > 0 else 0
+
+    @staticmethod
+    def calculate_grid_export_power(value, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
+        """Calculate grid export power (negative values converted to positive)."""
+        if coordinator_data is None or "plant" not in coordinator_data:
+            _LOGGER.debug("[CS][Grid Export] No plant data available")
+            return None
+            
+        # Get the grid active power value from coordinator data
+        grid_power = coordinator_data["plant"].get("plant_grid_sensor_active_power")
+        _LOGGER.debug("[CS][Grid Export] Starting calculation with grid_power=%s", grid_power)
+        
+        if grid_power is None or not isinstance(grid_power, (int, float)):
+            _LOGGER.debug("[CS][Grid Export] Invalid grid power value: %s", grid_power)
+            return None
+            
+        # Return absolute value if negative, otherwise 0
+        return -grid_power if grid_power < 0 else 0
 
 
 class IntegrationTrigger(Enum):
@@ -257,9 +312,15 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             if max_sub_interval is None or max_sub_interval.total_seconds() == 0
             else max_sub_interval
         )
+        _LOGGER.debug("[Callback] Initializing integration sensor %s with max_sub_interval=%s",
+                    self.entity_id, self._max_sub_interval)
         self._max_sub_interval_exceeded_callback = lambda *args: None
+        self._cancel_max_sub_interval_exceeded_callback = self._max_sub_interval_exceeded_callback
         self._last_integration_time = dt_util.utcnow()
         self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
+
+        _LOGGER.debug("[CS][Integration] Created sensor %s with max_sub_interval: %s", 
+                      name, max_sub_interval)
         
         # Set unique ID
         if device_type == DEVICE_TYPE_PLANT:
@@ -308,14 +369,21 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
     def _decimal_state(self, state: str) -> Optional[Decimal]:
         """Convert state to Decimal or return None if not possible."""
         try:
-            return Decimal(state)
-        except (InvalidOperation, TypeError):
+            decimal_value = Decimal(state)
+            _LOGGER.debug("[CS][State] Converted %s to Decimal: %s", state, decimal_value)
+            return decimal_value
+        except (InvalidOperation, TypeError) as e:
+            _LOGGER.debug("[CS][State] Failed to convert %s to Decimal: %s", state, e)
             return None
 
     def _validate_states(self, left: str, right: str) -> Optional[tuple[Decimal, Decimal]]:
         """Validate states and convert to Decimal."""
+        _LOGGER.debug("[CS][State] Validating states - Left: %s, Right: %s", left, right)
         if (left_dec := self._decimal_state(left)) is None or (right_dec := self._decimal_state(right)) is None:
+            _LOGGER.debug("[CS][State] State validation failed - Left: %s, Right: %s",
+                        left_dec, right_dec)
             return None
+        _LOGGER.debug("[CS][State] States validated - Left: %s, Right: %s", left_dec, right_dec)
         return (left_dec, right_dec)
 
     def _calculate_trapezoidal(self, elapsed_time: Decimal, left: Decimal, right: Decimal) -> Decimal:
@@ -347,6 +415,8 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         
         # Restore previous state if available
         last_state = await self.async_get_last_state()
+        _LOGGER.debug("[CS][Integration] Attempting to restore state for %s: %s",
+                    self.entity_id, last_state.state if last_state else None)
         if last_state and last_state.state not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._state = Decimal(last_state.state)
@@ -358,11 +428,26 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         # Set up appropriate handlers based on max_sub_interval
         if self._max_sub_interval is not None:
             source_state = self.hass.states.get(self._source_entity_id)
+            _LOGGER.debug("[Callback] Setting up max interval handling for %s with source state %s",
+                       self.entity_id, source_state.state if source_state else None)
             self._schedule_max_sub_interval_exceeded_if_state_is_numeric(source_state)
             self.async_on_remove(self._cancel_max_sub_interval_exceeded_callback)
             handle_state_change = self._integrate_on_state_change_with_max_sub_interval
         else:
             handle_state_change = self._integrate_on_state_change_callback
+        
+        # Check if source entity exists
+        source_entity = self.hass.states.get(self._source_entity_id)
+        _LOGGER.debug("[CS][Integration] Source entity %s exists: %s, state: %s",
+                     self._source_entity_id,
+                     source_entity is not None,
+                     source_entity.state if source_entity else "N/A")
+                     
+        # Add more detailed logging about the source entity
+        _LOGGER.debug("[CS][Integration] All available entities with 'sigen' in the name:")
+        for state in self.hass.states.async_all():
+            if 'sigen' in state.entity_id:
+                _LOGGER.debug("  - %s: %s", state.entity_id, state.state)
         
         # Register to track source sensor state changes
         self.async_on_remove(
@@ -384,9 +469,11 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         """Handle sensor state change with max_sub_interval."""
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
-        
         # Cancel any pending callbacks
+        _LOGGER.debug("[Callback] Cancelling pending callbacks for %s due to state change",
+                   self.entity_id)
         self._cancel_max_sub_interval_exceeded_callback()
+        
         
         try:
             self._integrate_on_state_change(old_state, new_state)
@@ -423,6 +510,12 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT
             else (new_state.last_updated - self._last_integration_time).total_seconds()
         )
+        _LOGGER.debug("[CS][Integration] Calculating for %s - Time delta: %s seconds, Trigger: %s",
+                    self.entity_id, elapsed_seconds, self._last_integration_trigger)
+        _LOGGER.debug("[CS][Integration] States - Old: %s, New: %s",
+                    old_state.state if old_state else None,
+                    new_state.state if new_state else None
+        )
         
         # Calculate area
         area = self._calculate_trapezoidal(elapsed_seconds, *states)
@@ -433,6 +526,9 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
 
     def _schedule_max_sub_interval_exceeded_if_state_is_numeric(self, source_state: State | None) -> None:
         """Schedule integration based on max_sub_interval."""
+        _LOGGER.debug("[CS][State] Scheduling check for %s - max_interval: %s, source_state: %s",
+                    self.entity_id, self._max_sub_interval,
+                    source_state.state if source_state else None)
         if (
             self._max_sub_interval is not None
             and source_state is not None
@@ -441,9 +537,13 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             @callback
             def _integrate_on_max_sub_interval_exceeded_callback(now: datetime) -> None:
                 """Integrate based on time and reschedule."""
+                _LOGGER.debug("[CS][Integration] Max interval exceeded for %s at %s",
+                          self.entity_id, now)
                 elapsed_seconds = Decimal(
                     (now - self._last_integration_time).total_seconds()
                 )
+                _LOGGER.debug("[CS][Integration] Time-based calculation - Elapsed: %s seconds, State: %s",
+                          elapsed_seconds, source_state_dec)
                 
                 # Calculate area with constant state
                 area = self._calculate_area_with_one_state(elapsed_seconds, source_state_dec)
@@ -465,24 +565,56 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
                 self._max_sub_interval,
                 _integrate_on_max_sub_interval_exceeded_callback,
             )
-
     def _cancel_max_sub_interval_exceeded_callback(self) -> None:
         """Cancel the scheduled callback."""
+        _LOGGER.debug("[CS][State] Cancelling scheduled callback for %s", self.entity_id)
         self._max_sub_interval_exceeded_callback()
+
 
     @property
     def native_value(self) -> Decimal | None:
         """Return the state of the sensor."""
-        if isinstance(self._state, Decimal) and self._round_digits is not None:
-            return round(self._state, self._round_digits)
-        return self._state
+        value = (
+            round(self._state, self._round_digits)
+            if isinstance(self._state, Decimal) and self._round_digits is not None
+            else self._state
+        )
+        _LOGGER.debug("[CS][State] %s value: %s (type: %s)",
+                    self.entity_id, value,
+                    type(value).__name__ if value is not None else 'None')
+        return value
+@property
+def extra_state_attributes(self) -> dict[str, Any]:
+    """Return the state attributes of the sensor."""
+    return {
+        "source_entity": self._source_entity_id,
+    }
+    
+def _check_source_entity(self) -> None:
+    """Check if the source entity exists and log potential alternatives."""
+    source_entity = self.hass.states.get(self._source_entity_id)
+    _LOGGER.debug("[CS][Diagnostic] Source entity check for %s:", self.entity_id)
+    _LOGGER.debug("  - Expected source: %s", self._source_entity_id)
+    _LOGGER.debug("  - Source exists: %s", source_entity is not None)
+    _LOGGER.debug("  - Source state: %s", source_entity.state if source_entity else "N/A")
+    
+    # If source doesn't exist, look for similar entities
+    if source_entity is None:
+        # Look for entities with similar names
+        similar_entities = []
+        for state in self.hass.states.async_all():
+            entity_id = state.entity_id
+            if (entity_id.startswith("sensor.sigen") and
+                ("grid" in entity_id or "import" in entity_id or "power" in entity_id)):
+                similar_entities.append((entity_id, state.state))
+        
+        if similar_entities:
+            _LOGGER.debug("  - Potential alternative sources:")
+            for entity_id, state in similar_entities:
+                _LOGGER.debug("    * %s (state: %s)", entity_id, state)
+        else:
+            _LOGGER.debug("  - No potential alternative sources found")
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes of the sensor."""
-        return {
-            "source_entity": self._source_entity_id,
-        }
 
 
 class SigenergyCalculatedSensors:
@@ -531,6 +663,26 @@ class SigenergyCalculatedSensors:
                 EMSWorkMode.REMOTE_EMS: "Remote EMS",
             }.get(value, "Unknown"),
         ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_grid_import_power",
+            name="Grid Import Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:power",
+            value_fn=SigenergyCalculations.calculate_grid_import_power,
+            extra_fn_data=True,  # Pass coordinator data to value_fn
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_grid_export_power",
+            name="Grid Export Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:power",
+            value_fn=SigenergyCalculations.calculate_grid_export_power,
+            extra_fn_data=True,  # Pass coordinator data to value_fn
+        ),
     ]
 
     INVERTER_SENSORS = [
@@ -564,7 +716,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_entity_id="sensor.sigen_plant_photovoltaic_power",
+            source_entity_id="sensor.sigen_plant_photovoltaic_power",  # Updated to match expected entity ID pattern
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
@@ -574,7 +726,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_entity_id="sensor.sigen_grid_sensor_export_power",
+            source_entity_id="sensor.sigen_plant_grid_export_power",  # Updated to match expected entity ID pattern
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
@@ -584,7 +736,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_entity_id="sensor.sigen_grid_sensor_import_power",
+            source_entity_id="sensor.sigen_plant_grid_import_power",  # Updated to match expected entity ID pattern
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
@@ -598,7 +750,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_entity_id="sensor.sigen_inverter_pv_power",
+            source_entity_id="sensor.sigen_inverter_pv_power",  # This is dynamically updated in sensor.py
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
