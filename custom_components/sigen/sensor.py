@@ -46,6 +46,21 @@ async def async_setup_entry(
     """Set up the Sigenergy sensor platform."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     entities = []
+    
+    # Create an entity registry to track created entity IDs
+    entity_registry = {}  # Format: {(device_type, device_id): {key: entity_id}}
+    
+    # Helper function to get source entity ID
+    def get_source_entity_id(device_type, device_id, source_key):
+        """Get the source entity ID for an integration sensor."""
+        device_key = (device_type, device_id)
+        if device_key in entity_registry and source_key in entity_registry[device_key]:
+            return entity_registry[device_key][source_key]
+        _LOGGER.warning(
+            "Could not find source entity with key %s for device type %s, device ID %s",
+            source_key, device_type, device_id
+        )
+        return None
 
     _LOGGER.debug("Setting up sensors for %s", config_entry.data[CONF_NAME])
     _LOGGER.debug("Inverters: %s", coordinator.hub.inverter_slave_ids)
@@ -69,6 +84,12 @@ async def async_setup_entry(
         _LOGGER.debug("Creating plant sensor with name: %s, expected entity_id: %s, key: %s",
                      sensor_name, entity_id, description.key)
         
+        # Track the entity ID
+        device_key = (DEVICE_TYPE_PLANT, None)  # Plant has no device_id
+        if device_key not in entity_registry:
+            entity_registry[device_key] = {}
+        entity_registry[device_key][description.key] = entity_id
+        
         entities.append(
             SigenergySensor(
                 coordinator=coordinator,
@@ -82,19 +103,33 @@ async def async_setup_entry(
     
     # Add plant integration sensors
     for description in SCS.PLANT_INTEGRATION_SENSORS:
-        entities.append(
-            SigenergyIntegrationSensor(
-                coordinator=coordinator,
-                description=description,
-                name=f"{plant_name} {description.name}",
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-                source_entity_id=description.source_entity_id,
-                round_digits=description.round_digits,
-                max_sub_interval=description.max_sub_interval,
-            )
+        # Look up the source entity ID based on the source key
+        source_entity_id = get_source_entity_id(
+            DEVICE_TYPE_PLANT,
+            None,  # Plant has no device_id
+            description.source_key
         )
+        
+        if source_entity_id:
+            _LOGGER.debug("Creating plant integration sensor with source entity ID: %s", source_entity_id)
+            entities.append(
+                SigenergyIntegrationSensor(
+                    coordinator=coordinator,
+                    description=description,
+                    name=f"{plant_name} {description.name}",
+                    device_type=DEVICE_TYPE_PLANT,
+                    device_id=None,
+                    device_name=plant_name,
+                    source_entity_id=source_entity_id,
+                    round_digits=description.round_digits,
+                    max_sub_interval=description.max_sub_interval,
+                )
+            )
+        else:
+            _LOGGER.warning(
+                "Skipping integration sensor %s because source entity not found",
+                f"{plant_name} {description.name}"
+            )
 
     # Add inverter sensors
     inverter_no = 0
@@ -105,11 +140,20 @@ async def async_setup_entry(
         
         # Add inverter sensors
         for description in SS.INVERTER_SENSORS + SCS.INVERTER_SENSORS:
+            sensor_name = f"{inverter_name} {description.name}"
+            entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
+            
+            # Track the entity ID
+            device_key = (DEVICE_TYPE_INVERTER, inverter_id)
+            if device_key not in entity_registry:
+                entity_registry[device_key] = {}
+            entity_registry[device_key][description.key] = entity_id
+            
             entities.append(
                 SigenergySensor(
                     coordinator=coordinator,
                     description=description,
-                    name=f"{inverter_name} {description.name}",
+                    name=sensor_name,
                     device_type=DEVICE_TYPE_INVERTER,
                     device_id=inverter_id,
                     device_name=inverter_name,
@@ -118,22 +162,33 @@ async def async_setup_entry(
             
         # Add inverter integration sensors
         for description in SCS.INVERTER_INTEGRATION_SENSORS:
-            # Create the source entity ID for this specific inverter
-            source_entity_id = f"sensor.sigen{'' if inverter_no == 0 else f'_{inverter_no}'}_inverter_pv_power"
-            
-            entities.append(
-                SigenergyIntegrationSensor(
-                    coordinator=coordinator,
-                    description=description,
-                    name=f"{inverter_name} {description.name}",
-                    device_type=DEVICE_TYPE_INVERTER,
-                    device_id=inverter_id,
-                    device_name=inverter_name,
-                    source_entity_id=source_entity_id,
-                    round_digits=description.round_digits,
-                    max_sub_interval=description.max_sub_interval,
-                )
+            # Look up the source entity ID based on the source key
+            source_entity_id = get_source_entity_id(
+                DEVICE_TYPE_INVERTER,
+                inverter_id,
+                description.source_key
             )
+            
+            if source_entity_id:
+                _LOGGER.debug("Creating inverter integration sensor with source entity ID: %s", source_entity_id)
+                entities.append(
+                    SigenergyIntegrationSensor(
+                        coordinator=coordinator,
+                        description=description,
+                        name=f"{inverter_name} {description.name}",
+                        device_type=DEVICE_TYPE_INVERTER,
+                        device_id=inverter_id,
+                        device_name=inverter_name,
+                        source_entity_id=source_entity_id,
+                        round_digits=description.round_digits,
+                        max_sub_interval=description.max_sub_interval,
+                    )
+                )
+            else:
+                _LOGGER.warning(
+                    "Skipping integration sensor %s because source entity not found",
+                    f"{inverter_name} {description.name}"
+                )
             
         # Add PV string sensors if we have PV string data
         if coordinator.data and "inverters" in coordinator.data and inverter_id in coordinator.data["inverters"]:
@@ -170,12 +225,21 @@ async def async_setup_entry(
                                 )
                             else:
                                 sensor_desc = description
+                            
+                            sensor_name = f"{pv_string_name} {description.name}"
+                            entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
+                            
+                            # Track the entity ID - use a special key format for PV strings
+                            device_key = (DEVICE_TYPE_INVERTER, inverter_id, pv_idx)
+                            if device_key not in entity_registry:
+                                entity_registry[device_key] = {}
+                            entity_registry[device_key][description.key] = entity_id
                                 
                             entities.append(
                                 PVStringSensor(
                                     coordinator=coordinator,
                                     description=sensor_desc,
-                                    name=f"{pv_string_name} {description.name}",
+                                    name=sensor_name,
                                     device_type=DEVICE_TYPE_INVERTER,  # Use inverter as device type for data access
                                     device_id=inverter_id,
                                     device_name=inverter_name,
@@ -196,11 +260,20 @@ async def async_setup_entry(
         ac_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
         _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
         for description in SS.AC_CHARGER_SENSORS + SCS.AC_CHARGER_SENSORS:
+            sensor_name = f"{ac_charger_name} {description.name}"
+            entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
+            
+            # Track the entity ID
+            device_key = (DEVICE_TYPE_AC_CHARGER, ac_charger_id)
+            if device_key not in entity_registry:
+                entity_registry[device_key] = {}
+            entity_registry[device_key][description.key] = entity_id
+            
             entities.append(
                 SigenergySensor(
                     coordinator=coordinator,
                     description=description,
-                    name=f"{ac_charger_name} {description.name}",
+                    name=sensor_name,
                     device_type=DEVICE_TYPE_AC_CHARGER,
                     device_id=ac_charger_id,
                     device_name=ac_charger_name,
@@ -214,11 +287,20 @@ async def async_setup_entry(
         dc_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
         _LOGGER.debug("Adding DC charger %s with dc_charger_no %s as %s", dc_charger_id, dc_charger_no, dc_charger_name)
         for description in SS.DC_CHARGER_SENSORS + SCS.DC_CHARGER_SENSORS:
+            sensor_name = f"{dc_charger_name} {description.name}"
+            entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
+            
+            # Track the entity ID
+            device_key = (DEVICE_TYPE_DC_CHARGER, dc_charger_id)
+            if device_key not in entity_registry:
+                entity_registry[device_key] = {}
+            entity_registry[device_key][description.key] = entity_id
+            
             entities.append(
                 SigenergySensor(
                     coordinator=coordinator,
                     description=description,
-                    name=f"{dc_charger_name} {description.name}",
+                    name=sensor_name,
                     device_type=DEVICE_TYPE_DC_CHARGER,
                     device_id=dc_charger_id,
                     device_name=dc_charger_name,

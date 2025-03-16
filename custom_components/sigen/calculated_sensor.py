@@ -53,6 +53,7 @@ class SigenergyCalculations:
         extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
         extra_params: Optional[Dict[str, Any]] = None  # Additional parameters for value_fn
         source_entity_id: Optional[str] = None
+        source_key: Optional[str] = None  # Key of the source entity to use for integration
         max_sub_interval: Optional[timedelta] = None
         round_digits: Optional[int] = None
 
@@ -746,7 +747,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_entity_id="sensor.sigen_plant_pv_power",  # Updated to match expected entity ID pattern
+            source_key="plant_pv_power",  # Key of the source entity to use
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
@@ -756,7 +757,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_entity_id="sensor.sigen_plant_grid_export_power",  # Updated to match expected entity ID pattern
+            source_key="plant_grid_export_power",  # Key of the source entity to use
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
@@ -766,7 +767,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_entity_id="sensor.sigen_plant_grid_import_power",  # Updated to match expected entity ID pattern
+            source_key="plant_grid_import_power",  # Key of the source entity to use
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
@@ -780,7 +781,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_entity_id="sensor.sigen_inverter_pv_power",  # This is dynamically updated in sensor.py
+            source_key="inverter_pv_power",  # Key of the source entity to use
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
