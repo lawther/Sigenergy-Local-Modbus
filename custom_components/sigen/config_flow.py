@@ -59,10 +59,7 @@ STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_INVERTER_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): vol.All(
-            vol.Coerce(int),
-            vol.Range(min=1, max=246)
-        ),
+        vol.Required(CONF_INVERTER_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
     }
 )
 
