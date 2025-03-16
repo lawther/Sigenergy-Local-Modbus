@@ -30,7 +30,7 @@ from .const import (
     DEFAULT_AC_CHARGER_COUNT,
     DEFAULT_DC_CHARGER_COUNT,
     DEFAULT_INVERTER_COUNT,
-    DEFAULT_SLAVE_ID,
+    DEFAULT_PLANT_SLAVE_ID,
     DataType,
     PLANT_RUNNING_INFO_REGISTERS,
     PLANT_PARAMETER_REGISTERS,
@@ -85,7 +85,7 @@ class SigenergyModbusHub:
         self.config_entry = config_entry
         
         # Get slave IDs from config
-        self.plant_id = config_entry.data.get(CONF_PLANT_ID, DEFAULT_SLAVE_ID)
+        self.plant_id = config_entry.data.get(CONF_PLANT_ID, DEFAULT_PLANT_SLAVE_ID)
         self.inverter_count = config_entry.data.get(CONF_INVERTER_COUNT, DEFAULT_INVERTER_COUNT)
         self.ac_charger_count = config_entry.data.get(CONF_AC_CHARGER_COUNT, DEFAULT_AC_CHARGER_COUNT)
         self.dc_charger_count = config_entry.data.get(CONF_DC_CHARGER_COUNT, DEFAULT_DC_CHARGER_COUNT)

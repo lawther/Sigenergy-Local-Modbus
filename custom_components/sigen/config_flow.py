@@ -18,7 +18,8 @@ from .const import (
     CONF_INVERTER_SLAVE_IDS,
     CONF_PLANT_ID,
     DEFAULT_PORT,
-    DEFAULT_SLAVE_ID,
+    DEFAULT_PLANT_SLAVE_ID,
+    DEFAULT_INVERTER_SLAVE_ID,
     DEVICE_TYPE_PLANT,
     DOMAIN,
     STEP_USER,
@@ -31,8 +32,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_PLANT_ID, default=DEFAULT_SLAVE_ID): int,
-        vol.Required(CONF_INVERTER_SLAVE_IDS, default="1"): str,
+        vol.Required(CONF_PLANT_ID, default=DEFAULT_PLANT_SLAVE_ID): int,
+        vol.Required(CONF_INVERTER_SLAVE_IDS, default=DEFAULT_INVERTER_SLAVE_ID): str,
         vol.Optional(CONF_AC_CHARGER_SLAVE_IDS, default=""): str,
         vol.Optional(CONF_DC_CHARGER_SLAVE_IDS, default=""): str,
     }
