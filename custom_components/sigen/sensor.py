@@ -1,9 +1,10 @@
 """Sensor platform for Sigenergy ESS integration."""
 from __future__ import annotations
-
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
@@ -21,6 +22,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
@@ -47,19 +49,95 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     entities = []
     
+    # Get the Home Assistant entity registry
+    ha_entity_registry = async_get_entity_registry(hass)
+    
     # Create an entity registry to track created entity IDs
     entity_registry = {}  # Format: {(device_type, device_id): {key: entity_id}}
     
     # Helper function to get source entity ID
     def get_source_entity_id(device_type, device_id, source_key):
         """Get the source entity ID for an integration sensor."""
+        # First try the exact match from our registry
         device_key = (device_type, device_id)
         if device_key in entity_registry and source_key in entity_registry[device_key]:
-            return entity_registry[device_key][source_key]
+            entity_id = entity_registry[device_key][source_key]
+            _LOGGER.debug("Found exact match entity %s for key %s", entity_id, source_key)
+            return entity_id
+        
+        # If not found, search for entities that match the pattern
+        exact_match_entities = []
+        pattern_match_entities = []
+        fallback_entities = []
+        
+        # Normalize device type for matching
+        device_type_norm = device_type.lower().replace("_", "")
+        
+        # Look for entities with various matching patterns
+        for entity_id in hass.states.async_entity_ids("sensor"):
+            entity_id_lower = entity_id.lower()
+            
+            # Skip non-sigen entities
+            if "sigen" not in entity_id_lower:
+                continue
+                
+            # Exact matches: contains both device type and source key
+            if source_key in entity_id_lower and device_type_norm in entity_id_lower:
+                exact_match_entities.append(entity_id)
+                continue
+                
+            # Pattern matches: based on device type and key components
+            if device_type_norm == "plant" and "plant" in entity_id_lower:
+                if "pv" in source_key and "pv" in entity_id_lower and "power" in entity_id_lower:
+                    pattern_match_entities.append(entity_id)
+                elif "grid" in source_key and "grid" in entity_id_lower:
+                    if "import" in source_key and "import" in entity_id_lower:
+                        pattern_match_entities.append(entity_id)
+                    elif "export" in source_key and "export" in entity_id_lower:
+                        pattern_match_entities.append(entity_id)
+            elif device_type_norm == "inverter" and "inverter" in entity_id_lower:
+                if "pv" in source_key and "pv" in entity_id_lower and "power" in entity_id_lower:
+                    pattern_match_entities.append(entity_id)
+                    
+            # Fallback: any entity containing the source key
+            if source_key in entity_id_lower:
+                fallback_entities.append(entity_id)
+        
+        # Use the best match available
+        if exact_match_entities:
+            _LOGGER.debug(
+                "Using exact match entity %s for key %s (device type %s, device ID %s)",
+                exact_match_entities[0], source_key, device_type, device_id
+            )
+            return exact_match_entities[0]
+            
+        if pattern_match_entities:
+            _LOGGER.debug(
+                "Using pattern match entity %s for key %s (device type %s, device ID %s)",
+                pattern_match_entities[0], source_key, device_type, device_id
+            )
+            return pattern_match_entities[0]
+            
+        if fallback_entities:
+            _LOGGER.warning(
+                "Using fallback entity %s for key %s (device type %s, device ID %s)",
+                fallback_entities[0], source_key, device_type, device_id
+            )
+            return fallback_entities[0]
+        
+        # Log available entities to help with debugging
         _LOGGER.warning(
             "Could not find source entity with key %s for device type %s, device ID %s",
             source_key, device_type, device_id
         )
+        
+        # Log all sigen entities to help with debugging
+        sigen_entities = [e for e in hass.states.async_entity_ids("sensor") if "sigen" in e.lower()]
+        if sigen_entities:
+            _LOGGER.debug("Available Sigen sensor entities: %s", sigen_entities)
+        else:
+            _LOGGER.debug("No Sigen sensor entities found")
+        
         return None
 
     _LOGGER.debug("Setting up sensors for %s", config_entry.data[CONF_NAME])
@@ -338,8 +416,11 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             self._device_info_override = device_info
 
             # Get the device number if any as a string for use in names
-            device_number_str = device_name.split()[-1]
-            device_number_str = f" {device_number_str}" if device_number_str.isdigit() else ""
+            device_number_str = ""
+            if device_name:
+                parts = device_name.split()
+                if parts and parts[-1].isdigit():
+                    device_number_str = f" {parts[-1]}"
             # _LOGGER.debug("Device number string for %s: %s", device_name, device_number_str)
 
             # Set unique ID

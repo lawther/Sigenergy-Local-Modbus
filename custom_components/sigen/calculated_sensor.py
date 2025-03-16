@@ -357,12 +357,13 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
         else:
+            device_number_str = ""
             if device_name:
-                device_number_str = device_name.split()[-1]
-                device_number_str = f" {device_number_str}" if device_number_str.isdigit() else ""
-                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
-            else:
-                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
+                parts = device_name.split()
+                if parts and parts[-1].isdigit():
+                    device_number_str = f" {parts[-1]}"
+            
+            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
         
         # Set device info
         if self._device_info_override:
@@ -479,6 +480,9 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         for state in self.hass.states.async_all():
             if 'sigen' in state.entity_id:
                 _LOGGER.debug("  - %s: %s", state.entity_id, state.state)
+        
+        # Check source entity and log potential alternatives
+        self._check_source_entity()
         
         # Register to track source sensor state changes
         self.async_on_remove(
@@ -614,37 +618,96 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
                     self.entity_id, value,
                     type(value).__name__ if value is not None else 'None')
         return value
-@property
-def extra_state_attributes(self) -> dict[str, Any]:
-    """Return the state attributes of the sensor."""
-    return {
-        "source_entity": self._source_entity_id,
-    }
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes of the sensor."""
+        return {
+            "source_entity": self._source_entity_id,
+        }
     
-def _check_source_entity(self) -> None:
-    """Check if the source entity exists and log potential alternatives."""
-    source_entity = self.hass.states.get(self._source_entity_id)
-    _LOGGER.debug("[CS][Diagnostic] Source entity check for %s:", self.entity_id)
-    _LOGGER.debug("  - Expected source: %s", self._source_entity_id)
-    _LOGGER.debug("  - Source exists: %s", source_entity is not None)
-    _LOGGER.debug("  - Source state: %s", source_entity.state if source_entity else "N/A")
-    
-    # If source doesn't exist, look for similar entities
-    if source_entity is None:
-        # Look for entities with similar names
-        similar_entities = []
-        for state in self.hass.states.async_all():
-            entity_id = state.entity_id
-            if (entity_id.startswith("sensor.sigen") and
-                ("grid" in entity_id or "import" in entity_id or "power" in entity_id)):
-                similar_entities.append((entity_id, state.state))
+    def _check_source_entity(self) -> None:
+        """Check if the source entity exists and log potential alternatives."""
+        source_entity = self.hass.states.get(self._source_entity_id)
+        _LOGGER.debug("[CS][Diagnostic] Source entity check for %s:", self.entity_id)
+        _LOGGER.debug("  - Expected source: %s", self._source_entity_id)
+        _LOGGER.debug("  - Source exists: %s", source_entity is not None)
+        _LOGGER.debug("  - Source state: %s", source_entity.state if source_entity else "N/A")
         
-        if similar_entities:
-            _LOGGER.debug("  - Potential alternative sources:")
-            for entity_id, state in similar_entities:
-                _LOGGER.debug("    * %s (state: %s)", entity_id, state)
-        else:
-            _LOGGER.debug("  - No potential alternative sources found")
+        # If source doesn't exist, look for similar entities
+        if source_entity is None:
+            # Extract key parts from the entity description
+            source_key = getattr(self.entity_description, "source_key", "")
+            device_type = self._device_type.lower().replace("_", "")
+            
+            # Look for entities with similar names
+            similar_entities = []
+            exact_match_entities = []
+            pattern_match_entities = []
+            
+            for state in self.hass.states.async_all():
+                entity_id = state.entity_id.lower()
+                
+                # Skip non-sensor entities
+                if not entity_id.startswith("sensor."):
+                    continue
+                    
+                # Skip self
+                if entity_id == self.entity_id.lower():
+                    continue
+                
+                # Check for exact matches first
+                if source_key and source_key in entity_id and device_type in entity_id:
+                    exact_match_entities.append((state.entity_id, state.state))
+                    continue
+                    
+                # Check for pattern matches
+                if entity_id.startswith("sensor.sigen"):
+                    # For plant entities
+                    if device_type == "plant" and "plant" in entity_id:
+                        if source_key and source_key in entity_id:
+                            pattern_match_entities.append((state.entity_id, state.state))
+                        elif "pv" in source_key and "pv" in entity_id and "power" in entity_id:
+                            pattern_match_entities.append((state.entity_id, state.state))
+                        elif "grid" in source_key and "grid" in entity_id:
+                            if "import" in source_key and "import" in entity_id:
+                                pattern_match_entities.append((state.entity_id, state.state))
+                            elif "export" in source_key and "export" in entity_id:
+                                pattern_match_entities.append((state.entity_id, state.state))
+                    
+                    # For inverter entities
+                    elif device_type == "inverter" and "inverter" in entity_id:
+                        if source_key and source_key in entity_id:
+                            pattern_match_entities.append((state.entity_id, state.state))
+                        elif "pv" in source_key and "pv" in entity_id and "power" in entity_id:
+                            pattern_match_entities.append((state.entity_id, state.state))
+                    
+                    # Add any other sigen entities as general matches
+                    similar_entities.append((state.entity_id, state.state))
+            
+            # Log the results
+            if exact_match_entities:
+                _LOGGER.debug("  - Exact match entities:")
+                for entity_id, state in exact_match_entities:
+                    _LOGGER.debug("    * %s (state: %s)", entity_id, state)
+                    
+            if pattern_match_entities:
+                _LOGGER.debug("  - Pattern match entities:")
+                for entity_id, state in pattern_match_entities:
+                    _LOGGER.debug("    * %s (state: %s)", entity_id, state)
+                    
+            if not exact_match_entities and not pattern_match_entities and similar_entities:
+                _LOGGER.debug("  - Other Sigen entities:")
+                for entity_id, state in similar_entities[:10]:  # Limit to 10 to avoid log spam
+                    _LOGGER.debug("    * %s (state: %s)", entity_id, state)
+                    
+            if not exact_match_entities and not pattern_match_entities and not similar_entities:
+                _LOGGER.debug("  - No potential alternative sources found")
+                
+            # Suggest the best alternative
+            if exact_match_entities:
+                _LOGGER.warning("  - Suggested alternative: %s", exact_match_entities[0][0])
+            elif pattern_match_entities:
+                _LOGGER.warning("  - Suggested alternative: %s", pattern_match_entities[0][0])
 
 
 
@@ -747,7 +810,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_key="plant_pv_power",  # Key of the source entity to use
+            source_key="plant_photovoltaic_power",  # Key of the source entity to use
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
@@ -757,7 +820,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_key="plant_grid_export_power",  # Key of the source entity to use
+            source_key="plant_grid_export_power",  # Key matches the calculated sensor
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
@@ -767,7 +830,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_key="plant_grid_import_power",  # Key of the source entity to use
+            source_key="plant_grid_import_power",  # Key matches the calculated sensor
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
@@ -781,7 +844,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_key="inverter_pv_power",  # Key of the source entity to use
+            source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
