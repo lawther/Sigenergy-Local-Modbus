@@ -79,7 +79,11 @@
     "abort": {
       "already_configured": "This Sigenergy system is already configured.",
       "no_plants_available": "No plants are available. Please add a plant first.",
-      "no_inverters_available": "No inverters are available on the selected plant. Please add an inverter first."
+      "no_inverters_available": "No inverters are available on the selected plant. Please add an inverter first.",
+      "device_added": "Device successfully added to the plant configuration.",
+      "parent_plant_not_found": "The parent plant configuration could not be found.",
+      "parent_inverter_not_found": "The parent inverter configuration could not be found.",
+      "parent_inverter_invalid": "The parent inverter configuration is invalid."
     }
   },
   "options": {

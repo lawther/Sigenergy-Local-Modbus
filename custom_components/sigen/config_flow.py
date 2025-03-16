@@ -282,28 +282,36 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         slave_id = user_input.get(CONF_SLAVE_ID)
         if slave_id is None or not (1 <= slave_id <= 246):
             errors[CONF_SLAVE_ID] = "each_id_must_be_between_1_and_246"
-            
             return self.async_show_form(
                 step_id=STEP_INVERTER_CONFIG,
                 data_schema=STEP_INVERTER_CONFIG_SCHEMA,
                 errors=errors,
             )
-        
-        # Store the slave ID
-        self._data[CONF_SLAVE_ID] = slave_id
-        
-        # Create a list with just this inverter
-        self._data[CONF_INVERTER_SLAVE_ID] = [slave_id]
-        
-        # Set empty lists for AC and DC chargers
-        self._data[CONF_AC_CHARGER_SLAVE_ID] = []
-        self._data[CONF_DC_CHARGER_SLAVE_ID] = []
-        
-        # Set the name based on the slave ID
-        self._data[CONF_NAME] = f"Sigen Inverter {slave_id}"
-        
-        # Create the configuration entry
-        return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
+            
+        # Check for duplicate IDs
+        plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
+        if plant_entry:
+            plant_inverters = plant_entry.data.get(CONF_INVERTER_SLAVE_ID, [])
+            if slave_id in plant_inverters and not _LOGGER.isEnabledFor(logging.DEBUG):
+                errors[CONF_SLAVE_ID] = "duplicate_ids_found"
+                return self.async_show_form(
+                    step_id=STEP_INVERTER_CONFIG,
+                    data_schema=STEP_INVERTER_CONFIG_SCHEMA,
+                    errors=errors,
+                )
+            
+            # Update the plant's configuration with the new inverter
+            new_data = dict(plant_entry.data)
+            new_data[CONF_INVERTER_SLAVE_ID] = plant_inverters + [slave_id]
+            
+            self.hass.config_entries.async_update_entry(
+                plant_entry,
+                data=new_data
+            )
+            
+            return self.async_abort(reason="device_added")
+            
+        return self.async_abort(reason="parent_plant_not_found")
     
     async def async_step_ac_charger_config(
         self, user_input: dict[str, Any] | None = None
@@ -321,28 +329,42 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         slave_id = user_input.get(CONF_SLAVE_ID)
         if slave_id is None or not (1 <= slave_id <= 246):
             errors[CONF_SLAVE_ID] = "each_id_must_be_between_1_and_246"
-            
             return self.async_show_form(
                 step_id=STEP_AC_CHARGER_CONFIG,
                 data_schema=STEP_AC_CHARGER_CONFIG_SCHEMA,
                 errors=errors,
             )
-        
-        # Store the slave ID
-        self._data[CONF_SLAVE_ID] = slave_id
-        
-        # Create a list with just this AC charger
-        self._data[CONF_AC_CHARGER_SLAVE_ID] = [slave_id]
-        
-        # Set empty lists for inverters and DC chargers
-        self._data[CONF_INVERTER_SLAVE_ID] = []
-        self._data[CONF_DC_CHARGER_SLAVE_ID] = []
-        
-        # Set the name based on the slave ID
-        self._data[CONF_NAME] = f"Sigen AC Charger {slave_id}"
-        
-        # Create the configuration entry
-        return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
+            
+        # Check for duplicate IDs and conflicts with inverters
+        plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
+        if plant_entry:
+            plant_ac_chargers = plant_entry.data.get(CONF_AC_CHARGER_SLAVE_ID, [])
+            plant_inverters = plant_entry.data.get(CONF_INVERTER_SLAVE_ID, [])
+            
+            if slave_id in plant_ac_chargers:
+                errors[CONF_SLAVE_ID] = "duplicate_ids_found"
+            elif slave_id in plant_inverters:
+                errors[CONF_SLAVE_ID] = "ac_charger_conflicts_inverter"
+                
+            if errors:
+                return self.async_show_form(
+                    step_id=STEP_AC_CHARGER_CONFIG,
+                    data_schema=STEP_AC_CHARGER_CONFIG_SCHEMA,
+                    errors=errors,
+                )
+            
+            # Update the plant's configuration with the new AC charger
+            new_data = dict(plant_entry.data)
+            new_data[CONF_AC_CHARGER_SLAVE_ID] = plant_ac_chargers + [slave_id]
+            
+            self.hass.config_entries.async_update_entry(
+                plant_entry,
+                data=new_data
+            )
+            
+            return self.async_abort(reason="device_added")
+            
+        return self.async_abort(reason="parent_plant_not_found")
     
     async def async_step_select_inverter(
         self, user_input: dict[str, Any] | None = None
@@ -363,34 +385,37 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 data_schema=schema,
             )
         
-        # Store the selected inverter ID
+        # Get the selected inverter
         parent_inverter_id = user_input[CONF_PARENT_INVERTER_ID]
-        self._data[CONF_PARENT_INVERTER_ID] = parent_inverter_id
-        
-        # Get the inverter entry to access its configuration
         inverter_entry = self.hass.config_entries.async_get_entry(parent_inverter_id)
-        if inverter_entry:
-            # Get the slave ID of the inverter
-            inverter_slave_id = inverter_entry.data.get(CONF_SLAVE_ID)
-            if inverter_slave_id:
-                # For DC chargers, the slave ID is the same as the parent inverter
-                self._data[CONF_SLAVE_ID] = inverter_slave_id
+        if not inverter_entry:
+            return self.async_abort(reason="parent_inverter_not_found")
+            
+        # Get the slave ID and verify it exists
+        inverter_slave_id = inverter_entry.data.get(CONF_SLAVE_ID)
+        if not inverter_slave_id:
+            return self.async_abort(reason="parent_inverter_invalid")
+            
+        # Check for existing DC charger with this ID
+        plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
+        if plant_entry:
+            plant_dc_chargers = plant_entry.data.get(CONF_DC_CHARGER_SLAVE_ID, [])
+            
+            if inverter_slave_id in plant_dc_chargers:
+                return self.async_abort(reason="duplicate_ids_found")
                 
-                # Set empty lists for inverters and AC chargers
-                self._data[CONF_INVERTER_SLAVE_ID] = []
-                self._data[CONF_AC_CHARGER_SLAVE_ID] = []
-                
-                # Create a list with just this DC charger (same ID as inverter)
-                self._data[CONF_DC_CHARGER_SLAVE_ID] = [inverter_slave_id]
-                
-                # Set the name based on the slave ID
-                self._data[CONF_NAME] = f"Sigen DC Charger {inverter_slave_id}"
-                
-                # Create the configuration entry
-                return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
-        
-        # If we get here, something went wrong
-        return self.async_abort(reason="unknown")
+            # Update the plant's configuration with the new DC charger
+            new_data = dict(plant_entry.data)
+            new_data[CONF_DC_CHARGER_SLAVE_ID] = plant_dc_chargers + [inverter_slave_id]
+            
+            self.hass.config_entries.async_update_entry(
+                plant_entry,
+                data=new_data
+            )
+            
+            return self.async_abort(reason="device_added")
+            
+        return self.async_abort(reason="parent_plant_not_found")
 
     async def _async_load_plants(self) -> None:
         """Load existing plants from config entries."""
@@ -507,6 +532,16 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         self._data = dict(config_entry.data)
         self._plants = {}
         self._inverters = {}
+
+    def _create_reconfigure_schema(self, inv_ids: str = "") -> vol.Schema:
+        """Create schema for reconfiguration step with default or provided values."""
+        if not inv_ids:
+            current_ids = self._data.get(CONF_INVERTER_SLAVE_ID, [])
+            inv_ids = ", ".join(str(i) for i in current_ids) if current_ids else ""
+        
+        return vol.Schema({
+            vol.Required(CONF_INVERTER_SLAVE_ID, default=inv_ids): str,
+        })
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Manage the options for the custom component."""
