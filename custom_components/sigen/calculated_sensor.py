@@ -639,6 +639,9 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             source_key = getattr(self.entity_description, "source_key", "")
             device_type = self._device_type.lower().replace("_", "")
             
+            _LOGGER.debug("  - Source key: %s", source_key)
+            _LOGGER.debug("  - Device type: %s", device_type)
+            
             # Look for entities with similar names
             similar_entities = []
             exact_match_entities = []

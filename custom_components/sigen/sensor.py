@@ -58,87 +58,23 @@ async def async_setup_entry(
     # Helper function to get source entity ID
     def get_source_entity_id(device_type, device_id, source_key):
         """Get the source entity ID for an integration sensor."""
-        # First try the exact match from our registry
-        device_key = (device_type, device_id)
-        if device_key in entity_registry and source_key in entity_registry[device_key]:
-            entity_id = entity_registry[device_key][source_key]
-            _LOGGER.debug("Found exact match entity %s for key %s", entity_id, source_key)
+        # Try to find entities by unique ID pattern
+        try:
+            # Determine the unique ID pattern to look for
+            config_entry_id = coordinator.hub.config_entry.entry_id
+            _LOGGER.debug("Looking for entity with config entry ID: %s, source key: %s, device type: %s, device ID: %s",
+                            config_entry_id, source_key, device_type, device_id)
+            
+            unique_id_pattern = f"{config_entry_id}_{device_type}{f'_{device_id}' if device_id > 1 else ''}_{source_key}"
+
+            _LOGGER.debug("Looking for entity with unique ID pattern: %s", unique_id_pattern)
+            entity_id = ha_entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id_pattern)
+            _LOGGER.debug("Found entity ID: %s", entity_id)
+
             return entity_id
+        except Exception as ex:
+            _LOGGER.warning("Error looking for entity with config entry ID: %s", ex)
         
-        # If not found, search for entities that match the pattern
-        exact_match_entities = []
-        pattern_match_entities = []
-        fallback_entities = []
-        
-        # Normalize device type for matching
-        device_type_norm = device_type.lower().replace("_", "")
-        
-        # Look for entities with various matching patterns
-        for entity_id in hass.states.async_entity_ids("sensor"):
-            entity_id_lower = entity_id.lower()
-            
-            # Skip non-sigen entities
-            if "sigen" not in entity_id_lower:
-                continue
-                
-            # Exact matches: contains both device type and source key
-            if source_key in entity_id_lower and device_type_norm in entity_id_lower:
-                exact_match_entities.append(entity_id)
-                continue
-                
-            # Pattern matches: based on device type and key components
-            if device_type_norm == "plant" and "plant" in entity_id_lower:
-                if "pv" in source_key and "pv" in entity_id_lower and "power" in entity_id_lower:
-                    pattern_match_entities.append(entity_id)
-                elif "grid" in source_key and "grid" in entity_id_lower:
-                    if "import" in source_key and "import" in entity_id_lower:
-                        pattern_match_entities.append(entity_id)
-                    elif "export" in source_key and "export" in entity_id_lower:
-                        pattern_match_entities.append(entity_id)
-            elif device_type_norm == "inverter" and "inverter" in entity_id_lower:
-                if "pv" in source_key and "pv" in entity_id_lower and "power" in entity_id_lower:
-                    pattern_match_entities.append(entity_id)
-                    
-            # Fallback: any entity containing the source key
-            if source_key in entity_id_lower:
-                fallback_entities.append(entity_id)
-        
-        # Use the best match available
-        if exact_match_entities:
-            _LOGGER.debug(
-                "Using exact match entity %s for key %s (device type %s, device ID %s)",
-                exact_match_entities[0], source_key, device_type, device_id
-            )
-            return exact_match_entities[0]
-            
-        if pattern_match_entities:
-            _LOGGER.debug(
-                "Using pattern match entity %s for key %s (device type %s, device ID %s)",
-                pattern_match_entities[0], source_key, device_type, device_id
-            )
-            return pattern_match_entities[0]
-            
-        if fallback_entities:
-            _LOGGER.warning(
-                "Using fallback entity %s for key %s (device type %s, device ID %s)",
-                fallback_entities[0], source_key, device_type, device_id
-            )
-            return fallback_entities[0]
-        
-        # Log available entities to help with debugging
-        _LOGGER.warning(
-            "Could not find source entity with key %s for device type %s, device ID %s",
-            source_key, device_type, device_id
-        )
-        
-        # Log all sigen entities to help with debugging
-        sigen_entities = [e for e in hass.states.async_entity_ids("sensor") if "sigen" in e.lower()]
-        if sigen_entities:
-            _LOGGER.debug("Available Sigen sensor entities: %s", sigen_entities)
-        else:
-            _LOGGER.debug("No Sigen sensor entities found")
-        
-        return None
 
     _LOGGER.debug("Setting up sensors for %s", config_entry.data[CONF_NAME])
     _LOGGER.debug("Inverters: %s", coordinator.hub.inverter_slave_ids)
@@ -184,7 +120,7 @@ async def async_setup_entry(
         # Look up the source entity ID based on the source key
         source_entity_id = get_source_entity_id(
             DEVICE_TYPE_PLANT,
-            None,  # Plant has no device_id
+            0,  # Plant has default device ID of 0 as it's a single device
             description.source_key
         )
         
@@ -204,10 +140,21 @@ async def async_setup_entry(
                 )
             )
         else:
+            # Log more detailed information about the missing source entity
             _LOGGER.warning(
-                "Skipping integration sensor %s because source entity not found",
-                f"{plant_name} {description.name}"
+                "Skipping integration sensor %s because source entity with key %s not found",
+                f"{plant_name} {description.name}",
+                description.source_key
             )
+            
+            # Log all available entities with 'sigen' and 'plant' in the name to help with debugging
+            _LOGGER.debug("Available Sigen plant entities:")
+            for state in hass.states.async_all():
+                if 'sigen' in state.entity_id.lower() and 'plant' in state.entity_id.lower():
+                    _LOGGER.debug("  - %s: %s (unique_id: %s)",
+                                 state.entity_id,
+                                 state.state,
+                                 ha_entity_registry.async_get(state.entity_id).unique_id if ha_entity_registry.async_get(state.entity_id) else "unknown")
 
     # Add inverter sensors
     inverter_no = 0
@@ -263,10 +210,26 @@ async def async_setup_entry(
                     )
                 )
             else:
+                # Log more detailed information about the missing source entity
                 _LOGGER.warning(
-                    "Skipping integration sensor %s because source entity not found",
-                    f"{inverter_name} {description.name}"
+                    "Skipping integration sensor %s because source entity with key %s not found",
+                    f"{inverter_name} {description.name}",
+                    description.source_key
                 )
+                
+                # Log all available entities with 'sigen' and 'inverter' in the name to help with debugging
+                _LOGGER.debug("Available Sigen inverter entities for inverter %s:", inverter_id)
+                for state in hass.states.async_all():
+                    if ('sigen' in state.entity_id.lower() and
+                        'inverter' in state.entity_id.lower() and
+                        'pv' in state.entity_id.lower() and
+                        'power' in state.entity_id.lower()):
+                        entity_entry = ha_entity_registry.async_get(state.entity_id)
+                        unique_id = entity_entry.unique_id if entity_entry else "unknown"
+                        _LOGGER.debug("  - %s: %s (unique_id: %s)",
+                                     state.entity_id,
+                                     state.state,
+                                     unique_id)
             
         # Add PV string sensors if we have PV string data
         if coordinator.data and "inverters" in coordinator.data and inverter_id in coordinator.data["inverters"]:
@@ -431,7 +394,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_pv{pv_string_idx}_{description.key}"
                 _LOGGER.debug("Unique ID for PV string sensor %s", self._attr_unique_id)
             else:
-                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
+                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}{f'_{device_number_str}' if device_number_str.isdigit() else ''}_{description.key}"
                 _LOGGER.debug("Unique ID for %s sensor %s", device_type, self._attr_unique_id)
 
             # Set device info (use provided device_info if available)
