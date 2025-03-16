@@ -14,7 +14,7 @@
       },
       "plant_config": {
         "title": "Configure Sigenergy Plant",
-        "description": "Set up a new Sigenergy Plant to monitor and control it through Home Assistant.",
+        "description": "Set up a new Sigenergy Plant to monitor and control it through Home Assistant. The Plant ID will be automatically set to 247.",
         "data": {
           "host": "Host (IP address of the main Sigenergy inverter)",
           "port": "Port (default is 502)",

@@ -177,7 +177,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Store plant configuration
         self._data.update(user_input)
         
-        # Always use the default plant ID
+        # Always use the default plant ID (247)
         self._data[CONF_PLANT_ID] = DEFAULT_PLANT_SLAVE_ID
 
         # Process and validate all slave IDs
