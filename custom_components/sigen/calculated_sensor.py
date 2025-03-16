@@ -746,7 +746,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
-            source_entity_id="sensor.sigen_plant_photovoltaic_power",  # Updated to match expected entity ID pattern
+            source_entity_id="sensor.sigen_plant_pv_power",  # Updated to match expected entity ID pattern
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
