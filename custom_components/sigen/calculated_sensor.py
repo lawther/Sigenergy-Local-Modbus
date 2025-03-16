@@ -208,21 +208,37 @@ class SigenergyCalculations:
                 return None
                 
             # Calculate power with bounds checking
-            # Make sure we don't return unreasonable values
-            power = pv_voltage * pv_current  # Already in Watts since voltage is in V and current in A
+            # Convert to Decimal for precise calculation
+            try:
+                voltage_dec = Decimal(str(pv_voltage))
+                current_dec = Decimal(str(pv_current))
+                power = voltage_dec * current_dec  # Already in Watts
+            except (ValueError, TypeError, InvalidOperation):
+                _LOGGER.warning("[CS][PV Power] Error converting values to Decimal: V=%s, I=%s", 
+                              pv_voltage, pv_current)
+                # Fallback to float calculation
+                power = pv_voltage * pv_current
             
             _LOGGER.debug("[CS][PV Power] Calculated raw power for PV%d: %s W (V=%s, I=%s)",
                         pv_idx, power, pv_voltage, pv_current)
             
             # Apply some reasonable bounds
-            MAX_REASONABLE_POWER = 20000  # 20kW per string is very high already
-            if abs(power) > MAX_REASONABLE_POWER:
+            MAX_REASONABLE_POWER = Decimal('20000')  # 20kW per string is very high already
+            if isinstance(power, Decimal) and abs(power) > MAX_REASONABLE_POWER:
+                _LOGGER.warning("[CS][PV Power] Calculated power for PV string %d seems excessive: %s W",
+                            pv_idx, power)
+            elif not isinstance(power, Decimal) and abs(power) > float(MAX_REASONABLE_POWER):
                 _LOGGER.warning("[CS][PV Power] Calculated power for PV string %d seems excessive: %s W",
                             pv_idx, power)
             
-            final_power = power / 1000  # Convert to kW
+            # Convert to kW
+            if isinstance(power, Decimal):
+                final_power = power / Decimal('1000')
+            else:
+                final_power = power / 1000
+            
             _LOGGER.debug("[CS][PV Power] Final power for PV%d: %s kW", pv_idx, final_power)
-            return final_power
+            return float(final_power) if isinstance(final_power, Decimal) else final_power
         except Exception as ex:
             _LOGGER.warning("[CS]Error calculating power for PV string %d: %s",
                         extra_params.get("pv_idx", "unknown"), ex)
@@ -243,8 +259,15 @@ class SigenergyCalculations:
             _LOGGER.debug("[CS][Grid Import] Invalid grid power value: %s", grid_power)
             return None
             
-        # Return value if positive, otherwise 0
-        return grid_power if grid_power > 0 else 0
+        # Convert to Decimal for precise calculation
+        try:
+            power_dec = Decimal(str(grid_power))
+            # Return value if positive, otherwise 0
+            return float(power_dec) if power_dec > Decimal('0') else 0
+        except (ValueError, TypeError, InvalidOperation):
+            _LOGGER.debug("[CS][Grid Import] Error converting value to Decimal: %s", grid_power)
+            # Fallback to float calculation
+            return grid_power if grid_power > 0 else 0
 
     @staticmethod
     def calculate_grid_export_power(value, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
@@ -261,8 +284,15 @@ class SigenergyCalculations:
             _LOGGER.debug("[CS][Grid Export] Invalid grid power value: %s", grid_power)
             return None
             
-        # Return absolute value if negative, otherwise 0
-        return -grid_power if grid_power < 0 else 0
+        # Convert to Decimal for precise calculation
+        try:
+            power_dec = Decimal(str(grid_power))
+            # Return absolute value if negative, otherwise 0
+            return float(-power_dec) if power_dec < Decimal('0') else 0
+        except (ValueError, TypeError, InvalidOperation):
+            _LOGGER.debug("[CS][Grid Export] Error converting value to Decimal: %s", grid_power)
+            # Fallback to float calculation
+            return -grid_power if grid_power < 0 else 0
 
 
 class IntegrationTrigger(Enum):
