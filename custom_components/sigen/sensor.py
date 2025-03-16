@@ -151,7 +151,7 @@ async def async_setup_entry(
     inverter_no = 1
     for inverter_id in coordinator.hub.inverter_slave_ids:
         inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
-        _LOGGER.debug("Adding inverter %s for plant %s with inverter_no %s as %s", inverter_id, plant_name, inverter_no, inverter_name)
+        _LOGGER.debug("Adding inverter_id %s for plant %s with inverter_no %s as %s", inverter_id, plant_name, inverter_no, inverter_name)
         _LOGGER.debug("Plant name: %s divided by space first part: %s, second part: %s, last part: %s", plant_name, plant_name.split()[0], plant_name.split()[1], plant_name.split()[-1])
         
         # Add inverter sensors
@@ -350,8 +350,8 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             if device_name:
                 parts = device_name.split()
                 if parts and parts[-1].isdigit():
-                    device_number_str = f" {parts[-1]}"
-            # _LOGGER.debug("Device number string for %s: %s", device_name, device_number_str)
+                    device_number_str = f" {parts[-1]}".strip()
+            _LOGGER.debug("Device number string for %s: %s", device_name, device_number_str)
 
             # Set unique ID
             if device_type == DEVICE_TYPE_PLANT:

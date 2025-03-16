@@ -454,9 +454,9 @@ async def async_setup_entry(
         )
 
     # Add inverter numbers
-    inverter_no = 0
+    inverter_no = 1
     for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
+        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
         for description in INVERTER_NUMBERS:
             entities.append(
                 SigenergyNumber(
