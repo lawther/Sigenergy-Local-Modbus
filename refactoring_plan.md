@@ -1,360 +1,526 @@
-# Refactoring Plan for Sigenergy Integration Sensors
+# Refactoring Plan for Sigenergy Config Flow
 
-## Overview
+## Requirements
 
-This document outlines a plan to refactor the code in `sensor.py` and `calculated_sensor.py` to dynamically assign the correct `source_entity_id` when entities in `PLANT_INTEGRATION_SENSORS` and `INVERTER_INTEGRATION_SENSORS` lists are added to the specific plant or inverter they are associated with during the `async_setup_entry` method.
+- Remove the need to specify plant_id. It should always be 247 (DEFAULT_PLANT_SLAVE_ID).
+- The current configuration schema should only be used if this is the first integration of this type being added or "New Plant" is chosen.
+- Otherwise, a schema where the user is asked to choose the type of device they want to add should be used.
+- Different schemas should be used for each device type.
+- For "New Plant", only host and port should be collected.
+- Inverters and AC/DC Chargers can only be added to an existing Plant configuration.
+- DC Chargers are physically connected to inverters and share the same Device ID (Slave ID).
+- All device types except DC Chargers should also ask for IP address (Host).
 
-## Current Issues
+## Current Status
 
-1. **Hardcoded Source Entity IDs**: In `calculated_sensor.py`, the `PLANT_INTEGRATION_SENSORS` list has hardcoded values like "sensor.sigen_plant_pv_power" which won't work correctly with multiple plants.
+After reviewing the code, most of the required changes are already implemented:
 
-2. **Partial Dynamic Assignment**: For inverter integration sensors, there's an attempt to dynamically set the `source_entity_id` in `sensor.py` (lines 122-123), but it uses a hardcoded pattern that may not match the actual entity naming convention.
+1. The config_flow.py file has:
+   - Device type selection (New Plant, Inverter, AC Charger, DC Charger)
+   - Plant configuration without plant_id (it's set to DEFAULT_PLANT_SLAVE_ID)
+   - Plant selection for devices
+   - Inverter selection for DC Chargers
+   - Device-specific configuration steps
 
-3. **No Consideration for Multiple Plants**: The current implementation doesn't properly handle scenarios with multiple plants, as it assumes a single plant naming pattern.
+2. The strings.json and translations/en.json files have the necessary translations for all the steps.
 
-## Proposed Solution
+The current configuration flow:
+- Collects host, port, plant_id, inverter_slave_ids, ac_charger_slave_ids, and dc_charger_slave_ids in a single step
+- Always uses plant_id 247 (DEFAULT_PLANT_SLAVE_ID) but requires it to be specified
+- Doesn't distinguish between different device types during initial setup
+
+## Changes Needed
+
+1. Remove the STEP_USER_DATA_SCHEMA from config_flow.py as it's no longer needed. The user step should now either:
+   - Show device type selection if plants exist
+   - Go directly to plant configuration if no plants exist
+
+2. Ensure the plant_id is always set to DEFAULT_PLANT_SLAVE_ID in the plant configuration step (this is already done)
+
+3. Update the strings.json and translations/en.json files to remove any references to plant_id (if any)
+
+## Refactoring Goals
+
+1. Remove the need to specify plant_id (always use 247, DEFAULT_PLANT_SLAVE_ID)
+2. Create a multi-step configuration flow:
+   - First step: Choose device type ("New Plant", "Inverter", "AC Charger", "DC Charger")
+   - Subsequent steps depend on the chosen device type
+
+## Detailed Flow Structure
 
 ```mermaid
 flowchart TD
-    A[Start Refactoring] --> B[Add source_key to Integration Sensor Descriptions]
-    B --> C[Create Entity Registry in async_setup_entry]
-    C --> D[Track Entity IDs During Sensor Creation]
-    D --> E[Implement Lookup Function]
-    E --> F[Update Integration Sensor Creation]
-    F --> G[Pass Looked-up source_entity_id to Constructor]
-    G --> H[Test with Multiple Plants/Inverters]
+    A[Start] --> B[Choose Device Type]
+    B -->|New Plant| C[Configure Plant]
+    B -->|Inverter| D[Select Plant]
+    B -->|AC Charger| E[Select Plant]
+    B -->|DC Charger| F[Select Plant]
+    
+    C --> C1[Enter Host & Port]
+    C1 --> C2[Create Plant Entry]
+    
+    D --> D1[Enter Host & Port]
+    D1 --> D2[Enter Device ID]
+    D2 --> D3[Create Inverter Entry]
+    
+    E --> E1[Enter Host & Port]
+    E1 --> E2[Enter Device ID]
+    E2 --> E3[Create AC Charger Entry]
+    
+    F --> F1[Select Inverter]
+    F1 --> F2[Create DC Charger Entry]
 ```
 
-## Detailed Implementation Plan
+## Implementation Details
 
-### Changes to `calculated_sensor.py`
+### 1. Constants and Step Definitions
 
-#### 1. Add `source_key` to `SigenergyCalculations.SigenergySensorEntityDescription`
+We need to add new constants for the device types and configuration steps:
 
 ```python
-@dataclass
-class SigenergySensorEntityDescription(SensorEntityDescription):
-    """Class describing Sigenergy sensor entities."""
+# Device type options
+DEVICE_TYPE_NEW_PLANT = "new_plant"
+DEVICE_TYPE_INVERTER = "inverter"
+DEVICE_TYPE_AC_CHARGER = "ac_charger"
+DEVICE_TYPE_DC_CHARGER = "dc_charger"
 
-    entity_registry_enabled_default: bool = True
-    value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None
-    extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
-    extra_params: Optional[Dict[str, Any]] = None  # Additional parameters for value_fn
-    source_entity_id: Optional[str] = None
-    source_key: Optional[str] = None  # Add this new attribute
-    max_sub_interval: Optional[timedelta] = None
-    round_digits: Optional[int] = None
+# Configuration step identifiers
+STEP_USER = "user"  # Already exists
+STEP_DEVICE_TYPE = "device_type"
+STEP_PLANT_CONFIG = "plant_config"
+STEP_INVERTER_CONFIG = "inverter_config"
+STEP_AC_CHARGER_CONFIG = "ac_charger_config"
+STEP_DC_CHARGER_CONFIG = "dc_charger_config"
+STEP_SELECT_PLANT = "select_plant"
+STEP_SELECT_INVERTER = "select_inverter"
 ```
 
-#### 2. Update `PLANT_INTEGRATION_SENSORS`
+### 2. Schema Definitions
+
+We need to define schemas for each step:
 
 ```python
-PLANT_INTEGRATION_SENSORS = [
-    SigenergyCalculations.SigenergySensorEntityDescription(
-        key="plant_accumulated_pv_energy",
-        name="Accumulated PV Energy",
-        device_class=SensorDeviceClass.ENERGY,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        state_class=SensorStateClass.TOTAL,
-        source_key="plant_pv_power",  # Add this
-        # Remove or comment out the hardcoded source_entity_id
-        # source_entity_id="sensor.sigen_plant_pv_power",
-        round_digits=3,
-        max_sub_interval=timedelta(seconds=30),
-    ),
-    SigenergyCalculations.SigenergySensorEntityDescription(
-        key="plant_accumulated_grid_export_energy",
-        name="Accumulated Grid Export Energy",
-        device_class=SensorDeviceClass.ENERGY,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        state_class=SensorStateClass.TOTAL,
-        source_key="plant_grid_export_power",  # Add this
-        # Remove or comment out the hardcoded source_entity_id
-        # source_entity_id="sensor.sigen_plant_grid_export_power",
-        round_digits=3,
-        max_sub_interval=timedelta(seconds=30),
-    ),
-    SigenergyCalculations.SigenergySensorEntityDescription(
-        key="plant_accumulated_grid_import_energy",
-        name="Accumulated Grid Import Energy",
-        device_class=SensorDeviceClass.ENERGY,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        state_class=SensorStateClass.TOTAL,
-        source_key="plant_grid_import_power",  # Add this
-        # Remove or comment out the hardcoded source_entity_id
-        # source_entity_id="sensor.sigen_plant_grid_import_power",
-        round_digits=3,
-        max_sub_interval=timedelta(seconds=30),
-    ),
-]
+# Device type selection schema
+STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
+    {
+        vol.Required("device_type"): vol.In(
+            {
+                DEVICE_TYPE_NEW_PLANT: "New Plant",
+                DEVICE_TYPE_INVERTER: "Inverter",
+                DEVICE_TYPE_AC_CHARGER: "AC Charger",
+                DEVICE_TYPE_DC_CHARGER: "DC Charger",
+            }
+        ),
+    }
+)
+
+# Plant configuration schema (simplified - only host and port)
+STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+    }
+)
+
+# Inverter configuration schema
+STEP_INVERTER_CONFIG_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+        vol.Required(CONF_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
+    }
+)
+
+# AC Charger configuration schema
+STEP_AC_CHARGER_CONFIG_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+        vol.Required(CONF_SLAVE_ID): int,
+    }
+)
+
+# DC Charger configuration schema (no host/port as it uses the inverter's connection)
+STEP_DC_CHARGER_CONFIG_SCHEMA = vol.Schema(
+    {
+        # No fields needed as it shares the inverter's slave ID
+    }
+)
 ```
 
-#### 3. Update `INVERTER_INTEGRATION_SENSORS`
+### 3. Config Flow Class Modifications
+
+The `SigenergyConfigFlow` class needs to be updated to handle the multi-step flow:
 
 ```python
-INVERTER_INTEGRATION_SENSORS = [
-    SigenergyCalculations.SigenergySensorEntityDescription(
-        key="inverter_accumulated_pv_energy",
-        name="Accumulated PV Energy",
-        device_class=SensorDeviceClass.ENERGY,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        state_class=SensorStateClass.TOTAL,
-        source_key="inverter_pv_power",  # Add this
-        # Remove or comment out the hardcoded source_entity_id
-        # source_entity_id="sensor.sigen_inverter_pv_power",
-        round_digits=3,
-        max_sub_interval=timedelta(seconds=30),
-    ),
-]
-```
+class SigenergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Sigenergy ESS."""
 
-### Changes to `sensor.py`
+    VERSION = 1
 
-#### 1. Create Entity Registry and Lookup Function
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        self._data = {}
+        self._plants = {}
+        self._inverters = {}
 
-Add the following code at the beginning of `async_setup_entry`:
-
-```python
-async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up the Sigenergy sensor platform."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    entities = []
-    
-    # Create an entity registry to track created entity IDs
-    entity_registry = {}  # Format: {(device_type, device_id): {key: entity_id}}
-    
-    # Helper function to get source entity ID
-    def get_source_entity_id(device_type, device_id, source_key):
-        """Get the source entity ID for an integration sensor."""
-        device_key = (device_type, device_id)
-        if device_key in entity_registry and source_key in entity_registry[device_key]:
-            return entity_registry[device_key][source_key]
-        _LOGGER.warning(
-            "Could not find source entity with key %s for device type %s, device ID %s",
-            source_key, device_type, device_id
-        )
-        return None
-    
-    # ... rest of the function
-```
-
-#### 2. Track Entity IDs During Plant Sensor Creation
-
-Modify the plant sensor creation code:
-
-```python
-# Add plant sensors
-for description in SS.PLANT_SENSORS + SCS.PLANT_SENSORS:
-    sensor_name = f"{plant_name} {description.name}"
-    entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-    _LOGGER.debug("Creating plant sensor with name: %s, expected entity_id: %s, key: %s",
-                 sensor_name, entity_id, description.key)
-    
-    # Track the entity ID
-    device_key = (DEVICE_TYPE_PLANT, None)  # Plant has no device_id
-    if device_key not in entity_registry:
-        entity_registry[device_key] = {}
-    entity_registry[device_key][description.key] = entity_id
-    
-    entities.append(
-        SigenergySensor(
-            coordinator=coordinator,
-            description=description,
-            name=sensor_name,
-            device_type=DEVICE_TYPE_PLANT,
-            device_id=None,
-            device_name=plant_name,
-        )
-    )
-```
-
-#### 3. Update Plant Integration Sensor Creation
-
-Modify the plant integration sensor creation code:
-
-```python
-# Add plant integration sensors
-for description in SCS.PLANT_INTEGRATION_SENSORS:
-    # Look up the source entity ID based on the source key
-    source_entity_id = get_source_entity_id(
-        DEVICE_TYPE_PLANT,
-        None,  # Plant has no device_id
-        description.source_key
-    )
-    
-    if source_entity_id:
-        _LOGGER.debug("Creating plant integration sensor with source entity ID: %s", source_entity_id)
-        entities.append(
-            SigenergyIntegrationSensor(
-                coordinator=coordinator,
-                description=description,
-                name=f"{plant_name} {description.name}",
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-                source_entity_id=source_entity_id,
-                round_digits=description.round_digits,
-                max_sub_interval=description.max_sub_interval,
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle the initial step - device type selection."""
+        # Load existing plants and inverters
+        await self._async_load_plants()
+        
+        # If no plants exist, go directly to plant configuration
+        if not self._plants and user_input is None:
+            return await self.async_step_plant_config()
+            
+        # Otherwise, show device type selection
+        return await self.async_step_device_type(user_input)
+        
+    async def async_step_device_type(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle device type selection."""
+        if user_input is None:
+            return self.async_show_form(
+                step_id=STEP_DEVICE_TYPE,
+                data_schema=STEP_DEVICE_TYPE_SCHEMA,
             )
-        )
-    else:
-        _LOGGER.warning(
-            "Skipping integration sensor %s because source entity not found",
-            f"{plant_name} {description.name}"
-        )
+            
+        device_type = user_input["device_type"]
+        self._data[CONF_DEVICE_TYPE] = device_type
+        
+        if device_type == DEVICE_TYPE_NEW_PLANT:
+            return await self.async_step_plant_config()
+        elif device_type == DEVICE_TYPE_INVERTER:
+            return await self.async_step_select_plant()
+        elif device_type == DEVICE_TYPE_AC_CHARGER:
+            return await self.async_step_select_plant()
+        elif device_type == DEVICE_TYPE_DC_CHARGER:
+            return await self.async_step_select_plant()
+            
+        # Should never reach here
+        return self.async_abort(reason="unknown_device_type")
 ```
 
-#### 4. Track Entity IDs During Inverter Sensor Creation
-
-Modify the inverter sensor creation code:
+### 4. Plant Configuration Step
 
 ```python
-# Add inverter sensors
-for description in SS.INVERTER_SENSORS + SCS.INVERTER_SENSORS:
-    sensor_name = f"{inverter_name} {description.name}"
-    entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
+async def async_step_plant_config(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    """Handle plant configuration."""
+    errors = {}
     
-    # Track the entity ID
-    device_key = (DEVICE_TYPE_INVERTER, inverter_id)
-    if device_key not in entity_registry:
-        entity_registry[device_key] = {}
-    entity_registry[device_key][description.key] = entity_id
-    
-    entities.append(
-        SigenergySensor(
-            coordinator=coordinator,
-            description=description,
-            name=sensor_name,
-            device_type=DEVICE_TYPE_INVERTER,
-            device_id=inverter_id,
-            device_name=inverter_name,
+    if user_input is None:
+        return self.async_show_form(
+            step_id=STEP_PLANT_CONFIG,
+            data_schema=STEP_PLANT_CONFIG_SCHEMA,
         )
-    )
+    
+    # Store plant configuration
+    self._data.update(user_input)
+    
+    # Set the plant ID to the default value
+    self._data[CONF_PLANT_ID] = DEFAULT_PLANT_SLAVE_ID
+    
+    # Initialize empty lists for device IDs
+    self._data[CONF_INVERTER_SLAVE_ID] = []
+    self._data[CONF_AC_CHARGER_SLAVE_ID] = []
+    self._data[CONF_DC_CHARGER_SLAVE_ID] = []
+    
+    # Set the device type as plant
+    self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_PLANT
+    
+    # Generate a name based on the number of existing plants
+    plant_no = len(self._plants)
+    self._data[CONF_NAME] = f"Sigen{' ' if plant_no == 0 else f' {plant_no} '}Plant"
+    
+    # Create the configuration entry
+    return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
 ```
 
-#### 5. Update Inverter Integration Sensor Creation
-
-Replace the hardcoded source entity ID with the dynamic lookup:
+### 5. Plant Selection Step
 
 ```python
-# Add inverter integration sensors
-for description in SCS.INVERTER_INTEGRATION_SENSORS:
-    # Look up the source entity ID based on the source key
-    source_entity_id = get_source_entity_id(
-        DEVICE_TYPE_INVERTER,
-        inverter_id,
-        description.source_key
-    )
+async def async_step_select_plant(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    """Handle plant selection."""
+    if not self._plants:
+        # No plants available, show error
+        return self.async_abort(reason="no_plants_available")
     
-    if source_entity_id:
-        _LOGGER.debug("Creating inverter integration sensor with source entity ID: %s", source_entity_id)
-        entities.append(
-            SigenergyIntegrationSensor(
-                coordinator=coordinator,
-                description=description,
-                name=f"{inverter_name} {description.name}",
-                device_type=DEVICE_TYPE_INVERTER,
-                device_id=inverter_id,
-                device_name=inverter_name,
-                source_entity_id=source_entity_id,
-                round_digits=description.round_digits,
-                max_sub_interval=description.max_sub_interval,
-            )
+    if user_input is None:
+        # Create schema with plant selection
+        schema = vol.Schema({
+            vol.Required("plant_id"): vol.In(self._plants),
+        })
+        
+        return self.async_show_form(
+            step_id=STEP_SELECT_PLANT,
+            data_schema=schema,
         )
-    else:
-        _LOGGER.warning(
-            "Skipping integration sensor %s because source entity not found",
-            f"{inverter_name} {description.name}"
-        )
+    
+    # Store selected plant ID
+    self._data["parent_plant_id"] = user_input["plant_id"]
+    
+    # Proceed based on device type
+    device_type = self._data[CONF_DEVICE_TYPE]
+    if device_type == DEVICE_TYPE_INVERTER:
+        return await self.async_step_inverter_config()
+    elif device_type == DEVICE_TYPE_AC_CHARGER:
+        return await self.async_step_ac_charger_config()
+    elif device_type == DEVICE_TYPE_DC_CHARGER:
+        return await self.async_step_select_inverter()
+    
+    # Should never reach here
+    return self.async_abort(reason="unknown_device_type")
 ```
 
-#### 6. Track Entity IDs for PV String Sensors
-
-Add entity tracking for PV string sensors:
+### 6. Inverter Configuration Step
 
 ```python
-# Inside the PV string sensor creation loop
-for description in SS.PV_STRING_SENSORS + SCS.PV_STRING_SENSORS:
-    sensor_name = f"{pv_string_name} {description.name}"
-    entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
+async def async_step_inverter_config(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    """Handle inverter configuration."""
+    errors = {}
     
-    # Track the entity ID - use a special key format for PV strings
-    device_key = (DEVICE_TYPE_INVERTER, inverter_id, pv_idx)
-    if device_key not in entity_registry:
-        entity_registry[device_key] = {}
-    entity_registry[device_key][description.key] = entity_id
+    if user_input is None:
+        return self.async_show_form(
+            step_id=STEP_INVERTER_CONFIG,
+            data_schema=STEP_INVERTER_CONFIG_SCHEMA,
+        )
     
-    # ... rest of the PV string sensor creation code
+    # Validate slave ID
+    slave_id = user_input[CONF_SLAVE_ID]
+    if not (1 <= slave_id <= 246):
+        errors[CONF_SLAVE_ID] = "each_id_must_be_between_1_and_246"
+        return self.async_show_form(
+            step_id=STEP_INVERTER_CONFIG,
+            data_schema=STEP_INVERTER_CONFIG_SCHEMA,
+            errors=errors,
+        )
+    
+    # Store inverter configuration
+    self._data.update(user_input)
+    
+    # Set the device type as inverter
+    self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_INVERTER
+    
+    # Store the inverter slave ID as a list with a single item
+    self._data[CONF_INVERTER_SLAVE_ID] = [slave_id]
+    
+    # Generate a name for the inverter
+    plant_name = self._plants[self._data["parent_plant_id"]]
+    self._data[CONF_NAME] = f"{plant_name} Inverter {slave_id}"
+    
+    # Create the configuration entry
+    return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
 ```
 
-## Testing Considerations
+### 7. AC Charger Configuration Step
 
-After implementing these changes, we should test the integration with:
+```python
+async def async_step_ac_charger_config(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    """Handle AC charger configuration."""
+    errors = {}
+    
+    if user_input is None:
+        return self.async_show_form(
+            step_id=STEP_AC_CHARGER_CONFIG,
+            data_schema=STEP_AC_CHARGER_CONFIG_SCHEMA,
+        )
+    
+    # Validate slave ID
+    slave_id = user_input[CONF_SLAVE_ID]
+    if not (1 <= slave_id <= 246):
+        errors[CONF_SLAVE_ID] = "each_id_must_be_between_1_and_246"
+        return self.async_show_form(
+            step_id=STEP_AC_CHARGER_CONFIG,
+            data_schema=STEP_AC_CHARGER_CONFIG_SCHEMA,
+            errors=errors,
+        )
+    
+    # Store AC charger configuration
+    self._data.update(user_input)
+    
+    # Set the device type as AC charger
+    self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_AC_CHARGER
+    
+    # Store the AC charger slave ID as a list with a single item
+    self._data[CONF_AC_CHARGER_SLAVE_ID] = [slave_id]
+    
+    # Generate a name for the AC charger
+    plant_name = self._plants[self._data["parent_plant_id"]]
+    self._data[CONF_NAME] = f"{plant_name} AC Charger {slave_id}"
+    
+    # Create the configuration entry
+    return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
+```
 
-1. A single plant with a single inverter
-2. A single plant with multiple inverters
-3. Multiple plants with multiple inverters
+### 8. Inverter Selection Step (for DC Charger)
 
-This will ensure that the dynamic source entity ID assignment works correctly in all scenarios.
+```python
+async def async_step_select_inverter(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    """Handle inverter selection for DC charger."""
+    # Load inverters for the selected plant
+    await self._async_load_inverters(self._data["parent_plant_id"])
+    
+    if not self._inverters:
+        # No inverters available for this plant, show error
+        return self.async_abort(reason="no_inverters_available")
+    
+    if user_input is None:
+        # Create schema with inverter selection
+        schema = vol.Schema({
+            vol.Required("inverter_id"): vol.In(self._inverters),
+        })
+        
+        return self.async_show_form(
+            step_id=STEP_SELECT_INVERTER,
+            data_schema=schema,
+        )
+    
+    # Store selected inverter ID
+    inverter_id = user_input["inverter_id"]
+    self._data["parent_inverter_id"] = inverter_id
+    
+    # Get the inverter's slave ID
+    inverter_entry = self.hass.config_entries.async_get_entry(inverter_id)
+    slave_id = inverter_entry.data[CONF_INVERTER_SLAVE_ID][0]
+    
+    # Set the device type as DC charger
+    self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_DC_CHARGER
+    
+    # Store the DC charger slave ID (same as the inverter's)
+    self._data[CONF_DC_CHARGER_SLAVE_ID] = [slave_id]
+    
+    # Copy host and port from the inverter
+    self._data[CONF_HOST] = inverter_entry.data[CONF_HOST]
+    self._data[CONF_PORT] = inverter_entry.data[CONF_PORT]
+    
+    # Generate a name for the DC charger
+    inverter_name = self._inverters[inverter_id]
+    self._data[CONF_NAME] = f"{inverter_name} DC Charger"
+    
+    # Create the configuration entry
+    return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
+```
 
-## Benefits of the Refactoring Approach
+### 9. Helper Methods
 
-This refactoring approach offers several significant benefits that will improve the code's reliability, maintainability, and flexibility:
+```python
+async def _async_load_plants(self) -> None:
+    """Load existing plants from config entries."""
+    self._plants = {}
+    
+    for entry in self.hass.config_entries.async_entries(DOMAIN):
+        if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PLANT:
+            self._plants[entry.entry_id] = entry.data.get(CONF_NAME, f"Plant {entry.entry_id}")
 
-### 1. Elimination of Hardcoded Entity IDs
+async def _async_load_inverters(self, plant_id: str) -> None:
+    """Load existing inverters for a specific plant."""
+    self._inverters = {}
+    
+    for entry in self.hass.config_entries.async_entries(DOMAIN):
+        if (entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER and
+                entry.data.get("parent_plant_id") == plant_id):
+            self._inverters[entry.entry_id] = entry.data.get(CONF_NAME, f"Inverter {entry.entry_id}")
+```
 
-The current implementation uses hardcoded entity IDs (like "sensor.sigen_plant_pv_power") which creates several problems:
-- It assumes a specific naming convention that might change
-- It doesn't account for multiple plants with different names
-- It creates tight coupling between the sensor definitions and their implementation
+### 10. Update Strings.json and Translations
 
-By removing these hardcoded values, we make the code more adaptable to changes in naming conventions and entity structures.
+The strings.json and translations/en.json files need to be updated to include the new steps and options:
 
-### 2. Dynamic Source Entity Assignment
+```json
+{
+  "config": {
+    "step": {
+      "device_type": {
+        "title": "Select Device Type",
+        "description": "Choose the type of Sigenergy device you want to add.",
+        "data": {
+          "device_type": "Device Type"
+        }
+      },
+      "plant_config": {
+        "title": "Configure Sigenergy Plant",
+        "description": "Set up a new Sigenergy Energy Storage System plant.",
+        "data": {
+          "host": "Host (IP address of the main Sigenergy inverter)",
+          "port": "Port (default is 502)"
+        }
+      },
+      "select_plant": {
+        "title": "Select Plant",
+        "description": "Choose which Sigenergy plant this device belongs to.",
+        "data": {
+          "plant_id": "Plant"
+        }
+      },
+      "inverter_config": {
+        "title": "Configure Sigenergy Inverter",
+        "description": "Set up a Sigenergy inverter connected to the selected plant.",
+        "data": {
+          "host": "Host (IP address of the inverter)",
+          "port": "Port (default is 502)",
+          "slave_id": "Device ID (between 1 and 246)"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Configure Sigenergy AC Charger",
+        "description": "Set up a Sigenergy AC charger connected to the selected plant.",
+        "data": {
+          "host": "Host (IP address of the AC charger)",
+          "port": "Port (default is 502)",
+          "slave_id": "Device ID (between 1 and 246)"
+        }
+      },
+      "select_inverter": {
+        "title": "Select Inverter",
+        "description": "Choose which inverter this DC charger is connected to.",
+        "data": {
+          "inverter_id": "Inverter"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Sigenergy system. Please check the host and port.",
+      "unknown": "An unexpected error occurred.",
+      "invalid_integer_value": "Invalid integer value.",
+      "each_id_must_be_between_1_and_246": "Device ID must be between 1 and 246.",
+      "duplicate_ids_found": "Duplicate IDs found.",
+      "dc_charger_requires_inverter": "DC charger IDs must correspond to configured inverter IDs.",
+      "ac_charger_conflicts_inverter": "AC charger IDs must be different from inverter IDs."
+    },
+    "abort": {
+      "already_configured": "This Sigenergy device is already configured.",
+      "no_plants_available": "No Sigenergy plants available. Please add a plant first.",
+      "no_inverters_available": "No inverters available for this plant. Please add an inverter first."
+    }
+  }
+}
+```
 
-The new approach dynamically assigns the correct source entity ID based on:
-- The specific plant or inverter the integration sensor is associated with
-- The actual entity IDs that were created during setup
-- A logical relationship defined by the `source_key`
+## Implementation Steps
 
-This ensures that integration sensors always reference the correct source entity, even when there are multiple plants or inverters with different naming patterns.
+1. Remove the STEP_USER_DATA_SCHEMA from config_flow.py
+2. Verify that the async_step_user method correctly handles the flow based on whether plants exist
+3. Ensure the plant_id is always set to DEFAULT_PLANT_SLAVE_ID in the plant configuration step
+4. Update the strings.json and translations/en.json files to remove any references to plant_id (if any)
+5. Update the const.py file with the new constants
+6. Modify the config_flow.py file to implement the multi-step flow
+7. Test each flow path to ensure it works correctly
 
-### 3. Better Support for Multiple Plants and Inverters
+## Potential Challenges and Solutions
 
-The refactored code properly handles scenarios with multiple plants and inverters by:
-- Tracking entity IDs by device type and device ID
-- Looking up the correct source entity based on the specific device instance
-- Maintaining proper entity relationships regardless of how many devices are present
+1. **Challenge**: Ensuring backward compatibility with existing configurations.
+   **Solution**: The refactored code should still be able to handle existing configurations during updates and options flows.
 
-This makes the integration more robust in complex installations with multiple Sigenergy devices.
+2. **Challenge**: Handling the relationship between plants, inverters, and chargers.
+   **Solution**: Store parent-child relationships in the configuration data to maintain the hierarchy.
 
-### 4. Improved Maintainability
+3. **Challenge**: Validating that DC chargers are properly associated with inverters.
+   **Solution**: Implement validation in the DC charger configuration step to ensure the selected inverter exists.
 
-The key-based lookup system makes the code more maintainable in several ways:
-- Changes to entity naming conventions only need to be updated in one place
-- The relationship between integration sensors and their sources is clearly defined
-- The code is more self-documenting, with explicit relationships between entities
+## Conclusion
 
-This reduces the likelihood of errors when making future changes to the codebase.
+This refactoring plan provides a comprehensive approach to updating the Sigenergy integration's configuration flow to meet the requirements. The multi-step flow will guide users through the process of adding different types of devices, ensuring that all necessary information is collected while maintaining the relationships between devices.
 
-### 5. Enhanced Error Handling
-
-The new implementation includes better error handling:
-- Appropriate logging when source entities cannot be found
-- Skipping integration sensors when their source entities are missing
-- Clear diagnostic information to help troubleshoot issues
-
-This makes the integration more robust and easier to debug.
-
-### 6. Clearer Relationship Definition
-
-The use of `source_key` makes the relationship between integration sensors and their source entities more explicit:
-- It's clear which source entity each integration sensor depends on
-- The relationship is defined at the sensor definition level
-- The implementation details are separated from the relationship definition
-
-This separation of concerns makes the code easier to understand and maintain.
+Most of the required changes are already implemented in the codebase, but we need to make a few adjustments to fully meet the requirements:
+1. Remove the STEP_USER_DATA_SCHEMA and update the async_step_user method
+2. Ensure plant_id is always set to DEFAULT_PLANT_SLAVE_ID
+3. Update any references to plant_id in the translation files

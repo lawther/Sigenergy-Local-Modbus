@@ -20,11 +20,11 @@ from pymodbus.client.mixin import ModbusClientMixin
 
 from .const import (
     CONF_AC_CHARGER_COUNT,
-    CONF_AC_CHARGER_SLAVE_IDS,
+    CONF_AC_CHARGER_SLAVE_ID,
     CONF_DC_CHARGER_COUNT,
-    CONF_DC_CHARGER_SLAVE_IDS,
+    CONF_DC_CHARGER_SLAVE_ID,
     CONF_INVERTER_COUNT,
-    CONF_INVERTER_SLAVE_IDS,
+    CONF_INVERTER_SLAVE_ID,
     CONF_PLANT_ID,
     CONF_SLAVE_ID,
     DEFAULT_AC_CHARGER_COUNT,
@@ -92,13 +92,13 @@ class SigenergyModbusHub:
         
         # Get specific slave IDs if configured
         self.inverter_slave_ids = config_entry.data.get(
-            CONF_INVERTER_SLAVE_IDS, list(range(1, self.inverter_count + 1))
+            CONF_INVERTER_SLAVE_ID, list(range(1, self.inverter_count + 1))
         )
         self.ac_charger_slave_ids = config_entry.data.get(
-            CONF_AC_CHARGER_SLAVE_IDS, list(range(self.inverter_count + 1, self.inverter_count + self.ac_charger_count + 1))
+            CONF_AC_CHARGER_SLAVE_ID, list(range(self.inverter_count + 1, self.inverter_count + self.ac_charger_count + 1))
         )
         self.dc_charger_slave_ids = config_entry.data.get(
-            CONF_DC_CHARGER_SLAVE_IDS, list(range(self.inverter_count + self.ac_charger_count + 1,
+            CONF_DC_CHARGER_SLAVE_ID, list(range(self.inverter_count + self.ac_charger_count + 1,
                                                  self.inverter_count + self.ac_charger_count + self.dc_charger_count + 1))
         )
 
