@@ -24,6 +24,7 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import callback, State
+from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 from homeassistant.util import dt as dt_util
@@ -441,6 +442,28 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         )
         self._last_valid_state = self._state
 
+    def _setup_midnight_reset(self) -> None:
+        """Schedule reset at midnight."""
+        now = dt_util.now()
+        midnight = (now + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        
+        @callback
+        def _handle_midnight(current_time):
+            """Handle midnight reset."""
+            self._state = Decimal(0)
+            self._last_valid_state = self._state
+            self.async_write_ha_state()
+            self._setup_midnight_reset()  # Schedule next reset
+            
+        # Schedule the reset
+        self.async_on_remove(
+            async_track_point_in_time(
+                self.hass, _handle_midnight, midnight
+            )
+        )
+
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
         await super().async_added_to_hass()
@@ -484,6 +507,10 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         # Check source entity and log potential alternatives
         self._check_source_entity()
         
+        # Set up midnight reset for daily sensors
+        if "daily" in self.entity_description.key:
+            self._setup_midnight_reset()
+
         # Register to track source sensor state changes
         self.async_on_remove(
             async_track_state_change_event(
@@ -834,6 +861,16 @@ class SigenergyCalculatedSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
             source_key="plant_grid_import_power",  # Key matches the calculated sensor
+            round_digits=3,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_daily_grid_export_energy",
+            name="Daily Grid Export Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            source_key="plant_grid_export_power",  # Key matches the grid export power sensor
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
