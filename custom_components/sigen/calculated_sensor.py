@@ -874,6 +874,36 @@ class SigenergyCalculatedSensors:
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_daily_grid_export_energy",
+            name="Daily Grid Export Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            source_key="plant_grid_export_power",  # Key matches the grid export power sensor
+            round_digits=3,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_daily_grid_import_energy",
+            name="Daily Grid Import Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            source_key="plant_grid_import_power",  # Key matches the grid import power sensor
+            round_digits=3,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_daily_pv_energy",
+            name="Daily PV Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
+            round_digits=3,
+            max_sub_interval=timedelta(seconds=30),
+        ),
     ]
     
     # Add the inverter integration sensors list
