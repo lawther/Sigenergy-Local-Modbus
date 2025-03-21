@@ -804,12 +804,12 @@ class SigenergyModbusHub:
             
             # Try multiple approaches for this specific register
             approaches = [
-                # Try with offset addressing first (40029 -> 28)
-                {"function": "write_registers", "address": register_def.address - 40001, "values": [int(value)]},
-                {"function": "write_register", "address": register_def.address - 40001, "value": int(value)},
-                # Then try with direct addressing
+                # Try with direct addressing
                 {"function": "write_registers", "address": register_def.address, "values": [int(value)]},
                 {"function": "write_register", "address": register_def.address, "value": int(value)},
+                # Then try with offset addressing first (40029 -> 28)
+                {"function": "write_registers", "address": register_def.address - 40001, "values": [int(value)]},
+                {"function": "write_register", "address": register_def.address - 40001, "value": int(value)},
             ]
             
             last_error = None
@@ -851,6 +851,60 @@ class SigenergyModbusHub:
                 raise SigenergyModbusError(f"Error writing plant_remote_ems_enable: {last_error}")
             else:
                 raise SigenergyModbusError(f"Error writing plant_remote_ems_enable: {last_error}")
+        
+        # Special handling for U32 registers that need 2 registers to be written
+        elif register_def.data_type == DataType.U32 or register_def.data_type == DataType.S32:
+            _LOGGER.debug("Special handling for U32/S32 register %s", register_name)
+            
+            encoded_values = self._encode_value(
+                value=value,
+                data_type=register_def.data_type,
+                gain=register_def.gain,
+            )
+            
+            _LOGGER.debug("Encoded values for %s: %s", register_name, encoded_values)
+            
+            # Try multiple addressing approaches for U32/S32 registers
+            approaches = [
+                # Try with different addressing schemes
+                {"address": register_def.address},          # Direct addressing (e.g., 40036)
+                {"address": register_def.address - 40001},  # Modbus standard offset (e.g., 40036 -> 35)
+                {"address": register_def.address - 40000},  # Alternative offset (e.g., 40036 -> 36)
+                {"address": register_def.address % 10000},  # Another common convention (e.g., 40036 -> 36)
+            ]
+            
+            last_error = None
+            for i, approach in enumerate(approaches):
+                try:
+                    _LOGGER.debug(
+                        "Attempt %d for %s: Using address %s with values %s",
+                        i+1, register_name, approach["address"], encoded_values
+                    )
+                    
+                    async with self.lock:
+                        result = await self.client.write_registers(
+                            address=approach["address"],
+                            values=encoded_values,
+                            slave=self.plant_id
+                        )
+                            
+                        if not result.isError():
+                            _LOGGER.debug("Success with approach %d for %s at address %s", 
+                                        i+1, register_name, approach["address"])
+                            return  # Success, exit early
+                        
+                        _LOGGER.debug("Error with approach %d: %s", i+1, result)
+                        last_error = result
+                        
+                except Exception as ex:
+                    _LOGGER.debug("Exception with approach %d: %s", i+1, ex)
+                    last_error = ex
+            
+            # If we've tried all approaches and still have an error
+            if isinstance(last_error, Exception):
+                raise SigenergyModbusError(f"Error writing {register_name}: {last_error}")
+            else:
+                raise SigenergyModbusError(f"Error writing {register_name}: {last_error}")
         
         # Normal handling for other registers
         else:
