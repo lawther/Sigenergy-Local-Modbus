@@ -37,6 +37,8 @@ from .const import (
     STEP_DC_CHARGER_CONFIG,
     STEP_SELECT_PLANT,
     STEP_SELECT_INVERTER,
+    DEFAULT_READ_ONLY,
+    CONF_READ_ONLY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,6 +62,7 @@ STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Required(CONF_INVERTER_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
+        vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool,
     }
 )
 

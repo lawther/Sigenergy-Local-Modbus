@@ -20,7 +20,8 @@
           "port": "Port (default is 502)",
           "inverter_slave_ids": "Inverter Device IDs (comma-separated when multiple. Default is 1)",
           "ac_charger_slave_ids": "AC Charger Device IDs (comma-separated when multiple. Default is empty for no AC charger)",
-          "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)"
+          "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)",
+          "read_only": "Read-Only Mode (prevents any writes to the Sigenergy system)"
         }
       },
       "select_plant": {
@@ -74,7 +75,8 @@
       "dc_charger_requires_inverter": "DC charger IDs must correspond to configured inverter IDs.",
       "ac_charger_conflicts_inverter": "AC charger IDs must be different from inverter IDs.",
       "no_plants_available": "No plants are available. Please add a plant first.",
-      "no_inverters_available": "No inverters are available on the selected plant. Please add an inverter first."
+      "no_inverters_available": "No inverters are available on the selected plant. Please add an inverter first.",
+      "read_only_mode_error": "Cannot write to the Sigenergy system while in read-only mode."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured.",

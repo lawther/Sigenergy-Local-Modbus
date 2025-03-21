@@ -41,6 +41,8 @@ from .const import (
     DC_CHARGER_RUNNING_INFO_REGISTERS,
     DC_CHARGER_PARAMETER_REGISTERS,
     RegisterType,
+    DEFAULT_READ_ONLY,
+    CONF_READ_ONLY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -101,6 +103,9 @@ class SigenergyModbusHub:
             CONF_DC_CHARGER_SLAVE_ID, list(range(self.inverter_count + self.ac_charger_count + 1,
                                                  self.inverter_count + self.ac_charger_count + self.dc_charger_count + 1))
         )
+
+        # Read-only mode setting
+        self.read_only = config_entry.data.get(CONF_READ_ONLY, DEFAULT_READ_ONLY)
 
         # Initialize register support status
         self.plant_registers_probed = False
@@ -787,6 +792,10 @@ class SigenergyModbusHub:
         value: Union[int, float, str]
     ) -> None:
         """Write a plant parameter."""
+        # Check if read-only mode is enabled
+        if self.read_only:
+            raise SigenergyModbusError("Cannot write parameter while in read-only mode")
+            
         if register_name not in PLANT_PARAMETER_REGISTERS:
             raise SigenergyModbusError(f"Unknown plant parameter: {register_name}")
         
@@ -938,6 +947,10 @@ class SigenergyModbusHub:
         value: Union[int, float, str]
     ) -> None:
         """Write an inverter parameter."""
+        # Check if read-only mode is enabled
+        if self.read_only:
+            raise SigenergyModbusError("Cannot write parameter while in read-only mode")
+            
         if register_name not in INVERTER_PARAMETER_REGISTERS:
             raise SigenergyModbusError(f"Unknown inverter parameter: {register_name}")
         
@@ -971,6 +984,10 @@ class SigenergyModbusHub:
         value: Union[int, float, str]
     ) -> None:
         """Write an AC charger parameter."""
+        # Check if read-only mode is enabled
+        if self.read_only:
+            raise SigenergyModbusError("Cannot write parameter while in read-only mode")
+            
         if register_name not in AC_CHARGER_PARAMETER_REGISTERS:
             raise SigenergyModbusError(f"Unknown AC charger parameter: {register_name}")
         
@@ -1004,6 +1021,10 @@ class SigenergyModbusHub:
         value: Union[int, float, str]
     ) -> None:
         """Write a DC charger parameter."""
+        # Check if read-only mode is enabled
+        if self.read_only:
+            raise SigenergyModbusError("Cannot write parameter while in read-only mode")
+            
         if register_name not in DC_CHARGER_PARAMETER_REGISTERS:
             raise SigenergyModbusError(f"Unknown DC charger parameter: {register_name}")
         

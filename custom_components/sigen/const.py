@@ -53,6 +53,8 @@ STEP_SELECT_INVERTER = "select_inverter"
 # Configuration constants
 CONF_PARENT_PLANT_ID = "parent_plant_id"
 CONF_PARENT_INVERTER_ID = "parent_inverter_id"
+CONF_PLANT_ID = "plant_id"
+CONF_READ_ONLY = "read_only"
 CONF_SLAVE_ID = "slave_id"
 
 # Default values
@@ -63,6 +65,7 @@ DEFAULT_SCAN_INTERVAL = 5
 DEFAULT_INVERTER_COUNT = 1
 DEFAULT_AC_CHARGER_COUNT = 0
 DEFAULT_DC_CHARGER_COUNT = 0
+DEFAULT_READ_ONLY = True  # Default to read-only mode
 
 # Platforms
 PLATFORMS = ["sensor", "switch", "select", "number"]
