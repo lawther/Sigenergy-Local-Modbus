@@ -298,7 +298,7 @@ class SigenergyCalculations:
 
     @staticmethod
     def calculate_plant_consumed_power(value, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
-        _LOGGER.warning("[CS][Plant Consumed] Method called with value=%s", value)
+        _LOGGER.debug("[CS][Plant Consumed] Method called with value=%s", value)
         """Calculate plant consumed power (household/building consumption).
         
         Formula: PV Power + Grid Import Power - Grid Export Power - Plant Battery Power
