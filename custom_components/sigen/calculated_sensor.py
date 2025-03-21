@@ -830,7 +830,6 @@ class SigenergyCalculatedSensors:
             name="Power",
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
-            suggested_display_precision=2,
             state_class=SensorStateClass.MEASUREMENT,
             value_fn=SigenergyCalculations.calculate_pv_power,
             extra_fn_data=True,
