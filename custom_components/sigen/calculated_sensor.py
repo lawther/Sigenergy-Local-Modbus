@@ -386,7 +386,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             else max_sub_interval
         )
         _LOGGER.debug("[Callback] Initializing integration sensor %s with max_sub_interval=%s",
-                    self.entity_id, self._max_sub_interval)
+                    name, self._max_sub_interval)
         self._max_sub_interval_exceeded_callback = lambda *args: None
         self._cancel_max_sub_interval_exceeded_callback = self._max_sub_interval_exceeded_callback
         self._last_integration_time = dt_util.utcnow()
