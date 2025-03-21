@@ -296,6 +296,47 @@ class SigenergyCalculations:
             # Fallback to float calculation
             return -grid_power if grid_power < 0 else 0
 
+    @staticmethod
+    def calculate_plant_consumed_power(value, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
+        """Calculate plant consumed power (household/building consumption).
+        
+        Formula: PV Power + Grid Import Power - Grid Export Power - Plant Battery Power
+        """
+        if coordinator_data is None or "plant" not in coordinator_data:
+            _LOGGER.debug("[CS][Plant Consumed] No plant data available")
+            return None
+            
+        # Get the required values from coordinator data
+        plant_data = coordinator_data["plant"]
+        
+        # Get PV power
+        pv_power = plant_data.get("plant_photovoltaic_power")
+        
+        # Get grid active power and calculate import/export
+        grid_power = plant_data.get("plant_grid_sensor_active_power")
+        
+        # Get battery power
+        battery_power = plant_data.get("plant_ess_power")
+        
+        # Validate inputs
+        if pv_power is None or grid_power is None or battery_power is None:
+            _LOGGER.debug("[CS][Plant Consumed] Missing required power values: PV=%s, Grid=%s, Battery=%s",
+                        pv_power, grid_power, battery_power)
+            return None
+        
+        # Calculate grid import and export power
+        # Grid power is positive when importing, negative when exporting
+        grid_import = max(0, grid_power)
+        grid_export = max(0, -grid_power)
+        
+        # Calculate plant consumed power
+        # Note: battery_power is positive when charging, negative when discharging
+        consumed_power = pv_power + grid_import - grid_export - battery_power
+        
+        _LOGGER.debug("[CS][Plant Consumed] Calculated power: %s kW (PV=%s, Grid Import=%s, Grid Export=%s, Battery=%s)",
+                    consumed_power, pv_power, grid_import, grid_export, battery_power)
+        
+        return consumed_power
 
 class IntegrationTrigger(Enum):
     """Trigger type for integration calculations."""
@@ -807,6 +848,16 @@ class SigenergyCalculatedSensors:
             value_fn=SigenergyCalculations.calculate_grid_export_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
         ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_consumed_power",
+            name="Consumed Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:home-lightning-bolt",
+            value_fn=SigenergyCalculations.calculate_plant_consumed_power,
+            extra_fn_data=True,  # Pass coordinator data to value_fn
+        ),
     ]
 
     INVERTER_SENSORS = [
@@ -875,16 +926,6 @@ class SigenergyCalculatedSensors:
             max_sub_interval=timedelta(seconds=30),
         ),
         SigenergyCalculations.SigenergySensorEntityDescription(
-            key="plant_daily_grid_export_energy",
-            name="Daily Grid Export Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="plant_grid_export_power",  # Key matches the grid export power sensor
-            round_digits=3,
-            max_sub_interval=timedelta(seconds=30),
-        ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
             key="plant_daily_grid_import_energy",
             name="Daily Grid Import Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -901,6 +942,26 @@ class SigenergyCalculatedSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
             source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
+            round_digits=3,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_accumulated_consumed_energy",
+            name="Accumulated Consumed Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL,
+            source_key="plant_consumed_power",  # Key of the source entity to use
+            round_digits=3,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="plant_daily_consumed_energy",
+            name="Daily Consumed Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            source_key="plant_consumed_power",  # Key of the source entity to use
             round_digits=3,
             max_sub_interval=timedelta(seconds=30),
         ),
