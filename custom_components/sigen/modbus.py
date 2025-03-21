@@ -5,7 +5,7 @@ import asyncio
 import logging
 import struct
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
@@ -18,6 +18,7 @@ from pymodbus.exceptions import ConnectionException, ModbusException
 from pymodbus.payload import BinaryPayloadBuilder, BinaryPayloadDecoder
 from pymodbus.client.mixin import ModbusClientMixin
 
+from .const import ModbusRegisterDefinition
 from .const import (
     CONF_AC_CHARGER_COUNT,
     CONF_AC_CHARGER_SLAVE_ID,
@@ -25,6 +26,7 @@ from .const import (
     CONF_DC_CHARGER_SLAVE_ID,
     CONF_INVERTER_COUNT,
     CONF_INVERTER_SLAVE_ID,
+    CONF_INVERTER_CONNECTIONS,
     CONF_PLANT_ID,
     CONF_SLAVE_ID,
     DEFAULT_AC_CHARGER_COUNT,
@@ -79,12 +81,17 @@ class SigenergyModbusHub:
     ) -> None:
         """Initialize the Modbus hub."""
         self.hass = hass
-        self.host = host
-        self.port = port
-        self.client: Optional[AsyncModbusTcpClient] = None
-        self.lock = asyncio.Lock()
-        self.connected = False
         self.config_entry = config_entry
+        
+        # Dictionary to store Modbus clients for different connections
+        # Key is (host, port) tuple, value is the client instance
+        self._clients: Dict[Tuple[str, int], AsyncModbusTcpClient] = {}
+        self._locks: Dict[Tuple[str, int], asyncio.Lock] = {}
+        self._connected: Dict[Tuple[str, int], bool] = {}
+        
+        # Store default connection for plant
+        self._plant_host = host
+        self._plant_port = port
         
         # Get slave IDs from config
         self.plant_id = config_entry.data.get(CONF_PLANT_ID, DEFAULT_PLANT_SLAVE_ID)
@@ -92,10 +99,13 @@ class SigenergyModbusHub:
         self.ac_charger_count = config_entry.data.get(CONF_AC_CHARGER_COUNT, DEFAULT_AC_CHARGER_COUNT)
         self.dc_charger_count = config_entry.data.get(CONF_DC_CHARGER_COUNT, DEFAULT_DC_CHARGER_COUNT)
         
-        # Get specific slave IDs if configured
+        # Get specific slave IDs and their connection details
         self.inverter_slave_ids = config_entry.data.get(
             CONF_INVERTER_SLAVE_ID, list(range(1, self.inverter_count + 1))
         )
+        self.inverter_connections = config_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
+        
+        # Other slave IDs
         self.ac_charger_slave_ids = config_entry.data.get(
             CONF_AC_CHARGER_SLAVE_ID, list(range(self.inverter_count + 1, self.inverter_count + self.ac_charger_count + 1))
         )
@@ -113,38 +123,73 @@ class SigenergyModbusHub:
         self.ac_charger_registers_probed = set()
         self.dc_charger_registers_probed = set()
 
-    async def async_connect(self) -> None:
-        """Connect to the Modbus device."""
-        if self.connected:
-            return
+    def _get_connection_key(self, slave_id: int) -> Tuple[str, int]:
+        """Get the connection key (host, port) for a slave ID."""
+        # For the plant, use the plant's connection details
+        if slave_id == self.plant_id:
+            return (self._plant_host, self._plant_port)
+            
+        # For inverters, look up their connection details
+        for name, details in self.inverter_connections.items():
+            if details.get(CONF_SLAVE_ID) == slave_id:
+                return (details[CONF_HOST], details[CONF_PORT])
+                
+        # If no specific connection found, use the plant's connection details as default
+        return (self._plant_host, self._plant_port)
 
-        try:
-            async with self.lock:
-                self.client = AsyncModbusTcpClient(
-                    host=self.host,
-                    port=self.port,
-                    timeout=10,
-                    retries=3,
-                    # Removed retry_on_empty parameter as it's not supported
-                )
+    async def _get_client(self, slave_id: int) -> AsyncModbusTcpClient:
+        """Get or create a Modbus client for the given slave ID."""
+        key = self._get_connection_key(slave_id)
+        
+        if key not in self._clients or not self._connected.get(key, False):
+            if key not in self._locks:
+                self._locks[key] = asyncio.Lock()
                 
-                connected = await self.client.connect()
-                if not connected:
-                    raise SigenergyModbusError(f"Failed to connect to {self.host}:{self.port}")
-                
-                self.connected = True
-                _LOGGER.info("Connected to Sigenergy system at %s:%s", self.host, self.port)
-        except Exception as ex:
-            self.connected = False
-            raise SigenergyModbusError(f"Error connecting to Sigenergy system: {ex}") from ex
+            async with self._locks[key]:
+                if key not in self._clients or not self._connected.get(key, False):
+                    host, port = key
+                    self._clients[key] = AsyncModbusTcpClient(
+                        host=host,
+                        port=port,
+                        timeout=10,
+                        retries=3
+                    )
+                    
+                    connected = await self._clients[key].connect()
+                    if not connected:
+                        raise SigenergyModbusError(f"Failed to connect to {host}:{port}")
+                    
+                    self._connected[key] = True
+                    _LOGGER.info("Connected to Sigenergy system at %s:%s", host, port)
+        
+        return self._clients[key]
+    async def async_connect(self, slave_id: Optional[int] = None) -> None:
+        """Connect to the Modbus device.
+        
+        If slave_id is provided, connects to that specific device.
+        If slave_id is None, connects to the plant (default device).
+        """
+        # Cast to help type checker and ensure we always have an int
+        actual_slave_id: int = self.plant_id if slave_id is None else slave_id
+            
+        key = self._get_connection_key(actual_slave_id)
+        await self._get_client(actual_slave_id)
+        
+        if not self._connected.get(key, False):
+            host, port = key
+            raise SigenergyModbusError(
+                f"Failed to establish connection to device {actual_slave_id} at {host}:{port}"
+            )
 
     async def async_close(self) -> None:
-        """Close the Modbus connection."""
-        if self.client and self.connected:
-            async with self.lock:
-                self.client.close()
-                self.connected = False
-                _LOGGER.info("Disconnected from Sigenergy system at %s:%s", self.host, self.port)
+        """Close all Modbus connections."""
+        for key, client in self._clients.items():
+            if client and self._connected.get(key, False):
+                host, port = key
+                async with self._locks[key]:
+                    client.close()
+                    self._connected[key] = False
+                    _LOGGER.info("Disconnected from Sigenergy system at %s:%s", host, port)
     
     def _validate_register_response(self, result: Any, register_def: ModbusRegisterDefinition) -> bool:
         """Validate if register response indicates support for the register."""
@@ -207,22 +252,22 @@ class SigenergyModbusHub:
         register_defs: Dict[str, ModbusRegisterDefinition]
     ) -> None:
         """Probe registers to determine which ones are supported."""
-        if not self.connected:
-            await self.async_connect()
+        client = await self._get_client(slave_id)
+        key = self._get_connection_key(slave_id)
             
         for name, register in register_defs.items():
             try:
                 # Get raw result from appropriate read method
-                async with self.lock:
+                async with self._locks[key]:
                     with _suppress_pymodbus_logging():
                         if register.register_type == RegisterType.READ_ONLY:
-                            result = await self.client.read_input_registers(
+                            result = await client.read_input_registers(
                                 address=register.address,
                                 count=register.count,
                                 slave=slave_id
                             )
                         elif register.register_type == RegisterType.HOLDING:
-                            result = await self.client.read_holding_registers(
+                            result = await client.read_holding_registers(
                                 address=register.address,
                                 count=register.count,
                                 slave=slave_id
@@ -261,6 +306,7 @@ class SigenergyModbusHub:
                         str(ex)
                     )
                 register.is_supported = False
+                self._connected[key] = False
 
     async def async_read_registers(
         self,
@@ -270,25 +316,26 @@ class SigenergyModbusHub:
         register_type: RegisterType
     ) -> Optional[List[int]]:
         """Read registers from the Modbus device."""
-        if not self.connected:
-            await self.async_connect()
-
         try:
-            if register_type not in [RegisterType.READ_ONLY, RegisterType.HOLDING]:
-                raise SigenergyModbusError(f"Register type {register_type} is not readable")
+            client = await self._get_client(slave_id)
+            key = self._get_connection_key(slave_id)
 
-            async with self.lock:
+            async with self._locks[key]:
                 with _suppress_pymodbus_logging():
-                    result = await self.client.read_input_registers(
+                    result = await client.read_input_registers(
                         address=address, count=count, slave=slave_id
-                    ) if register_type == RegisterType.READ_ONLY else await self.client.read_holding_registers(
+                    ) if register_type == RegisterType.READ_ONLY else await client.read_holding_registers(
                         address=address, count=count, slave=slave_id
                     )
                     
-                    return None if result.isError() else result.registers
+                    if result.isError():
+                        self._connected[key] = False
+                        return None
+                    return result.registers
 
         except ConnectionException as ex:
-            self.connected = False
+            key = self._get_connection_key(slave_id)
+            self._connected[key] = False
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
         except ModbusException as ex:
             raise SigenergyModbusError(f"Modbus error: {ex}") from ex
@@ -296,18 +343,18 @@ class SigenergyModbusHub:
             raise SigenergyModbusError(f"Error reading registers: {ex}") from ex
 
     async def async_write_register(
-        self, 
-        slave_id: int, 
-        address: int, 
-        value: int, 
+        self,
+        slave_id: int,
+        address: int,
+        value: int,
         register_type: RegisterType
     ) -> None:
         """Write a single register to the Modbus device."""
-        if not self.connected:
-            await self.async_connect()
-
         try:
-            async with self.lock:
+            client = await self._get_client(slave_id)
+            key = self._get_connection_key(slave_id)
+
+            async with self._locks[key]:
                 if register_type in [RegisterType.HOLDING, RegisterType.WRITE_ONLY]:
                     # Try multiple approaches to write to the register
                     approaches = []
@@ -338,13 +385,13 @@ class SigenergyModbusHub:
                             )
                             
                             if approach["function"] == "write_registers":
-                                result = await self.client.write_registers(
+                                result = await client.write_registers(
                                     address=approach["address"],
                                     values=approach["values"],
                                     slave=slave_id
                                 )
                             else:  # write_register
-                                result = await self.client.write_register(
+                                result = await client.write_register(
                                     address=approach["address"],
                                     value=approach["value"],
                                     slave=slave_id
@@ -368,6 +415,7 @@ class SigenergyModbusHub:
                         return
                         
                     # If we've tried all approaches and still have an error
+                    self._connected[key] = False
                     if last_error:
                         _LOGGER.debug("All write attempts failed. Final error: %s", last_error)
                         if isinstance(last_error, Exception):
@@ -383,7 +431,8 @@ class SigenergyModbusHub:
                         f"Register type {register_type} is not writable"
                     )
         except ConnectionException as ex:
-            self.connected = False
+            key = self._get_connection_key(slave_id)
+            self._connected[key] = False
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
         except ModbusException as ex:
             raise SigenergyModbusError(f"Modbus error: {ex}") from ex
@@ -391,18 +440,18 @@ class SigenergyModbusHub:
             raise SigenergyModbusError(f"Error writing register: {ex}") from ex
 
     async def async_write_registers(
-        self, 
-        slave_id: int, 
-        address: int, 
-        values: List[int], 
+        self,
+        slave_id: int,
+        address: int,
+        values: List[int],
         register_type: RegisterType
     ) -> None:
         """Write multiple registers to the Modbus device."""
-        if not self.connected:
-            await self.async_connect()
-
         try:
-            async with self.lock:
+            client = await self._get_client(slave_id)
+            key = self._get_connection_key(slave_id)
+
+            async with self._locks[key]:
                 if register_type in [RegisterType.HOLDING, RegisterType.WRITE_ONLY]:
                     # For Modbus addresses starting with 4xxxx, some devices expect the offset (address - 40001)
                     if address >= 40001:
@@ -412,7 +461,7 @@ class SigenergyModbusHub:
                             "Writing to registers starting at %s (offset address %s) with values %s for slave %s",
                             address, offset_address, values, slave_id
                         )
-                        result = await self.client.write_registers(
+                        result = await client.write_registers(
                             address=offset_address, values=values, slave=slave_id
                         )
                     else:
@@ -420,11 +469,12 @@ class SigenergyModbusHub:
                             "Writing to registers starting at %s with values %s for slave %s",
                             address, values, slave_id
                         )
-                        result = await self.client.write_registers(
+                        result = await client.write_registers(
                             address=address, values=values, slave=slave_id
                         )
                     
                     if result.isError():
+                        self._connected[key] = False
                         _LOGGER.debug("Error response from write_registers: %s", result)
                         raise SigenergyModbusError(
                             f"Error writing registers at address {address}: {result}"
@@ -436,7 +486,8 @@ class SigenergyModbusHub:
                         f"Register type {register_type} is not writable"
                     )
         except ConnectionException as ex:
-            self.connected = False
+            key = self._get_connection_key(slave_id)
+            self._connected[key] = False
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
         except ModbusException as ex:
             raise SigenergyModbusError(f"Modbus error: {ex}") from ex

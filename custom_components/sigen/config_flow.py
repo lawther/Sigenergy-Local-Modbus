@@ -16,6 +16,7 @@ from .const import (
     CONF_DC_CHARGER_SLAVE_ID,
     CONF_DEVICE_TYPE,
     CONF_INVERTER_SLAVE_ID,
+    CONF_INVERTER_CONNECTIONS,
     CONF_PARENT_INVERTER_ID,
     CONF_PARENT_PLANT_ID,
     CONF_PLANT_ID,
@@ -68,6 +69,8 @@ STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
 
 STEP_INVERTER_CONFIG_SCHEMA = vol.Schema(
     {
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Required(CONF_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
     }
 )
@@ -265,7 +268,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         
         # Should never reach here
         return self.async_abort(reason="unknown_device_type")
-    
     async def async_step_inverter_config(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -273,9 +275,18 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
         
         if user_input is None:
+            # For first inverter, use plant's host and port
+            if self._data.get(CONF_HOST) and self._data.get(CONF_PORT):
+                schema = vol.Schema({
+                    vol.Required(CONF_HOST, default=self._data[CONF_HOST]): str,
+                    vol.Required(CONF_PORT, default=self._data[CONF_PORT]): int,
+                    vol.Required(CONF_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
+                })
+            else:
+                schema = STEP_INVERTER_CONFIG_SCHEMA
             return self.async_show_form(
                 step_id=STEP_INVERTER_CONFIG,
-                data_schema=STEP_INVERTER_CONFIG_SCHEMA,
+                data_schema=schema,
             )
         
         # Validate the slave ID
@@ -300,15 +311,29 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                     errors=errors,
                 )
             
-            # Update the plant's configuration with the new inverter
+            # Get the inverter name based on number of existing inverters
+            inverter_no = len(plant_inverters)
+            inverter_name = f"Inverter{' ' if inverter_no == 0 else f' {inverter_no + 1} '}"
+            
+            # Create or update the inverter connections dictionary
             new_data = dict(plant_entry.data)
+            inverter_connections = new_data.get(CONF_INVERTER_CONNECTIONS, {})
+            inverter_connections[inverter_name] = {
+                CONF_HOST: user_input[CONF_HOST],
+                CONF_PORT: user_input[CONF_PORT],
+                CONF_SLAVE_ID: slave_id
+            }
+            
+            # Update the plant's configuration with the new inverter
             new_data[CONF_INVERTER_SLAVE_ID] = plant_inverters + [slave_id]
+            new_data[CONF_INVERTER_CONNECTIONS] = inverter_connections
             
             self.hass.config_entries.async_update_entry(
                 plant_entry,
                 data=new_data
             )
             
+            return self.async_abort(reason="device_added")
             return self.async_abort(reason="device_added")
             
         return self.async_abort(reason="parent_plant_not_found")
