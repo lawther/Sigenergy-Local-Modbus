@@ -307,23 +307,6 @@ class SigenergyModbusHub:
                     # Try multiple approaches to write to the register
                     approaches = []
                     
-                    # For registers in the 4XXXX range, try both with and without offset
-                    if address >= 40001:
-                        offset_address = address - 40001
-                        # Add approaches with offset addressing
-                        approaches.append({
-                            "description": f"write_registers with offset addressing ({offset_address})",
-                            "function": "write_registers",
-                            "address": offset_address,
-                            "values": [value]
-                        })
-                        approaches.append({
-                            "description": f"write_register with offset addressing ({offset_address})",
-                            "function": "write_register",
-                            "address": offset_address,
-                            "value": value
-                        })
-                    
                     # Always try direct addressing approaches
                     approaches.append({
                         "description": f"write_registers with direct addressing ({address})",
