@@ -304,14 +304,90 @@ class SigenergyModbusHub:
         try:
             async with self.lock:
                 if register_type in [RegisterType.HOLDING, RegisterType.WRITE_ONLY]:
-                    result = await self.client.write_register(
-                        address=address, value=value, slave=slave_id
-                    )
+                    # Try multiple approaches to write to the register
+                    approaches = []
                     
-                    if result.isError():
+                    # For registers in the 4XXXX range, try both with and without offset
+                    if address >= 40001:
+                        offset_address = address - 40001
+                        # Add approaches with offset addressing
+                        approaches.append({
+                            "description": f"write_registers with offset addressing ({offset_address})",
+                            "function": "write_registers",
+                            "address": offset_address,
+                            "values": [value]
+                        })
+                        approaches.append({
+                            "description": f"write_register with offset addressing ({offset_address})",
+                            "function": "write_register",
+                            "address": offset_address,
+                            "value": value
+                        })
+                    
+                    # Always try direct addressing approaches
+                    approaches.append({
+                        "description": f"write_registers with direct addressing ({address})",
+                        "function": "write_registers",
+                        "address": address,
+                        "values": [value]
+                    })
+                    approaches.append({
+                        "description": f"write_register with direct addressing ({address})",
+                        "function": "write_register",
+                        "address": address,
+                        "value": value
+                    })
+                    
+                    # Try each approach until one succeeds
+                    last_error = None
+                    for i, approach in enumerate(approaches):
+                        try:
+                            _LOGGER.debug(
+                                "Attempt %d: Using %s for register %s with value %s for slave %s",
+                                i+1, approach["description"], address, value, slave_id
+                            )
+                            
+                            if approach["function"] == "write_registers":
+                                result = await self.client.write_registers(
+                                    address=approach["address"],
+                                    values=approach["values"],
+                                    slave=slave_id
+                                )
+                            else:  # write_register
+                                result = await self.client.write_register(
+                                    address=approach["address"],
+                                    value=approach["value"],
+                                    slave=slave_id
+                                )
+                                
+                            if not result.isError():
+                                _LOGGER.debug("Success with approach: %s", approach["description"])
+                                break
+                            
+                            _LOGGER.debug("Error with approach %s: %s", approach["description"], result)
+                            last_error = result
+                            
+                        except Exception as ex:
+                            _LOGGER.debug("Exception with approach %s: %s", approach["description"], ex)
+                            last_error = ex
+                    
+                    # If we've tried all approaches and still have an error
+                    if last_error:
+                        if isinstance(last_error, Exception):
+                            # Re-raise the exception
+                            raise last_error
+                        else:
+                            # It's a Modbus error response
+                            result = last_error
+                    
+                    # Check if we have a Modbus error response
+                    if hasattr(result, 'isError') and result.isError():
+                        _LOGGER.debug("All write attempts failed. Final error: %s", result)
                         raise SigenergyModbusError(
                             f"Error writing register at address {address}: {result}"
                         )
+                    else:
+                        _LOGGER.debug("Successfully wrote to register at address %s", address)
                 else:
                     raise SigenergyModbusError(
                         f"Register type {register_type} is not writable"
@@ -338,14 +414,33 @@ class SigenergyModbusHub:
         try:
             async with self.lock:
                 if register_type in [RegisterType.HOLDING, RegisterType.WRITE_ONLY]:
-                    result = await self.client.write_registers(
-                        address=address, values=values, slave=slave_id
-                    )
+                    # For Modbus addresses starting with 4xxxx, some devices expect the offset (address - 40001)
+                    if address >= 40001:
+                        # Try with the offset addressing first
+                        offset_address = address - 40001
+                        _LOGGER.debug(
+                            "Writing to registers starting at %s (offset address %s) with values %s for slave %s",
+                            address, offset_address, values, slave_id
+                        )
+                        result = await self.client.write_registers(
+                            address=offset_address, values=values, slave=slave_id
+                        )
+                    else:
+                        _LOGGER.debug(
+                            "Writing to registers starting at %s with values %s for slave %s",
+                            address, values, slave_id
+                        )
+                        result = await self.client.write_registers(
+                            address=address, values=values, slave=slave_id
+                        )
                     
                     if result.isError():
+                        _LOGGER.debug("Error response from write_registers: %s", result)
                         raise SigenergyModbusError(
                             f"Error writing registers at address {address}: {result}"
                         )
+                    else:
+                        _LOGGER.debug("Successfully wrote to registers starting at address %s", address)
                 else:
                     raise SigenergyModbusError(
                         f"Register type {register_type} is not writable"
@@ -408,11 +503,20 @@ class SigenergyModbusHub:
         gain: float
     ) -> List[int]:
         """Encode value to register values based on data type."""
-        builder = BinaryPayloadBuilder()
+        # For simple U16 values like 0 or 1, just return the value directly
+        # This bypasses potential byte order issues with the BinaryPayloadBuilder
+        if data_type == DataType.U16 and isinstance(value, int) and 0 <= value <= 255:
+            _LOGGER.debug("Using direct value encoding for simple U16 value: %s", value)
+            return [value]
+            
+        # For other cases, use the BinaryPayloadBuilder
+        builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.BIG)
         
         # Apply gain for numeric values
         if isinstance(value, (int, float)) and gain != 1 and data_type != DataType.STRING:
             value = int(value * gain)
+        
+        _LOGGER.debug("Encoding value %s with data_type %s", value, data_type)
         
         if data_type == DataType.U16:
             builder.add_16bit_uint(value)
@@ -429,7 +533,9 @@ class SigenergyModbusHub:
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
         
-        return builder.to_registers()
+        registers = builder.to_registers()
+        _LOGGER.debug("Encoded registers: %s", registers)
+        return registers
 
     async def async_read_plant_data(self) -> Dict[str, Any]:
         """Read all supported plant data."""
@@ -701,26 +807,90 @@ class SigenergyModbusHub:
         
         register_def = PLANT_PARAMETER_REGISTERS[register_name]
         
-        encoded_values = self._encode_value(
-            value=value,
-            data_type=register_def.data_type,
-            gain=register_def.gain,
+        _LOGGER.debug(
+            "Writing plant parameter %s with value %s to address %s (type: %s, data_type: %s, gain: %s)",
+            register_name, value, register_def.address, register_def.register_type,
+            register_def.data_type, register_def.gain
         )
         
-        if len(encoded_values) == 1:
-            await self.async_write_register(
-                slave_id=self.plant_id,
-                address=register_def.address,
-                value=encoded_values[0],
-                register_type=register_def.register_type,
-            )
+        # Special handling for plant_remote_ems_enable register
+        if register_name == "plant_remote_ems_enable":
+            _LOGGER.debug("Special handling for plant_remote_ems_enable register")
+            
+            # Try multiple approaches for this specific register
+            approaches = [
+                # Try with offset addressing first (40029 -> 28)
+                {"function": "write_registers", "address": register_def.address - 40001, "values": [int(value)]},
+                {"function": "write_register", "address": register_def.address - 40001, "value": int(value)},
+                # Then try with direct addressing
+                {"function": "write_registers", "address": register_def.address, "values": [int(value)]},
+                {"function": "write_register", "address": register_def.address, "value": int(value)},
+            ]
+            
+            last_error = None
+            for i, approach in enumerate(approaches):
+                try:
+                    _LOGGER.debug(
+                        "Attempt %d for plant_remote_ems_enable: Using %s with address %s and value %s",
+                        i+1, approach["function"], approach["address"],
+                        approach.get("value", approach.get("values"))
+                    )
+                    
+                    async with self.lock:
+                        if approach["function"] == "write_registers":
+                            result = await self.client.write_registers(
+                                address=approach["address"],
+                                values=approach["values"],
+                                slave=self.plant_id
+                            )
+                        else:  # write_register
+                            result = await self.client.write_register(
+                                address=approach["address"],
+                                value=approach["value"],
+                                slave=self.plant_id
+                            )
+                            
+                        if not hasattr(result, 'isError') or not result.isError():
+                            _LOGGER.debug("Success with approach %d for plant_remote_ems_enable", i+1)
+                            return  # Success, exit early
+                        
+                        _LOGGER.debug("Error with approach %d: %s", i+1, result)
+                        last_error = result
+                        
+                except Exception as ex:
+                    _LOGGER.debug("Exception with approach %d: %s", i+1, ex)
+                    last_error = ex
+            
+            # If we've tried all approaches and still have an error
+            if isinstance(last_error, Exception):
+                raise SigenergyModbusError(f"Error writing plant_remote_ems_enable: {last_error}")
+            else:
+                raise SigenergyModbusError(f"Error writing plant_remote_ems_enable: {last_error}")
+        
+        # Normal handling for other registers
         else:
-            await self.async_write_registers(
-                slave_id=self.plant_id,
-                address=register_def.address,
-                values=encoded_values,
-                register_type=register_def.register_type,
+            encoded_values = self._encode_value(
+                value=value,
+                data_type=register_def.data_type,
+                gain=register_def.gain,
             )
+            
+            _LOGGER.debug("Encoded values for %s: %s", register_name, encoded_values)
+            
+            if len(encoded_values) == 1:
+                await self.async_write_register(
+                    slave_id=self.plant_id,
+                    address=register_def.address,
+                    value=encoded_values[0],
+                    register_type=register_def.register_type,
+                )
+            else:
+                await self.async_write_registers(
+                    slave_id=self.plant_id,
+                    address=register_def.address,
+                    values=encoded_values,
+                    register_type=register_def.register_type,
+                )
 
     async def async_write_inverter_parameter(
         self, 
