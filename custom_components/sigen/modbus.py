@@ -340,6 +340,8 @@ class SigenergyModbusHub:
                     
                     # Try each approach until one succeeds
                     last_error = None
+                    success = False
+                    
                     for i, approach in enumerate(approaches):
                         try:
                             _LOGGER.debug(
@@ -362,6 +364,7 @@ class SigenergyModbusHub:
                                 
                             if not result.isError():
                                 _LOGGER.debug("Success with approach: %s", approach["description"])
+                                success = True
                                 break
                             
                             _LOGGER.debug("Error with approach %s: %s", approach["description"], result)
@@ -371,23 +374,22 @@ class SigenergyModbusHub:
                             _LOGGER.debug("Exception with approach %s: %s", approach["description"], ex)
                             last_error = ex
                     
+                    # Check if any approach succeeded
+                    if success:
+                        _LOGGER.debug("Successfully wrote to register at address %s", address)
+                        return
+                        
                     # If we've tried all approaches and still have an error
                     if last_error:
+                        _LOGGER.debug("All write attempts failed. Final error: %s", last_error)
                         if isinstance(last_error, Exception):
                             # Re-raise the exception
                             raise last_error
                         else:
                             # It's a Modbus error response
-                            result = last_error
-                    
-                    # Check if we have a Modbus error response
-                    if hasattr(result, 'isError') and result.isError():
-                        _LOGGER.debug("All write attempts failed. Final error: %s", result)
-                        raise SigenergyModbusError(
-                            f"Error writing register at address {address}: {result}"
-                        )
-                    else:
-                        _LOGGER.debug("Successfully wrote to register at address %s", address)
+                            raise SigenergyModbusError(
+                                f"Error writing register at address {address}: {last_error}"
+                            )
                 else:
                     raise SigenergyModbusError(
                         f"Register type {register_type} is not writable"
