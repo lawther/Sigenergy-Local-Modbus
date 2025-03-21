@@ -132,7 +132,7 @@ PLANT_SELECTS = [
                 "Command Discharging (ESS First)": RemoteEMSControlMode.COMMAND_DISCHARGING_ESS_FIRST,
             }.get(option, RemoteEMSControlMode.PCS_REMOTE_CONTROL),
         ),
-        available_fn=lambda data, _: data["plant"].get("remote_ems_enable") == 1,
+        available_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
     ),
 ]
 
