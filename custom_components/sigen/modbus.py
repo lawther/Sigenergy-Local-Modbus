@@ -408,7 +408,7 @@ class SigenergyModbusHub:
         gain: float
     ) -> List[int]:
         """Encode value to register values based on data type."""
-        builder = BinaryPayloadBuilder(word_order='big', wordorder=Endian.BIG)
+        builder = BinaryPayloadBuilder()
         
         # Apply gain for numeric values
         if isinstance(value, (int, float)) and gain != 1 and data_type != DataType.STRING:
