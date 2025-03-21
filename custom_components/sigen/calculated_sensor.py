@@ -298,25 +298,36 @@ class SigenergyCalculations:
 
     @staticmethod
     def calculate_plant_consumed_power(value, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
+        _LOGGER.warning("[CS][Plant Consumed] Method called with value=%s", value)
         """Calculate plant consumed power (household/building consumption).
         
         Formula: PV Power + Grid Import Power - Grid Export Power - Plant Battery Power
         """
+        _LOGGER.debug("[CS][Plant Consumed] Starting calculation with coordinator_data=%s, extra_params=%s",
+                     bool(coordinator_data), extra_params)
+        
         if coordinator_data is None or "plant" not in coordinator_data:
             _LOGGER.debug("[CS][Plant Consumed] No plant data available")
             return None
             
         # Get the required values from coordinator data
         plant_data = coordinator_data["plant"]
+        _LOGGER.debug("[CS][Plant Consumed] Plant data keys: %s", list(plant_data.keys()))
         
         # Get PV power
         pv_power = plant_data.get("plant_photovoltaic_power")
+        _LOGGER.debug("[CS][Plant Consumed] PV power: %s (type: %s)", 
+                     pv_power, type(pv_power).__name__ if pv_power is not None else "None")
         
         # Get grid active power and calculate import/export
         grid_power = plant_data.get("plant_grid_sensor_active_power")
+        _LOGGER.debug("[CS][Plant Consumed] Grid power: %s (type: %s)", 
+                     grid_power, type(grid_power).__name__ if grid_power is not None else "None")
         
         # Get battery power
         battery_power = plant_data.get("plant_ess_power")
+        _LOGGER.debug("[CS][Plant Consumed] Battery power: %s (type: %s)", 
+                     battery_power, type(battery_power).__name__ if battery_power is not None else "None")
         
         # Validate inputs
         if pv_power is None or grid_power is None or battery_power is None:
@@ -324,18 +335,46 @@ class SigenergyCalculations:
                         pv_power, grid_power, battery_power)
             return None
         
+        # Validate input types
+        if not isinstance(pv_power, (int, float)):
+            _LOGGER.warning("[CS][Plant Consumed] PV power is not a number: %s (type: %s)", 
+                          pv_power, type(pv_power).__name__)
+            return None
+        if not isinstance(grid_power, (int, float)):
+            _LOGGER.warning("[CS][Plant Consumed] Grid power is not a number: %s (type: %s)", 
+                          grid_power, type(grid_power).__name__)
+            return None
+        if not isinstance(battery_power, (int, float)):
+            _LOGGER.warning("[CS][Plant Consumed] Battery power is not a number: %s (type: %s)", 
+                          battery_power, type(battery_power).__name__)
+            return None
+        
         # Calculate grid import and export power
         # Grid power is positive when importing, negative when exporting
         grid_import = max(0, grid_power)
         grid_export = max(0, -grid_power)
+        _LOGGER.debug("[CS][Plant Consumed] Calculated Grid Import: %s, Grid Export: %s",
+                     grid_import, grid_export)
         
         # Calculate plant consumed power
         # Note: battery_power is positive when charging, negative when discharging
-        consumed_power = pv_power + grid_import - grid_export - battery_power
+        try:
+            consumed_power = pv_power + grid_import - grid_export - battery_power
+            _LOGGER.debug("[CS][Plant Consumed] Raw calculation: %s + %s - %s - %s = %s",
+                        pv_power, grid_import, grid_export, battery_power, consumed_power)
+            
+            # Sanity check
+            if consumed_power < 0:
+                _LOGGER.warning("[CS][Plant Consumed] Calculated power is negative: %s kW", consumed_power)
+                # Keep the negative value as it might be valid in some scenarios
+            
+            if consumed_power > 50:  # Unlikely to have consumption over 50 kW in residential setting
+                _LOGGER.warning("[CS][Plant Consumed] Calculated power seems excessive: %s kW", consumed_power)
+        except Exception as ex:
+            _LOGGER.error("[CS][Plant Consumed] Error during calculation: %s", ex, exc_info=True)
+            return None
         
-        _LOGGER.debug("[CS][Plant Consumed] Calculated power: %s kW (PV=%s, Grid Import=%s, Grid Export=%s, Battery=%s)",
-                    consumed_power, pv_power, grid_import, grid_export, battery_power)
-        
+        _LOGGER.debug("[CS][Plant Consumed] Final calculated power: %s kW", consumed_power)
         return consumed_power
 
 class IntegrationTrigger(Enum):

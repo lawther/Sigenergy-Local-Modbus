@@ -89,11 +89,12 @@ async def async_setup_entry(
     _LOGGER.debug("Setting up sensors for %s", plant_name)
 
     # Add plant sensors
+    _LOGGER.warning("[CS][Setup] Adding plant sensors from SS.PLANT_SENSORS + SCS.PLANT_SENSORS")
     for description in SS.PLANT_SENSORS + SCS.PLANT_SENSORS:
         sensor_name = f"{plant_name} {description.name}"
         entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-        _LOGGER.debug("Creating plant sensor with name: %s, expected entity_id: %s, key: %s",
-                     sensor_name, entity_id, description.key)
+        _LOGGER.warning("[CS][Setup] Creating plant sensor with name: %s, entity_id: %s, key: %s, value_fn: %s",
+                     sensor_name, entity_id, description.key, getattr(description, 'value_fn', None))
         
         entities.append(
             SigenergySensor(
@@ -421,16 +422,21 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the state of the sensor."""
-        # Special handling for grid import/export power sensors
-        if self.entity_description.key in ["plant_grid_import_power", "plant_grid_export_power"]:
+        _LOGGER.warning("[CS][native_value] Getting value for %s (key: %s)", self.entity_id, self.entity_description.key)
+        # Special handling for calculated power sensors
+        _LOGGER.warning("[CS][native_value] Checking if %s needs special handling", self.entity_description.key)
+        if self.entity_description.key in ["plant_grid_import_power", "plant_grid_export_power", "plant_consumed_power"]:
             if self.coordinator.data is None or "plant" not in self.coordinator.data:
                 _LOGGER.debug("[CS][GridSensor] No coordinator data available for %s", self.entity_id)
                 return None
                 
             # Call the value_fn directly with the coordinator data
             if hasattr(self.entity_description, "value_fn") and self.entity_description.value_fn is not None:
+                _LOGGER.warning("[CS][native_value] Found value_fn for %s: %s", self.entity_id, self.entity_description.value_fn)
                 try:
-                    # Always pass coordinator data to the value_fn
+                    _LOGGER.warning("[CS][native_value] Calling value_fn for %s", self.entity_id)
+            # Always pass coordinator data to the value_fn
+                    _LOGGER.warning("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     transformed_value = self.entity_description.value_fn(
                         None, self.coordinator.data, None
                     )
@@ -446,6 +452,12 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     return None
         
         # Standard handling for other sensors
+        if self.entity_description.key == "plant_consumed_power":
+            _LOGGER.warning("[CS][Plant Consumed] Native value called for plant_consumed_power sensor")
+            _LOGGER.warning("[CS][Plant Consumed] Coordinator data available: %s", bool(self.coordinator.data))
+            if self.coordinator.data and "plant" in self.coordinator.data:
+                _LOGGER.warning("[CS][Plant Consumed] Available plant data keys: %s", list(self.coordinator.data["plant"].keys()))
+
         if self.coordinator.data is None:
             return STATE_UNKNOWN
             
@@ -500,8 +512,10 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 if hasattr(self.entity_description, "extra_fn_data") and self.entity_description.extra_fn_data:
                     # Pass extra parameters if available
                     extra_params = getattr(self.entity_description, "extra_params", None)
+                    _LOGGER.warning("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     transformed_value = self.entity_description.value_fn(value, self.coordinator.data, extra_params)
                 else:
+                    _LOGGER.warning("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     transformed_value = self.entity_description.value_fn(value)
                     
                 if transformed_value is not None:
@@ -620,6 +634,12 @@ class PVStringSensor(SigenergySensor):
     @property
     def native_value(self) -> Any:
         """Return the state of the sensor."""
+        if self.entity_description.key == "plant_consumed_power":
+            _LOGGER.warning("[CS][Plant Consumed] Native value called for plant_consumed_power sensor")
+            _LOGGER.warning("[CS][Plant Consumed] Coordinator data available: %s", bool(self.coordinator.data))
+            if self.coordinator.data and "plant" in self.coordinator.data:
+                _LOGGER.warning("[CS][Plant Consumed] Available plant data keys: %s", list(self.coordinator.data["plant"].keys()))
+
         if self.coordinator.data is None:
             return STATE_UNKNOWN
             
@@ -632,6 +652,7 @@ class PVStringSensor(SigenergySensor):
             # Handle different sensor types
             # First check if we have a value_fn (for power and energy sensors)
             if hasattr(self.entity_description, "value_fn") and self.entity_description.value_fn is not None:
+                _LOGGER.warning("[CS][native_value] Found value_fn for %s: %s", self.entity_id, self.entity_description.value_fn)
                 return self.entity_description.value_fn(
                     None,
                     self.coordinator.data,
