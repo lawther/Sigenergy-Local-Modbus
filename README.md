@@ -41,19 +41,22 @@ This integration allows you to monitor and control your Sigenergy ESS (Energy St
 
 ## Configuration
 
-The integration uses a multi-step configuration process through the Home Assistant UI:
+The integration uses a configuration process through the Home Assistant UI.  When adding your first Sigenergy device, the integration will always add a Plant and an Inverter. A Plant represents your overall Sigenergy system, encompassing all connected devices.
+
+To add more devices, you need to add the "Sigenergy" integration again for each subsequent device (Inverter, AC Charger, or DC Charger).
+
+Follow the configuration flow:
 
 1.  Go to Settings > Devices & Services.
 2.  Click "Add Integration".
 3.  Search for "Sigenergy".
 4.  Follow the configuration flow:
 
-    -   **Add a Plant:** The first step is to add a "Plant," which represents your overall Sigenergy system. You'll need to provide the host (IP address) and port (default: 502) of your Sigenergy system. You can also set the integration to read-only mode.
-    -   **Add Devices:** After adding a plant, you can add inverters, AC chargers, and DC chargers.  You'll be prompted to select the plant you want to add the device to.
-        -   **Inverters:** Provide a slave ID for each inverter. The integration will attempt to connect to the inverter using the plant's host and port, but you can specify different connection details if needed.
-        -   **AC Chargers:**  Provide a slave ID for each AC charger. The integration will attempt to connect to the AC charger using the plant's host and port, but you can specify different connection details if needed.
-        -   **DC Chargers:** DC Chargers are associated with a specific inverter. You'll select the inverter and the integration will use the inverter's slave ID for the DC charger.
-
+    -   **Add a Plant and Inverter:** The first time you add the Sigenergy integration, you will add a "Plant" and the main or only "Inverter". You'll need to provide the host (IP address) and port (default: 502) of your Sigenergy system, and the slave ID (default: 1) for your Inverter. You can also set the integration to read-only mode.
+    -   **Adding Subsequent Devices:** To add more devices (Inverters, AC Chargers, DC Chargers), repeat steps 1-3, selecting the "Sigenergy" integration again for each device.
+        -   **Inverters:** Provide a host and slave ID for each additional inverter.
+        -   **AC Chargers:**  Provide a host and slave ID for each AC charger.
+        -   **DC Chargers:** DC Chargers are associated with a specific inverter. You'll select the inverter and the integration will use the inverter's host and slave ID for the DC charger.
 ### Configuration Parameters
 
 -   **`host`:** The IP address of your Sigenergy system (required for plant and optionally for individual devices).
