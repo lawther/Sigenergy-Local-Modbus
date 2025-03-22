@@ -13,6 +13,7 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_AC_CHARGER_SLAVE_ID,
+    CONF_AC_CHARGER_CONNECTIONS,
     CONF_DC_CHARGER_SLAVE_ID,
     CONF_DEVICE_TYPE,
     CONF_INVERTER_SLAVE_ID,
@@ -77,6 +78,8 @@ STEP_INVERTER_CONFIG_SCHEMA = vol.Schema(
 
 STEP_AC_CHARGER_CONFIG_SCHEMA = vol.Schema(
     {
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Required(CONF_SLAVE_ID): int,
     }
 )
@@ -378,9 +381,22 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                     errors=errors,
                 )
             
-            # Update the plant's configuration with the new AC charger
+            # Get the AC charger name based on number of existing AC chargers
+            ac_charger_no = len(plant_ac_chargers)
+            ac_charger_name = f"AC Charger{' ' if ac_charger_no == 0 else f' {ac_charger_no + 1} '}"
+            
+            # Create or update the AC charger connections dictionary
             new_data = dict(plant_entry.data)
+            ac_charger_connections = new_data.get(CONF_AC_CHARGER_CONNECTIONS, {})
+            ac_charger_connections[ac_charger_name] = {
+                CONF_HOST: user_input[CONF_HOST],
+                CONF_PORT: user_input[CONF_PORT],
+                CONF_SLAVE_ID: slave_id
+            }
+            
+            # Update the plant's configuration with the new AC charger
             new_data[CONF_AC_CHARGER_SLAVE_ID] = plant_ac_chargers + [slave_id]
+            new_data[CONF_AC_CHARGER_CONNECTIONS] = ac_charger_connections
             
             self.hass.config_entries.async_update_entry(
                 plant_entry,
