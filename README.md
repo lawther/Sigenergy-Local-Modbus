@@ -26,7 +26,8 @@ This integration allows you to monitor and control your Sigenergy ESS (Energy St
     -   Go to HACS > Integrations
     -   Click the three dots in the top right corner
     -   Select "Custom repositories"
-    -   Add the URL of this repository
+    -   Add the URL of this repository:
+    <br>`https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus`
     -   Select "Integration" as the category
 3.  Click "Install" on the Sigenergy integration card.
 4.  Restart Home Assistant.
