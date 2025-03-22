@@ -31,12 +31,10 @@ from .const import (
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
     DOMAIN,
-    STEP_USER,
     STEP_DEVICE_TYPE,
     STEP_PLANT_CONFIG,
     STEP_INVERTER_CONFIG,
     STEP_AC_CHARGER_CONFIG,
-    STEP_DC_CHARGER_CONFIG,
     STEP_SELECT_PLANT,
     STEP_SELECT_INVERTER,
     DEFAULT_READ_ONLY,
@@ -194,8 +192,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             if not (1 <= inverter_id <= 246):
                 errors[CONF_INVERTER_SLAVE_ID] = "each_id_must_be_between_1_and_246"
             elif not _LOGGER.isEnabledFor(logging.DEBUG):
-                # Check for duplicate IDs
-                existing_inverters = []
                 for entry in self.hass.config_entries.async_entries(DOMAIN):
                     if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER:
                         existing_id = entry.data.get(CONF_INVERTER_SLAVE_ID)
@@ -336,7 +332,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 data=new_data
             )
             
-            return self.async_abort(reason="device_added")
             return self.async_abort(reason="device_added")
             
         return self.async_abort(reason="parent_plant_not_found")

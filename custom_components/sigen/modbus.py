@@ -3,19 +3,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import struct
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
-import pymodbus.logging
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.constants import Endian
 from pymodbus.exceptions import ConnectionException, ModbusException
-from pymodbus.payload import BinaryPayloadBuilder, BinaryPayloadDecoder
+from pymodbus.payload import BinaryPayloadBuilder
 from pymodbus.client.mixin import ModbusClientMixin
 
 from .const import ModbusRegisterDefinition

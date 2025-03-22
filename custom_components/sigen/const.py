@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Final, Optional
+from typing import Optional
 
 # Import needed Home Assistant constants
 from homeassistant.const import (

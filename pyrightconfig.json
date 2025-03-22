@@ -11,5 +11,6 @@
     ],
     "typeCheckingMode": "basic",
     "useLibraryCodeForTypes": true,
-    "reportMissingTypeStubs": false
+    "reportMissingTypeStubs": false,
+    "reportMissingImports": false,
 }
