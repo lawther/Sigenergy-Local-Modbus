@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Tuple
 
+import re
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -38,8 +39,16 @@ from .const import (
     STEP_SELECT_PLANT,
     STEP_SELECT_INVERTER,
     DEFAULT_READ_ONLY,
-    CONF_READ_ONLY,
 )
+
+# Define constants that might not be in the .const module
+CONF_READ_ONLY = "read_only"
+CONF_REMOVE_DEVICE = "remove_device"
+
+STEP_DC_CHARGER_CONFIG = "dc_charger_config"
+STEP_SELECT_DEVICE = "select_device"
+STEP_RECONFIGURE = "reconfigure"
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -83,6 +92,42 @@ STEP_AC_CHARGER_CONFIG_SCHEMA = vol.Schema(
 )
 
 STEP_DC_CHARGER_CONFIG_SCHEMA = vol.Schema({})
+
+def validate_host_port(host: str, port: int) -> Dict[str, str]:
+    """Validate host and port combination.
+    
+    Args:
+        host: The host address
+        port: The port number
+        
+    Returns:
+        Dictionary of errors, empty if validation passes
+    """
+    errors = {}
+    
+    if host is None or host == "":
+        errors["host"] = "invalid_host"
+    
+    if not port or not (1 <= port <= 65535):
+        errors["port"] = "invalid_port"
+        
+    return errors
+
+def validate_slave_id(
+    slave_id: int, 
+    existing_ids: List[int] = [],
+    field_name: str = CONF_SLAVE_ID
+,
+) -> Dict[str, str]:
+    """Validate a slave ID."""
+    errors = {}
+    
+    if slave_id is None or not (1 <= slave_id <= 246):
+        errors[field_name] = "each_id_must_be_between_1_and_246"
+    elif existing_ids and slave_id in existing_ids:
+        errors[field_name] = "duplicate_ids_found"
+        
+    return errors
 
 def validate_slave_ids(raw_ids: str, field_name: str) -> Tuple[List[int], Dict[str, str]]:
     """Validate slave IDs from a comma-separated string.
@@ -130,6 +175,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         self._data = {}
         self._plants = {}
         self._inverters = {}
+        self._devices = {}
         self._selected_plant_entry_id = None
 
     async def async_step_user(
@@ -212,6 +258,16 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         self._data[CONF_INVERTER_SLAVE_ID] = [inverter_id]
         self._data[CONF_AC_CHARGER_SLAVE_ID] = []
         self._data[CONF_DC_CHARGER_SLAVE_ID] = []
+
+        # Create the inverter connections dictionary for the implicit first inverter
+        inverter_name = "Inverter 1"
+        self._data[CONF_INVERTER_CONNECTIONS] = {
+            inverter_name: {
+                CONF_HOST: self._data[CONF_HOST],
+                CONF_PORT: self._data[CONF_PORT],
+                CONF_SLAVE_ID: inverter_id
+            }
+        }
         
         # Store the plant name generated based on the number of installed plants
         plant_no = len(self._plants)
@@ -483,64 +539,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         
         _LOGGER.debug("Found inverters for plant %s: %s", plant_entry_id, self._inverters)
 
-    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle dynamic reconfiguration of inverter and AC charger slave IDs."""
-        if user_input is None:
-            # Create schema with current values
-            schema = self._create_reconfigure_schema()
-            return self.async_show_form(
-                step_id="reconfigure",
-                data_schema=schema,
-            )
-
-        # Process and validate inverter ID
-        errors = {}
-        try:
-            inverter_id = int(user_input[CONF_INVERTER_SLAVE_ID])
-            if not (1 <= inverter_id <= 246):
-                errors[CONF_INVERTER_SLAVE_ID] = "each_id_must_be_between_1_and_246"
-            elif not _LOGGER.isEnabledFor(logging.DEBUG):
-                # Check for duplicate IDs
-                for entry in self.hass.config_entries.async_entries(DOMAIN):
-                    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER:
-                        existing_id = entry.data.get(CONF_INVERTER_SLAVE_ID)
-                        if existing_id and inverter_id in existing_id:
-                            errors[CONF_INVERTER_SLAVE_ID] = "duplicate_ids_found"
-                            break
-        except (ValueError, TypeError):
-            errors[CONF_INVERTER_SLAVE_ID] = "invalid_integer_value"
-
-        if errors:
-            # Re-create schema with user input values for error display
-            schema = self._create_reconfigure_schema(
-                user_input.get(CONF_INVERTER_SLAVE_ID, "")
-            )
-            return self.async_show_form(
-                step_id="reconfigure",
-                data_schema=schema,
-                errors=errors
-            )
-
-        # Update the configuration entry with the new data
-        new_data = {
-            **self._data,
-            CONF_INVERTER_SLAVE_ID: [inverter_id],
-            CONF_AC_CHARGER_SLAVE_ID: [],
-            CONF_DC_CHARGER_SLAVE_ID: [],
-        }
-
-        # Ensure device type is preserved
-        device_type = self._data.get(CONF_DEVICE_TYPE)
-        if device_type:
-            new_data[CONF_DEVICE_TYPE] = device_type
-        
-        # Update the configuration entry
-        self.hass.config_entries.async_update_entry(
-            self.config_entry, data=new_data
-        )
-        
-        return self.async_create_entry(title="", data={})
-
     def _create_reconfigure_schema(self, inv_ids=""):
         """Create schema for reconfiguration step with default or provided values."""
         # Use provided values or get current values from data
@@ -567,7 +565,469 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         self.options = dict(config_entry.options)
         self._data = dict(config_entry.data)
         self._plants = {}
+        self._devices = {}
         self._inverters = {}
+        self._devices_loaded = False
+        self._selected_device = None
+        self._temp_config = {}
+
+    async def _async_load_devices(self) -> None:
+        """Load all devices for selection."""
+        self._devices = {}
+        device_type = self._data.get(CONF_DEVICE_TYPE)
+        _LOGGER.debug("Loading devices for device type: %s", device_type)
+        
+        if device_type == DEVICE_TYPE_PLANT:
+            # For plants, load all child devices
+            plant_entry_id = self.config_entry.entry_id
+            plant_name = self._data.get(CONF_NAME, f"Plant {plant_entry_id}")
+            plant_host = self._data.get(CONF_HOST, "")
+            
+            # Add the plant itself with host info
+            self._devices[f"plant_{plant_entry_id}"] = f"{plant_name} (Host: {plant_host})"
+            
+            # Add inverters
+            inverter_connections = self._data.get(CONF_INVERTER_CONNECTIONS, {})
+            _LOGGER.debug("Inverter connections: %s", inverter_connections)
+            
+            # Process inverters with special handling for the first implicit inverter
+            for i, (inv_name, inv_details) in enumerate(inverter_connections.items()):
+                device_key = f"inverter_{inv_name}"
+                
+                # For first inverter (implicit), remove the number and include host/ID info
+                if i == 0:
+                    display_name = f"Inverter (Host: {inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
+                else:
+                    display_name = f"{inv_name} (Host: {inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
+                
+                self._devices[device_key] = display_name
+                _LOGGER.debug("Added inverter device: %s -> %s", device_key, self._devices[device_key])
+            
+            # Add AC chargers with host info
+            ac_charger_connections = self._data.get(CONF_AC_CHARGER_CONNECTIONS, {})
+            for ac_name, ac_details in ac_charger_connections.items():
+                self._devices[f"ac_charger_{ac_name}"] = f"{ac_name} (Host: {ac_details.get(CONF_HOST)}, ID: {ac_details.get(CONF_SLAVE_ID)})"
+            
+            # Add DC chargers
+            dc_charger_ids = self._data.get(CONF_DC_CHARGER_SLAVE_ID, [])
+            for i, dc_id in enumerate(dc_charger_ids):
+                dc_name = f"DC Charger {i+1}"
+                self._devices[f"dc_charger_{dc_id}"] = f"{dc_name} (ID: {dc_id})"
+        
+        self._devices_loaded = True
+        
+        _LOGGER.debug("Loaded devices for selection: %s", self._devices)
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None):
+        """Manage the options for the custom component."""
+        device_type = self._data.get(CONF_DEVICE_TYPE)
+        _LOGGER.debug("Options flow init for device type: %s", device_type)
+        
+        # If this is a plant, load devices and show device selection
+        if device_type == DEVICE_TYPE_PLANT and not self._devices_loaded:
+            await self._async_load_devices()
+            return await self.async_step_select_device()
+        
+        # For non-plant devices or if no devices loaded, go to device-specific options
+        if device_type == DEVICE_TYPE_PLANT:
+            return await self.async_step_plant_config(user_input)
+        elif device_type == DEVICE_TYPE_INVERTER:
+            return await self.async_step_inverter_config(user_input)
+        elif device_type == DEVICE_TYPE_AC_CHARGER:
+            return await self.async_step_ac_charger_config(user_input)
+        elif device_type == DEVICE_TYPE_DC_CHARGER:
+            return await self.async_step_dc_charger_config(user_input)
+        
+        # Fallback
+        return self.async_abort(reason="unknown_device_type")
+    
+    async def async_step_select_device(self, user_input: dict[str, Any] | None = None):
+        """Handle device selection step."""
+        if not self._devices:
+            _LOGGER.debug("No devices available for selection, going to plant config")
+            return await self.async_step_plant_config()
+        
+        if user_input is None:
+            # Create schema with device selection
+            schema = vol.Schema({
+                vol.Required("selected_device"): vol.In(self._devices)
+            })
+            
+            return self.async_show_form(
+                step_id=STEP_SELECT_DEVICE,
+                data_schema=schema,
+            )
+        
+        # Parse the selected device
+        _LOGGER.debug("Selected device: %s", user_input["selected_device"])
+        selected_device = user_input.get("selected_device", "")
+        device_parts = selected_device.split("_", 1)
+        
+        if len(device_parts) < 2:
+            return self.async_abort(reason="invalid_device_selection")
+        
+        device_type = device_parts[0]
+        device_id = device_parts[1]
+        
+        # Store the selected device info
+        self._selected_device = {
+            "type": device_type,
+            "id": device_id
+        }
+        _LOGGER.debug("Parsed selected device: %s", self._selected_device)
+
+        # Store the selected device for later use
+        self._temp_config["selected_device"] = self._selected_device
+        
+        # Route to the appropriate configuration step
+        if device_type == "plant":
+            return await self.async_step_plant_config()
+        elif device_type == "inverter":
+            return await self.async_step_inverter_config()
+        elif device_type == "ac_charger":
+            return await self.async_step_ac_charger_config()
+        elif device_type == "dc_charger":
+            return await self.async_step_dc_charger_config()
+        
+        # Fallback
+        return self.async_abort(reason="unknown_device_type")
+    
+    async def async_step_plant_config(self, user_input: dict[str, Any] | None = None):
+        """Handle plant configurations"""
+        errors = {}
+        
+        if user_input is None:
+            # Create schema with current values
+            schema = vol.Schema({
+                vol.Required(CONF_HOST, default=self._data.get(CONF_HOST, "")): str,
+                vol.Required(CONF_PORT, default=self._data.get(CONF_PORT, DEFAULT_PORT)): int,
+                vol.Required(CONF_READ_ONLY, default=self._data.get(CONF_READ_ONLY, DEFAULT_READ_ONLY)): bool,
+            })
+            
+            return self.async_show_form(
+                step_id=STEP_PLANT_CONFIG,
+                data_schema=schema,
+            )
+        
+        # Validate host and port
+        host_port_errors = validate_host_port(user_input.get(CONF_HOST, ""), user_input.get(CONF_PORT, 0))
+        errors.update(host_port_errors)
+        
+        if errors:
+            # Re-create schema with user input values for error display
+            schema = vol.Schema({
+                vol.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): str,
+                vol.Required(CONF_PORT, default=user_input.get(CONF_PORT, DEFAULT_PORT)): int,
+                vol.Required(CONF_READ_ONLY, default=user_input.get(CONF_READ_ONLY, DEFAULT_READ_ONLY)): bool,
+            })
+            
+            return self.async_show_form(
+                step_id=STEP_PLANT_CONFIG,
+                data_schema=schema,
+                errors=errors,
+            )
+        
+        # Update the configuration entry with the new data
+        new_data = dict(self._data)
+        new_data[CONF_HOST] = user_input[CONF_HOST]
+        new_data[CONF_PORT] = user_input[CONF_PORT]
+        new_data[CONF_READ_ONLY] = user_input[CONF_READ_ONLY]
+        
+        self.hass.config_entries.async_update_entry(
+            self.config_entry, data=new_data
+        )
+        
+        return self.async_create_entry(title="", data={})
+    
+    async def async_step_inverter_config(self, user_input: dict[str, Any] | None = None):
+        """Handle inverter configurations"""
+        errors = {}
+        
+        # Get the inverter details
+        inverter_name = self._selected_device["id"] if self._selected_device else None
+        inverter_connections = self._data.get(CONF_INVERTER_CONNECTIONS, {})
+        _LOGGER.debug("Inverter name: %s, connections: %s", inverter_name, inverter_connections)
+        inverter_details = inverter_connections.get(inverter_name, {})
+        
+        if user_input is None:
+            # Create schema with current values
+            schema = vol.Schema({
+                vol.Required(CONF_HOST, default=inverter_details.get(CONF_HOST, "")): str,
+                vol.Required(CONF_PORT, default=inverter_details.get(CONF_PORT, DEFAULT_PORT)): int,
+                vol.Required(CONF_SLAVE_ID, default=inverter_details.get(CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID)): int,
+                vol.Optional(CONF_REMOVE_DEVICE, default=False): bool,
+            })
+            
+            return self.async_show_form(
+                step_id=STEP_INVERTER_CONFIG,
+                data_schema=schema,
+            )
+        
+        # Check if user wants to remove the device
+        if user_input.get(CONF_REMOVE_DEVICE, False):
+            # Validate that the inverter can be removed
+            dc_chargers = self._data.get(CONF_DC_CHARGER_SLAVE_ID, [])
+            inverter_slave_id = inverter_details.get(CONF_SLAVE_ID)
+            
+            if inverter_slave_id in dc_chargers:
+                errors[CONF_REMOVE_DEVICE] = "cannot_remove_parent"
+                
+                # Re-create schema with error
+                schema = vol.Schema({
+                    vol.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): str,
+                    vol.Required(CONF_PORT, default=user_input.get(CONF_PORT, DEFAULT_PORT)): int,
+                    vol.Required(CONF_SLAVE_ID, default=user_input.get(CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID)): int,
+                    vol.Optional(CONF_REMOVE_DEVICE, default=True): bool,
+                })
+                
+                return self.async_show_form(
+                    step_id=STEP_INVERTER_CONFIG,
+                    data_schema=schema,
+                    errors=errors,
+                )
+            
+            # Remove the inverter
+            new_data = dict(self._data)
+            
+            # Remove from inverter connections
+            new_inverter_connections = dict(inverter_connections)
+            if inverter_name in new_inverter_connections:
+                del new_inverter_connections[inverter_name]
+            new_data[CONF_INVERTER_CONNECTIONS] = new_inverter_connections
+            
+            # Remove from inverter slave IDs
+            inverter_slave_ids = new_data.get(CONF_INVERTER_SLAVE_ID, [])
+            if inverter_slave_id in inverter_slave_ids:
+                inverter_slave_ids.remove(inverter_slave_id)
+            new_data[CONF_INVERTER_SLAVE_ID] = inverter_slave_ids
+            
+            # Update the configuration entry
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            
+            return self.async_create_entry(title="", data={})
+        
+        # Validate host, port, and slave ID
+        host_port_errors = validate_host_port(user_input.get(CONF_HOST, ""), user_input.get(CONF_PORT, 0))
+        errors.update(host_port_errors)
+        
+        # Validate slave ID
+        slave_id = user_input.get(CONF_SLAVE_ID)
+        existing_ids = []
+        
+        # Get existing slave IDs excluding the current one
+        for name, details in inverter_connections.items():
+            if name != inverter_name:
+                existing_ids.append(details.get(CONF_SLAVE_ID))
+        
+        slave_id_errors = validate_slave_id(slave_id or 0, existing_ids)
+        errors.update(slave_id_errors or {})
+        
+        if errors:
+            # Re-create schema with user input values for error display
+            schema = vol.Schema({
+                vol.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): str,
+                vol.Required(CONF_PORT, default=user_input.get(CONF_PORT, DEFAULT_PORT)): int,
+                vol.Required(CONF_SLAVE_ID, default=user_input.get(CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID)): int,
+                vol.Optional(CONF_REMOVE_DEVICE, default=user_input.get(CONF_REMOVE_DEVICE, False)): bool,
+            })
+            
+            return self.async_show_form(
+                step_id=STEP_INVERTER_CONFIG,
+                data_schema=schema,
+                errors=errors,
+            )
+        
+        # Update the inverter configuration
+        new_data = dict(self._data)
+        new_inverter_connections = dict(inverter_connections)
+        
+        # Update the inverter details
+        new_inverter_connections[inverter_name] = {
+            CONF_HOST: user_input[CONF_HOST],
+            CONF_PORT: user_input[CONF_PORT],
+            CONF_SLAVE_ID: slave_id
+        }
+        
+        # Update the configuration entry
+        new_data[CONF_INVERTER_CONNECTIONS] = new_inverter_connections
+        
+        # Update the inverter slave IDs if changed
+        old_slave_id = inverter_details.get(CONF_SLAVE_ID)
+        if old_slave_id != slave_id:
+            inverter_slave_ids = new_data.get(CONF_INVERTER_SLAVE_ID, [])
+            if old_slave_id in inverter_slave_ids:
+                inverter_slave_ids.remove(old_slave_id)
+            inverter_slave_ids.append(slave_id)
+            new_data[CONF_INVERTER_SLAVE_ID] = inverter_slave_ids
+        
+        self.hass.config_entries.async_update_entry(
+            self.config_entry, data=new_data
+        )
+        
+        return self.async_create_entry(title="", data={})
+    
+    async def async_step_ac_charger_config(self, user_input: dict[str, Any] | None = None):
+        """Handle AC charger configurations"""
+        errors = {}
+        
+        # Get the AC charger details
+        ac_charger_name = self._selected_device["id"] if self._selected_device else None
+        ac_charger_connections = self._data.get(CONF_AC_CHARGER_CONNECTIONS, {})
+        ac_charger_details = ac_charger_connections.get(ac_charger_name, {})
+        
+        if user_input is None:
+            # Create schema with current values
+            schema = vol.Schema({
+                vol.Required(CONF_HOST, default=ac_charger_details.get(CONF_HOST, "")): str,
+                vol.Required(CONF_PORT, default=ac_charger_details.get(CONF_PORT, DEFAULT_PORT)): int,
+                vol.Required(CONF_SLAVE_ID, default=ac_charger_details.get(CONF_SLAVE_ID, 1)): int,
+                vol.Optional(CONF_REMOVE_DEVICE, default=False): bool,
+            })
+            
+            return self.async_show_form(
+                step_id=STEP_AC_CHARGER_CONFIG,
+                data_schema=schema,
+            )
+        
+        # Check if user wants to remove the device
+        if user_input.get(CONF_REMOVE_DEVICE, False):
+            # Remove the AC charger
+            new_data = dict(self._data)
+            
+            # Remove from AC charger connections
+            new_ac_charger_connections = dict(ac_charger_connections)
+            if ac_charger_name in new_ac_charger_connections:
+                del new_ac_charger_connections[ac_charger_name]
+            new_data[CONF_AC_CHARGER_CONNECTIONS] = new_ac_charger_connections
+            
+            # Remove from AC charger slave IDs
+            ac_charger_slave_id = ac_charger_details.get(CONF_SLAVE_ID)
+            ac_charger_slave_ids = new_data.get(CONF_AC_CHARGER_SLAVE_ID, [])
+            if ac_charger_slave_id in ac_charger_slave_ids:
+                ac_charger_slave_ids.remove(ac_charger_slave_id)
+            new_data[CONF_AC_CHARGER_SLAVE_ID] = ac_charger_slave_ids
+            
+            # Update the configuration entry
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            
+            return self.async_create_entry(title="", data={})
+        
+        # Validate host, port, and slave ID
+        host_port_errors = validate_host_port(user_input.get(CONF_HOST, ""), user_input.get(CONF_PORT, 0))
+        errors.update(host_port_errors)
+        
+        # Validate slave ID
+        slave_id = user_input.get(CONF_SLAVE_ID)
+        existing_ids = []
+        
+        # Get existing AC charger slave IDs excluding the current one
+        for name, details in ac_charger_connections.items():
+            if name != ac_charger_name:
+                existing_ids.append(details.get(CONF_SLAVE_ID))
+        
+        # Also check for conflicts with inverter IDs
+        inverter_slave_ids = self._data.get(CONF_INVERTER_SLAVE_ID, [])
+        
+        slave_id_errors = validate_slave_id(slave_id or 0, existing_ids)
+        errors.update(slave_id_errors or {})
+        
+        # Check for conflicts with inverter IDs
+        if not errors and slave_id in inverter_slave_ids:
+            errors[CONF_SLAVE_ID] = "ac_charger_conflicts_inverter"
+        
+        if errors:
+            # Re-create schema with user input values for error display
+            schema = vol.Schema({
+                vol.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): str,
+                vol.Required(CONF_PORT, default=user_input.get(CONF_PORT, DEFAULT_PORT)): int,
+                vol.Required(CONF_SLAVE_ID, default=user_input.get(CONF_SLAVE_ID, 1)): int,
+                vol.Optional(CONF_REMOVE_DEVICE, default=user_input.get(CONF_REMOVE_DEVICE, False)): bool,
+            })
+                
+            return self.async_show_form(
+                step_id=STEP_AC_CHARGER_CONFIG,
+                data_schema=schema,
+                errors=errors,
+            )
+        
+        # Update the AC charger configuration
+        new_data = dict(self._data)
+        new_ac_charger_connections = dict(ac_charger_connections)
+        
+        # Update the AC charger details
+        new_ac_charger_connections[ac_charger_name] = {
+            CONF_HOST: user_input[CONF_HOST],
+            CONF_PORT: user_input[CONF_PORT],
+            CONF_SLAVE_ID: slave_id
+        }
+        
+        # Update the configuration entry
+        new_data[CONF_AC_CHARGER_CONNECTIONS] = new_ac_charger_connections
+        
+        # Update the AC charger slave IDs if changed
+        old_slave_id = ac_charger_details.get(CONF_SLAVE_ID)
+        if old_slave_id != slave_id:
+            ac_charger_slave_ids = new_data.get(CONF_AC_CHARGER_SLAVE_ID, [])
+            if old_slave_id in ac_charger_slave_ids:
+                ac_charger_slave_ids.remove(old_slave_id)
+            ac_charger_slave_ids.append(slave_id)
+            new_data[CONF_AC_CHARGER_SLAVE_ID] = ac_charger_slave_ids
+        
+        self.hass.config_entries.async_update_entry(
+            self.config_entry, data=new_data
+        )
+        
+        return self.async_create_entry(title="", data={})
+
+    async def async_step_dc_charger_config(self, user_input: dict[str, Any] | None = None):
+        """Handle DC charger configuration."""
+        errors = {}
+        
+        # Get the DC charger details
+        dc_charger_id = self._selected_device["id"] if self._selected_device else None
+        dc_charger_slave_id = int(dc_charger_id) if dc_charger_id and dc_charger_id.isdigit() else None
+        
+        if user_input is None:
+            # Load inverters for selection
+            inverters = {}
+            inverter_connections = self._data.get(CONF_INVERTER_CONNECTIONS, {})
+            
+            for inv_name, inv_details in inverter_connections.items():
+                inverters[inv_name] = f"{inv_name} (Slave ID: {inv_details.get(CONF_SLAVE_ID)})"
+            
+            # Create schema with current values and inverter selection
+            schema = vol.Schema({
+                vol.Optional(CONF_REMOVE_DEVICE, default=False): bool,
+            })
+            
+            return self.async_show_form(
+                step_id=STEP_DC_CHARGER_CONFIG,
+                data_schema=schema,
+            )
+
+        
+        # Check if user wants to remove the device
+        if user_input.get(CONF_REMOVE_DEVICE, False):
+            # Remove the DC charger
+            new_data = dict(self._data)
+            
+            # Remove from DC charger slave IDs
+            dc_charger_slave_ids = new_data.get(CONF_DC_CHARGER_SLAVE_ID, [])
+            if dc_charger_slave_id in dc_charger_slave_ids:
+                dc_charger_slave_ids.remove(dc_charger_slave_id)
+            new_data[CONF_DC_CHARGER_SLAVE_ID] = dc_charger_slave_ids
+            
+            # Update the configuration entry
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            
+            return self.async_create_entry(title="", data={})
+        return self.async_create_entry(title="", data={})
 
     def _create_reconfigure_schema(self, inv_ids: str = "") -> vol.Schema:
         """Create schema for reconfiguration step with default or provided values."""
@@ -579,91 +1039,38 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required(CONF_INVERTER_SLAVE_ID, default=inv_ids): str,
         })
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        """Manage the options for the custom component."""
-        device_type = self._data.get(CONF_DEVICE_TYPE)
-        
-        if device_type == DEVICE_TYPE_PLANT:
-            return await self.async_step_plant_options(user_input)
-        elif device_type == DEVICE_TYPE_INVERTER:
-            return await self.async_step_inverter_options(user_input)
-        elif device_type == DEVICE_TYPE_AC_CHARGER:
-            return await self.async_step_ac_charger_options(user_input)
-        elif device_type == DEVICE_TYPE_DC_CHARGER:
-            return await self.async_step_dc_charger_options(user_input)
-        
-        # Default fallback to reconfigure step for backward compatibility
-        return await self.async_step_reconfigure(user_input)
-    
-    async def async_step_plant_options(self, user_input: dict[str, Any] | None = None):
-        """Handle plant options."""
-        # For now, just use the reconfigure step for plants
-        return await self.async_step_reconfigure(user_input)
-    
-    async def async_step_inverter_options(self, user_input: dict[str, Any] | None = None):
-        """Handle inverter options."""
-        # For now, just use the reconfigure step for inverters
-        return await self.async_step_reconfigure(user_input)
-    
-    async def async_step_ac_charger_options(self, user_input: dict[str, Any] | None = None):
-        """Handle AC charger options."""
-        # For now, just use the reconfigure step for AC chargers
-        return await self.async_step_reconfigure(user_input)
-    
-    async def async_step_dc_charger_options(self, user_input: dict[str, Any] | None = None):
-        """Handle DC charger options."""
-        # For now, just use the reconfigure step for DC chargers
-        return await self.async_step_reconfigure(user_input)
-
-    async def async_step_reconfigure(self, user_input=None):
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
         """Handle reconfiguration of inverter and AC charger slave IDs."""
         errors = {}
         
         if user_input is None:
-            # Create schema with current values
             schema = self._create_reconfigure_schema()
             return self.async_show_form(
-                step_id="reconfigure",
-                data_schema=schema,
+                step_id=STEP_RECONFIGURE,
+                data_schema=schema
             )
+        
 
-        # Process and validate inverter ID
-        try:
-            inverter_id = int(user_input[CONF_INVERTER_SLAVE_ID])
+        # Simple validation
+        inverter_id_str = user_input.get(CONF_INVERTER_SLAVE_ID, "")
+        if not inverter_id_str.isdigit():
+            errors[CONF_INVERTER_SLAVE_ID] = "invalid_integer_value"
+        else:
+            inverter_id = int(inverter_id_str)
             if not (1 <= inverter_id <= 246):
                 errors[CONF_INVERTER_SLAVE_ID] = "each_id_must_be_between_1_and_246"
-        except (ValueError, TypeError):
-            errors[CONF_INVERTER_SLAVE_ID] = "invalid_integer_value"
 
-
+        
         if errors:
-            # Re-create schema with user input values for error display
-            schema = self._create_reconfigure_schema(
-                user_input.get(CONF_INVERTER_SLAVE_ID, "")
-            )
+            schema = self._create_reconfigure_schema(inverter_id_str)
             return self.async_show_form(
-                step_id="reconfigure",
-                data_schema=schema,
-                errors=errors,
+                step_id=STEP_RECONFIGURE,
+                data_schema=schema, errors=errors
             )
 
-        # Ensure we preserve the device type (especially important if it's DEVICE_TYPE_PLANT)
-        device_type = self._data.get(CONF_DEVICE_TYPE)
         
-        # Update the configuration entry with the new IDs
-        new_data = {
-            **self._data,
-            CONF_INVERTER_SLAVE_ID: [inverter_id],
-            CONF_AC_CHARGER_SLAVE_ID: [],
-            CONF_DC_CHARGER_SLAVE_ID: [],
-        }
-        
-        # Ensure device type is preserved
-        if device_type:
-            new_data[CONF_DEVICE_TYPE] = device_type
-            
-        self.hass.config_entries.async_update_entry(
-            self.config_entry, data=new_data
-        )
-        
+        # Update configuration
+        new_data = dict(self._data)
+        new_data[CONF_INVERTER_SLAVE_ID] = [int(inverter_id_str)]
+        self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
         return self.async_create_entry(title="", data={})
