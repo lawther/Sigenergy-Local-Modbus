@@ -181,7 +181,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the initial step."""
+        """Handle the initial step when adding a new device."""
         # Load existing plants
         await self._async_load_plants()
         
@@ -196,7 +196,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     async def async_step_device_type(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the device type selection."""
+        """Handle the device type selection when adding a new device."""
         if user_input is None:
             return self.async_show_form(
                 step_id=STEP_DEVICE_TYPE,
@@ -217,7 +217,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     async def async_step_plant_config(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the plant configuration step."""
+        """Handle the plant configuration step when adding a new plant device."""
         errors = {}
         
         if user_input is None:
@@ -282,7 +282,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     async def async_step_select_plant(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the plant selection step."""
+        """Handle the plant selection step when adding a new child device."""
         if not self._plants:
             # No plants available, abort with error
             return self.async_abort(reason="no_plants_available")
@@ -326,7 +326,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     async def async_step_inverter_config(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the inverter configuration step."""
+        """Handle the inverter configuration step when adding a new inverter device."""
         errors = {}
         
         if user_input is None:
@@ -395,7 +395,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     async def async_step_ac_charger_config(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the AC charger configuration step."""
+        """Handle the AC charger configuration step when adding a new AC charger device."""
         errors = {}
         
         if user_input is None:
@@ -461,7 +461,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     async def async_step_select_inverter(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the inverter selection step for DC chargers."""
+        """Handle the inverter selection step when adding a new DC charger device."""
         if not self._inverters:
             # No inverters available, abort with error
             return self.async_abort(reason="no_inverters_available")
@@ -510,7 +510,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         return self.async_abort(reason="parent_plant_not_found")
 
     async def _async_load_plants(self) -> None:
-        """Load existing plants from config entries."""
+        """Load existing plants from config entries when adding a new device."""
         self._plants = {}
         
         # Log the number of config entries for debugging
@@ -529,7 +529,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         _LOGGER.debug("Found plants: %s", self._plants)
     
     async def _async_load_inverters(self, plant_entry_id: str) -> None:
-        """Load existing inverters for a specific plant."""
+        """Load existing inverters for a specific plant when adding a new DC charger device."""
         self._inverters = {}
         
         for entry in self.hass.config_entries.async_entries(DOMAIN):
@@ -540,7 +540,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         _LOGGER.debug("Found inverters for plant %s: %s", plant_entry_id, self._inverters)
 
     def _create_reconfigure_schema(self, inv_ids=""):
-        """Create schema for reconfiguration step with default or provided values."""
+        """Create schema with default or provided values when adding a new device."""
         # Use provided values or get current values from data
         if not inv_ids:
             current_ids = self._data.get(CONF_INVERTER_SLAVE_ID, [])
@@ -557,7 +557,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         return SigenergyOptionsFlowHandler(config_entry)
 
 class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle Sigenergy options."""
+    """Handle Sigenergy options for reconfiguring existing devices."""
 
     def __init__(self, config_entry):
         """Initialize options flow."""
@@ -572,7 +572,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         self._temp_config = {}
 
     async def _async_load_devices(self) -> None:
-        """Load all devices for selection."""
+        """Load all existing devices for reconfiguration selection."""
         self._devices = {}
         device_type = self._data.get(CONF_DEVICE_TYPE)
         _LOGGER.debug("Loading devices for device type: %s", device_type)
@@ -619,7 +619,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         _LOGGER.debug("Loaded devices for selection: %s", self._devices)
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        """Manage the options for the custom component."""
+        """Initial handler for device reconfiguration options."""
         device_type = self._data.get(CONF_DEVICE_TYPE)
         _LOGGER.debug("Options flow init for device type: %s", device_type)
         
@@ -642,7 +642,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_abort(reason="unknown_device_type")
     
     async def async_step_select_device(self, user_input: dict[str, Any] | None = None):
-        """Handle device selection step."""
+        """Handle selection of which existing device to reconfigure."""
         if not self._devices:
             _LOGGER.debug("No devices available for selection, going to plant config")
             return await self.async_step_plant_config()
@@ -693,7 +693,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_abort(reason="unknown_device_type")
     
     async def async_step_plant_config(self, user_input: dict[str, Any] | None = None):
-        """Handle plant configurations"""
+        """Handle reconfiguration of an existing plant device."""
         errors = {}
         
         if user_input is None:
@@ -740,7 +740,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_create_entry(title="", data={})
     
     async def async_step_inverter_config(self, user_input: dict[str, Any] | None = None):
-        """Handle inverter configurations"""
+        """Handle reconfiguration of an existing inverter device."""
         errors = {}
         
         # Get the inverter details
@@ -868,8 +868,10 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         
         return self.async_create_entry(title="", data={})
     
-    async def async_step_ac_charger_config(self, user_input: dict[str, Any] | None = None):
-        """Handle AC charger configurations"""
+    async def async_step_ac_charger_config(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration of an existing AC charger device."""
         errors = {}
         
         # Get the AC charger details
@@ -984,7 +986,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_create_entry(title="", data={})
 
     async def async_step_dc_charger_config(self, user_input: dict[str, Any] | None = None):
-        """Handle DC charger configuration."""
+        """Handle reconfiguration of an existing DC charger device."""
         errors = {}
         
         # Get the DC charger details
@@ -1030,7 +1032,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_create_entry(title="", data={})
 
     def _create_reconfigure_schema(self, inv_ids: str = "") -> vol.Schema:
-        """Create schema for reconfiguration step with default or provided values."""
+        """Create schema for reconfiguring device IDs with default or provided values."""
         if not inv_ids:
             current_ids = self._data.get(CONF_INVERTER_SLAVE_ID, [])
             inv_ids = ", ".join(str(i) for i in current_ids) if current_ids else ""
@@ -1040,7 +1042,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         })
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
-        """Handle reconfiguration of inverter and AC charger slave IDs."""
+        """Handle reconfiguration of existing inverter and AC charger slave IDs."""
         errors = {}
         
         if user_input is None:
