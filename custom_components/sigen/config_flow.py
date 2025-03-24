@@ -303,6 +303,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         self._data[CONF_PARENT_PLANT_ID] = self._selected_plant_entry_id
         
         # Get the plant entry to access its configuration
+        _LOGGER.debug("Selected plant entry ID: %s", self._selected_plant_entry_id)
         plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
         if plant_entry:
             # Copy host and port from the plant
@@ -330,15 +331,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
         
         if user_input is None:
-            # For first inverter, use plant's host and port
-            if self._data.get(CONF_HOST) and self._data.get(CONF_PORT):
-                schema = vol.Schema({
-                    vol.Required(CONF_HOST, default=self._data[CONF_HOST]): str,
-                    vol.Required(CONF_PORT, default=self._data[CONF_PORT]): int,
-                    vol.Required(CONF_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
-                })
-            else:
-                schema = STEP_INVERTER_CONFIG_SCHEMA
+            schema = STEP_INVERTER_CONFIG_SCHEMA
             return self.async_show_form(
                 step_id=STEP_INVERTER_CONFIG,
                 data_schema=schema,
@@ -477,16 +470,41 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 data_schema=schema,
             )
         
-        # Get the selected inverter
-        parent_inverter_id = user_input[CONF_PARENT_INVERTER_ID]
-        inverter_entry = self.hass.config_entries.async_get_entry(parent_inverter_id)
-        if not inverter_entry:
-            return self.async_abort(reason="parent_inverter_not_found")
-            
-        # Get the slave ID and verify it exists
-        inverter_slave_id = inverter_entry.data.get(CONF_SLAVE_ID)
+        # Get the plant data
+        plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
+        if not plant_entry:
+            return self.async_abort(reason="parent_plant_not_found")
+
+        # Get the inverter connections
+        inverter_connections = plant_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
+        _LOGGER.debug("Inverter connections: %s", inverter_connections)
+
+        # Get the selected inverter connection details
+        selected_inverter = user_input[CONF_PARENT_INVERTER_ID]
+        inverter_details = list(inverter_connections.values())[selected_inverter]
+        _LOGGER.debug("Selected inverter: %s, details: %s", selected_inverter, inverter_details)
+
+        if not inverter_details:
+            return self.async_abort(reason="inverter_details_not_found")
+
+        # Get the slave ID and host and verify it exists
+        inverter_slave_id = inverter_details.get(CONF_SLAVE_ID)
+        inverter_host = inverter_details.get(CONF_HOST)
+        inverter_port = inverter_details.get(CONF_PORT)
+        # inverter_slave_id = inverter_entry.data.get(CONF_SLAVE_ID)
         if not inverter_slave_id:
+            _LOGGER.debug("Inverter slave ID not found in details: %s", inverter_details)
             return self.async_abort(reason="parent_inverter_invalid")
+        
+        if not inverter_host:
+            _LOGGER.debug("Inverter host not found in details: %s", inverter_details)
+            return self.async_abort(reason="parent_inverter_host_not_found")
+        
+        # Validate the host and port
+        host_port_errors = validate_host_port(inverter_host, inverter_port)
+        if host_port_errors:
+            _LOGGER.debug("Host/port validation errors: %s", host_port_errors)
+            return self.async_abort(reason="invalid_host_or_port")
             
         # Check for existing DC charger with this ID
         plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
@@ -531,11 +549,40 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     async def _async_load_inverters(self, plant_entry_id: str) -> None:
         """Load existing inverters for a specific plant when adding a new DC charger device."""
         self._inverters = {}
+
+        plant_entry = self.hass.config_entries.async_get_entry(plant_entry_id)
+        if not plant_entry:
+            _LOGGER.error("SigenergyConfigFlow.async_load_inverters: No plant entry found for ID: %s", plant_entry_id)
+            return
+        plant_data = dict(plant_entry.data)
+        inverter_connections = plant_data.get(CONF_INVERTER_CONNECTIONS, {})
+        _LOGGER.debug("Inverter connections: %s", inverter_connections)
         
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            if (entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER and
-                entry.data.get(CONF_PARENT_PLANT_ID) == plant_entry_id):
-                self._inverters[entry.entry_id] = entry.data.get(CONF_NAME, f"Inverter {entry.entry_id}")
+        # Process inverters with special handling for the first implicit inverter
+        for i, (inv_name, inv_details) in enumerate(inverter_connections.items()):
+            device_key = f"inverter_{inv_name}"
+            # self._inverters[i] = inv_name, inv_details
+            # For first inverter (implicit), remove the number and include host/ID info
+            if i == 0:
+                device_key = "inverter"
+                display_name = f"Inverter (Host: {inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
+            else:
+                device_key = display_name.replace(" ", "_").lower()
+                display_name = f"{inv_name} (Host: {inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
+            
+            self._inverters[i] = display_name
+            _LOGGER.debug("Added inverter device: %s -> %s", i, self._inverters[i])
+        
+
+        # for entry in self.hass.config_entries.async_entries(DOMAIN):
+        #     _LOGGER.debug("SigenergyConfigFlow.async_load_inverters: Found entry: %s, device type: %s, parent plant ID: %s",
+        #                 entry.entry_id, 
+        #                 entry.data.get(CONF_DEVICE_TYPE), 
+        #                 entry.data.get(CONF_PARENT_PLANT_ID))
+        #     if (entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER and
+        #         entry.data.get(CONF_PARENT_PLANT_ID) == plant_entry_id):
+        #         self._inverters[entry.entry_id] = entry.data.get(CONF_NAME, f"Inverter {entry.entry_id}")
+        #         _LOGGER.debug("SigenergyConfigFlow.async_load_inverters: Found inverter: %s", self._inverters[entry.entry_id])
         
         _LOGGER.debug("Found inverters for plant %s: %s", plant_entry_id, self._inverters)
 
