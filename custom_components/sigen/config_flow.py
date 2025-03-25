@@ -16,6 +16,7 @@ from .const import (
     CONF_AC_CHARGER_SLAVE_ID,
     CONF_AC_CHARGER_CONNECTIONS,
     CONF_DC_CHARGER_SLAVE_ID,
+    CONF_DC_CHARGER_CONNECTIONS,
     CONF_DEVICE_TYPE,
     CONF_INVERTER_SLAVE_ID,
     CONF_INVERTER_CONNECTIONS,
@@ -257,6 +258,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Store the validated lists
         self._data[CONF_INVERTER_SLAVE_ID] = [inverter_id]
         self._data[CONF_AC_CHARGER_SLAVE_ID] = []
+        self._data[CONF_DC_CHARGER_CONNECTIONS] = {}
         self._data[CONF_DC_CHARGER_SLAVE_ID] = []
 
         # Create the inverter connections dictionary for the implicit first inverter
@@ -517,6 +519,16 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             # Update the plant's configuration with the new DC charger
             new_data = dict(plant_entry.data)
             new_data[CONF_DC_CHARGER_SLAVE_ID] = plant_dc_chargers + [inverter_slave_id]
+
+            # Create or update the DC charger connections dictionary
+            dc_charger_connections = new_data.get(CONF_DC_CHARGER_CONNECTIONS, {})
+            dc_charger_name = f"DC Charger {len(plant_dc_chargers) + 1}"
+            dc_charger_connections[dc_charger_name] = {
+                CONF_HOST: inverter_host,
+                CONF_PORT: inverter_port,
+                CONF_SLAVE_ID: inverter_slave_id
+            }
+            new_data[CONF_DC_CHARGER_CONNECTIONS] = dc_charger_connections
             
             self.hass.config_entries.async_update_entry(
                 plant_entry,

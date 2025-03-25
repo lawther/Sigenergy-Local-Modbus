@@ -22,6 +22,7 @@ from .const import (
     CONF_AC_CHARGER_SLAVE_ID,
     CONF_DC_CHARGER_COUNT,
     CONF_DC_CHARGER_SLAVE_ID,
+    CONF_DC_CHARGER_CONNECTIONS,
     CONF_INVERTER_COUNT,
     CONF_INVERTER_SLAVE_ID,
     CONF_INVERTER_CONNECTIONS,
@@ -109,6 +110,7 @@ class SigenergyModbusHub:
             CONF_AC_CHARGER_SLAVE_ID, list(range(self.inverter_count + 1, self.inverter_count + self.ac_charger_count + 1))
         )
         self.ac_charger_connections = config_entry.data.get(CONF_AC_CHARGER_CONNECTIONS, {})
+        self.dc_charger_connections = config_entry.data.get(CONF_DC_CHARGER_CONNECTIONS, {})
         self.dc_charger_slave_ids = config_entry.data.get(
             CONF_DC_CHARGER_SLAVE_ID, list(range(self.inverter_count + self.ac_charger_count + 1,
                                                  self.inverter_count + self.ac_charger_count + self.dc_charger_count + 1))
@@ -136,6 +138,11 @@ class SigenergyModbusHub:
         
         # For AC chargers, look up their connection details
         for name, details in self.ac_charger_connections.items():
+            if details.get(CONF_SLAVE_ID) == slave_id:
+                return (details[CONF_HOST], details[CONF_PORT])
+                
+        # For DC chargers, look up their connection details
+        for name, details in self.dc_charger_connections.items():
             if details.get(CONF_SLAVE_ID) == slave_id:
                 return (details[CONF_HOST], details[CONF_PORT])
                 
