@@ -15,7 +15,6 @@ from homeassistant.data_entry_flow import FlowResult
 from .const import (
     CONF_AC_CHARGER_SLAVE_ID,
     CONF_AC_CHARGER_CONNECTIONS,
-    CONF_DC_CHARGER_SLAVE_ID,
     CONF_DC_CHARGER_CONNECTIONS,
     CONF_DEVICE_TYPE,
     CONF_INVERTER_SLAVE_ID,
@@ -259,7 +258,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         self._data[CONF_INVERTER_SLAVE_ID] = [inverter_id]
         self._data[CONF_AC_CHARGER_SLAVE_ID] = []
         self._data[CONF_DC_CHARGER_CONNECTIONS] = {}
-        self._data[CONF_DC_CHARGER_SLAVE_ID] = []
+
 
         # Create the inverter connections dictionary for the implicit first inverter
         inverter_name = "Inverter 1"
@@ -511,18 +510,19 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Check for existing DC charger with this ID
         plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
         if plant_entry:
-            plant_dc_chargers = plant_entry.data.get(CONF_DC_CHARGER_SLAVE_ID, [])
-            
-            if inverter_slave_id in plant_dc_chargers:
+            # Get existing DC charger connections and extract their slave IDs
+            dc_charger_connections_existing = plant_entry.data.get(CONF_DC_CHARGER_CONNECTIONS, {})
+            plant_dc_charger_ids = [details.get(CONF_SLAVE_ID) for details in dc_charger_connections_existing.values() if details.get(CONF_SLAVE_ID) is not None]
+
+            if inverter_slave_id in plant_dc_charger_ids:
                 return self.async_abort(reason="duplicate_ids_found")
-                
+
             # Update the plant's configuration with the new DC charger
             new_data = dict(plant_entry.data)
-            new_data[CONF_DC_CHARGER_SLAVE_ID] = plant_dc_chargers + [inverter_slave_id]
 
             # Create or update the DC charger connections dictionary
             dc_charger_connections = new_data.get(CONF_DC_CHARGER_CONNECTIONS, {})
-            dc_charger_name = f"DC Charger {len(plant_dc_chargers) + 1}"
+            dc_charger_name = f"DC Charger {len(dc_charger_connections) + 1}"
             dc_charger_connections[dc_charger_name] = {
                 CONF_HOST: inverter_host,
                 CONF_PORT: inverter_port,
@@ -668,10 +668,11 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 self._devices[f"ac_charger_{ac_name}"] = f"{ac_name} (Host: {ac_details.get(CONF_HOST)}, ID: {ac_details.get(CONF_SLAVE_ID)})"
             
             # Add DC chargers
-            dc_charger_ids = self._data.get(CONF_DC_CHARGER_SLAVE_ID, [])
-            for i, dc_id in enumerate(dc_charger_ids):
-                dc_name = f"DC Charger {i+1}"
-                self._devices[f"dc_charger_{dc_id}"] = f"{dc_name} (ID: {dc_id})"
+            dc_charger_connections = self._data.get(CONF_DC_CHARGER_CONNECTIONS, {})
+            for dc_name, dc_details in dc_charger_connections.items():
+                dc_id = dc_details.get(CONF_SLAVE_ID)
+                if dc_id is not None:
+                    self._devices[f"dc_charger_{dc_id}"] = f"{dc_name} (ID: {dc_id})"
         
         self._devices_loaded = True
         
@@ -825,10 +826,12 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # Check if user wants to remove the device
         if user_input.get(CONF_REMOVE_DEVICE, False):
             # Validate that the inverter can be removed
-            dc_chargers = self._data.get(CONF_DC_CHARGER_SLAVE_ID, [])
+            # Check if the inverter's slave ID is used by any DC charger connection
+            dc_charger_connections = self._data.get(CONF_DC_CHARGER_CONNECTIONS, {})
+            dc_charger_slave_ids = [details.get(CONF_SLAVE_ID) for details in dc_charger_connections.values() if details.get(CONF_SLAVE_ID) is not None]
             inverter_slave_id = inverter_details.get(CONF_SLAVE_ID)
             
-            if inverter_slave_id in dc_chargers:
+            if inverter_slave_id in dc_charger_slave_ids:
                 errors[CONF_REMOVE_DEVICE] = "cannot_remove_parent"
                 
                 # Re-create schema with error
@@ -1075,12 +1078,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input.get(CONF_REMOVE_DEVICE, False):
             # Remove the DC charger
             new_data = dict(self._data)
-            
-            # Remove from DC charger slave IDs
-            dc_charger_slave_ids = new_data.get(CONF_DC_CHARGER_SLAVE_ID, [])
-            if dc_charger_slave_id in dc_charger_slave_ids:
-                dc_charger_slave_ids.remove(dc_charger_slave_id)
-            new_data[CONF_DC_CHARGER_SLAVE_ID] = dc_charger_slave_ids
             
             # Update the configuration entry
             self.hass.config_entries.async_update_entry(
