@@ -2,6 +2,10 @@
 
 This integration allows you to monitor and control your Sigenergy ESS (Energy Storage System) through Home Assistant. It dynamically discovers and configures your plant, inverters, AC chargers, and DC chargers, providing real-time data and control capabilities.
 
+## Highly experimental
+This implementation is still under development and should not be used if you need help.
+It is published for those that can help with finding out what works and what doesn't.
+
 ## Features
 
 - **Dynamic Device Addition and Configuration:** Easily add and configure multiple inverters, AC chargers, and DC chargers within a single plant configuration.
