@@ -308,11 +308,16 @@ async def async_setup_entry(
             _LOGGER.warning("Missing slave ID for DC charger '%s' in configuration, skipping sensor setup", dc_charger_name)
             continue
 
+        # Check if coordinator actually has data for this DC charger ID
+        if not coordinator.data or "dc_chargers" not in coordinator.data or dc_charger_id not in coordinator.data or not coordinator.data["dc_chargers"][dc_charger_id]:
+            _LOGGER.warning("No data found for DC charger %s (ID: %s) after coordinator refresh, skipping sensor setup.", dc_charger_name, dc_charger_id)
+            continue
+
         _LOGGER.debug("Adding sensors for DC charger %s (ID: %s)", dc_charger_name, dc_charger_id)
         for description in SS.DC_CHARGER_SENSORS + SCS.DC_CHARGER_SENSORS:
             sensor_name = f"{dc_charger_name} {description.name}"
             entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-            
+
             entities.append(
                 SigenergySensor(
                     coordinator=coordinator,

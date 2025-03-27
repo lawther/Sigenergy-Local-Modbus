@@ -76,7 +76,10 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "ac_chargers": ac_charger_data,
                     "dc_chargers": dc_charger_data,
                 }
-                
+
+                # Log the final DC charger data structure
+                _LOGGER.debug("Coordinator Update: Final dc_chargers data: %s", dc_charger_data)
+
                 return data
         except asyncio.TimeoutError as exception:
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception

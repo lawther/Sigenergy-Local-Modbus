@@ -820,17 +820,22 @@ class SigenergyModbusHub:
                         data[register_name] = None
                         if register_def.is_supported is None:
                             register_def.is_supported = False
+                        # Add detailed logging for failed read
+                        _LOGGER.debug("DC Charger %d: Failed to read register %s (Addr: %d). Result: %s",
+                                      dc_charger_id, register_name, register_def.address, registers)
                         continue
-
+    
                     value = self._decode_value(
                         registers=registers,
                         data_type=register_def.data_type,
                         gain=register_def.gain,
                     )
-
+    
                     data[register_name] = value
-                    # _LOGGER.debug("Read register %s = %s from DC charger %d", register_name, value, dc_charger_id)
-
+                    # Add detailed logging for successful read
+                    _LOGGER.debug("DC Charger %d: Read register %s (Addr: %d) = %s",
+                                  dc_charger_id, register_name, register_def.address, value)
+    
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
                         register_def.is_supported = True
