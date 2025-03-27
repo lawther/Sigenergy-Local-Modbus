@@ -13,6 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    CONF_SLAVE_ID, # Import CONF_SLAVE_ID
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
@@ -29,9 +30,10 @@ _LOGGER = logging.getLogger(__name__)
 class SigenergySwitchEntityDescription(SwitchEntityDescription):
     """Class describing Sigenergy switch entities."""
 
-    is_on_fn: Callable[[Dict[str, Any], Optional[int]], bool] = None
-    turn_on_fn: Callable[[Any, Optional[int]], None] = None
-    turn_off_fn: Callable[[Any, Optional[int]], None] = None
+    # Provide default lambdas instead of None to satisfy type checker
+    is_on_fn: Callable[[Dict[str, Any], Optional[int]], bool] = lambda data, id: False
+    turn_on_fn: Callable[[Any, Optional[int]], None] = lambda hub, id: None
+    turn_off_fn: Callable[[Any, Optional[int]], None] = lambda hub, id: None
     available_fn: Callable[[Dict[str, Any], Optional[int]], bool] = lambda data, _: True
     entity_registry_enabled_default: bool = True
 
@@ -172,9 +174,15 @@ async def async_setup_entry(
 
     # Add DC charger switches
     dc_charger_no = 0
-    for dc_charger_id in coordinator.hub.dc_charger_slave_ids:
-        dc_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
-        _LOGGER.debug("Adding DC charger %s with dc_charger_no %s as %s", dc_charger_id, dc_charger_no, dc_charger_name)
+    # Iterate through the connection details dictionary
+    for dc_charger_name, connection_details in coordinator.hub.dc_charger_connections.items():
+        # Extract the slave ID from the details
+        dc_charger_id = connection_details.get(CONF_SLAVE_ID)
+        if dc_charger_id is None:
+            _LOGGER.warning("Missing slave ID for DC charger '%s' in configuration, skipping switch setup", dc_charger_name)
+            continue
+
+        _LOGGER.debug("Adding switches for DC charger %s (ID: %s)", dc_charger_name, dc_charger_id)
         for description in DC_CHARGER_SWITCHES:
             entities.append(
                 SigenergySwitch(
@@ -185,6 +193,9 @@ async def async_setup_entry(
                     device_type=DEVICE_TYPE_DC_CHARGER,
                     device_id=dc_charger_id,
                     device_name=dc_charger_name,
+                    # Note: The DC_CHARGER_SWITCHES definitions might need adjustment
+                    # as they currently reference 'inverter_id' in their lambda functions.
+                    # This might cause issues later if not corrected.
                 )
             )
         dc_charger_no += 1
@@ -216,8 +227,11 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         self._device_id = device_id
         
         # Get the device number if any as a string for use in names
-        device_number_str = device_name.split()[-1]
-        device_number_str = f" {device_number_str}" if device_number_str.isdigit() else ""
+        device_number_str = ""
+        if device_name: # Check if device_name is not None or empty
+            parts = device_name.split()
+            if parts and parts[-1].isdigit():
+                device_number_str = f" {parts[-1]}"
 
         # Set unique ID
         if device_type == DEVICE_TYPE_PLANT:

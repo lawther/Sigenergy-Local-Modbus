@@ -5,7 +5,8 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from typing import Any, Dict, Optional
+# Duplicate import removed
+# from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -26,6 +27,7 @@ from homeassistant.helpers.entity_registry import async_get as async_get_entity_
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    CONF_SLAVE_ID, # Added CONF_SLAVE_ID
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
@@ -297,14 +299,25 @@ async def async_setup_entry(
         ac_charger_no += 1
 
     # Add DC charger sensors
-    dc_charger_no = 0
-    for dc_charger_id in coordinator.hub.dc_charger_slave_ids:
-        dc_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
-        _LOGGER.debug("Adding DC charger %s with dc_charger_no %s as %s", dc_charger_id, dc_charger_no, dc_charger_name)
+    dc_charger_no = 0 # Keep counter for potential future naming needs, though name comes from dict key now
+    # Iterate through the connection details dictionary
+    for dc_charger_name, connection_details in coordinator.hub.dc_charger_connections.items():
+        # Extract the slave ID from the details
+        dc_charger_id = connection_details.get(CONF_SLAVE_ID)
+        if dc_charger_id is None:
+            _LOGGER.warning("Missing slave ID for DC charger '%s' in configuration, skipping sensor setup", dc_charger_name)
+            continue
+
+        # Check if coordinator actually has data for this DC charger ID
+        if not coordinator.data or "dc_chargers" not in coordinator.data or dc_charger_id not in coordinator.data or not coordinator.data["dc_chargers"][dc_charger_id]:
+            _LOGGER.warning("No data found for DC charger %s (ID: %s) after coordinator refresh, skipping sensor setup.", dc_charger_name, dc_charger_id)
+            continue
+
+        _LOGGER.debug("Adding sensors for DC charger %s (ID: %s)", dc_charger_name, dc_charger_id)
         for description in SS.DC_CHARGER_SENSORS + SCS.DC_CHARGER_SENSORS:
             sensor_name = f"{dc_charger_name} {description.name}"
             entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-            
+
             entities.append(
                 SigenergySensor(
                     coordinator=coordinator,
@@ -312,7 +325,7 @@ async def async_setup_entry(
                     name=sensor_name,
                     device_type=DEVICE_TYPE_DC_CHARGER,
                     device_id=dc_charger_id,
-                    device_name=dc_charger_name,
+                    device_name=dc_charger_name, # Use name from dict key
                 )
             )
         dc_charger_no += 1
@@ -362,7 +375,9 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_pv{pv_string_idx}_{description.key}"
                 _LOGGER.debug("Unique ID for PV string sensor %s", self._attr_unique_id)
             else:
-                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}{f'_{device_number_str}' if device_number_str.isdigit() else ''}_{description.key}"
+                # Use device_name directly for unique ID generation for chargers/inverters
+                unique_device_part = str(device_name).lower().replace(' ', '_') if device_name else device_type
+                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{unique_device_part}_{description.key}"
                 _LOGGER.debug("Unique ID for %s sensor %s", device_type, self._attr_unique_id)
 
             # Set device info (use provided device_info if available)
@@ -673,4 +688,3 @@ class PVStringSensor(SigenergySensor):
         except Exception as ex:
             _LOGGER.error("Error getting value for PV string sensor %s: %s", self.entity_id, ex)
             return STATE_UNKNOWN
-

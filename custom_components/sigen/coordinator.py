@@ -10,9 +10,8 @@ from typing import Any, Dict, List, Optional
 import async_timeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.exceptions import ConfigEntryAuthFailed
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_SLAVE_ID # Import CONF_SLAVE_ID
 from .modbus import SigenergyModbusHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,8 +58,15 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Fetch DC charger data for each DC charger
                 dc_charger_data = {}
-                for dc_charger_id in self.hub.dc_charger_slave_ids:
-                    dc_charger_data[dc_charger_id] = await self.hub.async_read_dc_charger_data(dc_charger_id)
+                # Iterate through the connection details dictionary
+                for charger_name, connection_details in self.hub.dc_charger_connections.items():
+                    # Extract the slave ID from the details
+                    dc_charger_id = connection_details.get(CONF_SLAVE_ID)
+                    if dc_charger_id is not None:
+                        _LOGGER.debug("Fetching data for DC charger %s (ID: %s)", charger_name, dc_charger_id)
+                        dc_charger_data[dc_charger_id] = await self.hub.async_read_dc_charger_data(dc_charger_id)
+                    else:
+                        _LOGGER.warning("Missing slave ID for DC charger '%s' in configuration", charger_name)
                 
                 # Combine all data
                 _LOGGER.debug("[CS][Coordinator] Plant data keys: %s", list(plant_data.keys()) if plant_data else None)
@@ -70,7 +76,10 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "ac_chargers": ac_charger_data,
                     "dc_chargers": dc_charger_data,
                 }
-                
+
+                # Log the final DC charger data structure
+                _LOGGER.debug("Coordinator Update: Final dc_chargers data: %s", dc_charger_data)
+
                 return data
         except asyncio.TimeoutError as exception:
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception

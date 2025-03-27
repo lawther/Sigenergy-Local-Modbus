@@ -21,7 +21,7 @@ from .const import (
     CONF_AC_CHARGER_COUNT,
     CONF_AC_CHARGER_SLAVE_ID,
     CONF_DC_CHARGER_COUNT,
-    CONF_DC_CHARGER_SLAVE_ID,
+    CONF_DC_CHARGER_CONNECTIONS,
     CONF_INVERTER_COUNT,
     CONF_INVERTER_SLAVE_ID,
     CONF_INVERTER_CONNECTIONS,
@@ -109,10 +109,7 @@ class SigenergyModbusHub:
             CONF_AC_CHARGER_SLAVE_ID, list(range(self.inverter_count + 1, self.inverter_count + self.ac_charger_count + 1))
         )
         self.ac_charger_connections = config_entry.data.get(CONF_AC_CHARGER_CONNECTIONS, {})
-        self.dc_charger_slave_ids = config_entry.data.get(
-            CONF_DC_CHARGER_SLAVE_ID, list(range(self.inverter_count + self.ac_charger_count + 1,
-                                                 self.inverter_count + self.ac_charger_count + self.dc_charger_count + 1))
-        )
+        self.dc_charger_connections = config_entry.data.get(CONF_DC_CHARGER_CONNECTIONS, {})
 
         # Read-only mode setting
         self.read_only = config_entry.data.get(CONF_READ_ONLY, DEFAULT_READ_ONLY)
@@ -136,6 +133,11 @@ class SigenergyModbusHub:
         
         # For AC chargers, look up their connection details
         for name, details in self.ac_charger_connections.items():
+            if details.get(CONF_SLAVE_ID) == slave_id:
+                return (details[CONF_HOST], details[CONF_PORT])
+                
+        # For DC chargers, look up their connection details
+        for name, details in self.dc_charger_connections.items():
             if details.get(CONF_SLAVE_ID) == slave_id:
                 return (details[CONF_HOST], details[CONF_PORT])
                 
@@ -818,17 +820,22 @@ class SigenergyModbusHub:
                         data[register_name] = None
                         if register_def.is_supported is None:
                             register_def.is_supported = False
+                        # Add detailed logging for failed read
+                        _LOGGER.debug("DC Charger %d: Failed to read register %s (Addr: %d). Result: %s",
+                                      dc_charger_id, register_name, register_def.address, registers)
                         continue
-
+    
                     value = self._decode_value(
                         registers=registers,
                         data_type=register_def.data_type,
                         gain=register_def.gain,
                     )
-
+    
                     data[register_name] = value
-                    # _LOGGER.debug("Read register %s = %s from DC charger %d", register_name, value, dc_charger_id)
-
+                    # Add detailed logging for successful read
+                    _LOGGER.debug("DC Charger %d: Read register %s (Addr: %d) = %s",
+                                  dc_charger_id, register_name, register_def.address, value)
+    
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
                         register_def.is_supported = True
