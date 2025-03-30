@@ -492,52 +492,44 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         inverter_slave_id = inverter_details.get(CONF_SLAVE_ID)
         inverter_host = inverter_details.get(CONF_HOST)
         inverter_port = inverter_details.get(CONF_PORT)
-        # inverter_slave_id = inverter_entry.data.get(CONF_SLAVE_ID)
-        if not inverter_slave_id:
-            _LOGGER.debug("Inverter slave ID not found in details: %s", inverter_details)
-            return self.async_abort(reason="parent_inverter_invalid")
-        
-        if not inverter_host:
-            _LOGGER.debug("Inverter host not found in details: %s", inverter_details)
-            return self.async_abort(reason="parent_inverter_host_not_found")
-        
+
         # Validate the host and port
         host_port_errors = validate_host_port(inverter_host, inverter_port)
         if host_port_errors:
             _LOGGER.debug("Host/port validation errors: %s", host_port_errors)
             return self.async_abort(reason="invalid_host_or_port")
             
-        # Check for existing DC charger with this ID
-        plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
-        if plant_entry:
-            # Get existing DC charger connections and extract their slave IDs
-            dc_charger_connections_existing = plant_entry.data.get(CONF_DC_CHARGER_CONNECTIONS, {})
-            plant_dc_charger_ids = [details.get(CONF_SLAVE_ID) for details in dc_charger_connections_existing.values() if details.get(CONF_SLAVE_ID) is not None]
+        # Get existing DC charger connections and extract their slave IDs
+        dc_charger_connections_existing = plant_entry.data.get(CONF_DC_CHARGER_CONNECTIONS, {})
+        plant_dc_charger_ids = [details.get(CONF_SLAVE_ID) for details in dc_charger_connections_existing.values() if details.get(CONF_SLAVE_ID) is not None]
+        _LOGGER.debug("Existing DC charger slave IDs: %s", plant_dc_charger_ids)
 
-            if inverter_slave_id in plant_dc_charger_ids:
-                return self.async_abort(reason="duplicate_ids_found")
+        if inverter_slave_id in plant_dc_charger_ids:
+            return self.async_abort(reason="duplicate_ids_found")
 
-            # Update the plant's configuration with the new DC charger
-            new_data = dict(plant_entry.data)
+        # Update the plant's configuration with the new DC charger
+        new_data = dict(plant_entry.data)
 
-            # Create or update the DC charger connections dictionary
-            dc_charger_connections = new_data.get(CONF_DC_CHARGER_CONNECTIONS, {})
-            dc_charger_name = f"DC Charger {len(dc_charger_connections) + 1}"
-            dc_charger_connections[dc_charger_name] = {
-                CONF_HOST: inverter_host,
-                CONF_PORT: inverter_port,
-                CONF_SLAVE_ID: inverter_slave_id
-            }
-            new_data[CONF_DC_CHARGER_CONNECTIONS] = dc_charger_connections
+        # Create or update the DC charger connections dictionary
+        dc_charger_connections = new_data.get(CONF_DC_CHARGER_CONNECTIONS, {})
+        dc_charger_name = f"DC Charger {len(dc_charger_connections) + 1}"
+        dc_charger_connections[dc_charger_name] = {
+            CONF_HOST: inverter_host,
+            CONF_PORT: inverter_port,
+            CONF_SLAVE_ID: inverter_slave_id
+        }
+        _LOGGER.debug("DC charger connections: %s", dc_charger_connections)
+        new_data[CONF_DC_CHARGER_CONNECTIONS] = dc_charger_connections
+        _LOGGER.debug("New data for plant entry: %s", new_data)
+        
+        self.hass.config_entries.async_update_entry(
+            plant_entry,
+            data=new_data
+        )
+        
+        return self.async_abort(reason="device_added")
             
-            self.hass.config_entries.async_update_entry(
-                plant_entry,
-                data=new_data
-            )
-            
-            return self.async_abort(reason="device_added")
-            
-        return self.async_abort(reason="parent_plant_not_found")
+        
 
     async def _async_load_plants(self) -> None:
         """Load existing plants from config entries when adding a new device."""
@@ -669,6 +661,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             
             # Add DC chargers
             dc_charger_connections = self._data.get(CONF_DC_CHARGER_CONNECTIONS, {})
+            _LOGGER.debug("DC Charger connections when loading devices: %s", dc_charger_connections)
             for dc_name, dc_details in dc_charger_connections.items():
                 dc_id = dc_details.get(CONF_SLAVE_ID)
                 if dc_id is not None:
