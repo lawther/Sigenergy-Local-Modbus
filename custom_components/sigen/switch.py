@@ -12,6 +12,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .common import(generate_device_name, generate_sigen_entity)
 from .const import (
     CONF_SLAVE_ID, # Import CONF_SLAVE_ID
     DEVICE_TYPE_AC_CHARGER,
@@ -116,92 +117,31 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Sigenergy switch platform."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    hub = hass.data[DOMAIN][config_entry.entry_id]["hub"]
-    entities = []
-
-    # Add plant switches
+    coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     plant_name = config_entry.data[CONF_NAME]
-    for description in PLANT_SWITCHES:
-        entities.append(
-            SigenergySwitch(
-                coordinator=coordinator,
-                hub=hub,
-                description=description,
-                name=f"{plant_name} {description.name}",
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-            )
-        )
+    _LOGGER.debug(f"Starting to add {SigenergySwitch}")
+    # Add plant Switches
+    entities : list[SigenergySwitch] = generate_sigen_entity(plant_name, None, None, coordinator, SigenergySwitch,
+                                           PLANT_SWITCHES, DEVICE_TYPE_PLANT)
 
-    # Add inverter switches
-    inverter_no = 1
-    for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
-        for description in INVERTER_SWITCHES:
-            entities.append(
-                SigenergySwitch(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{inverter_name} {description.name}",
-                    device_type=DEVICE_TYPE_INVERTER,
-                    device_id=inverter_id,
-                    device_name=inverter_name,
-                )
-            )
-        inverter_no += 1
+    # Add inverter Switches
+    for device_name, device_conn in coordinator.hub.inverter_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySwitch,
+                                           INVERTER_SWITCHES, DEVICE_TYPE_INVERTER)
 
-    # Add AC charger switches
-    ac_charger_no = 0
-    for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
-        _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
-        for description in AC_CHARGER_SWITCHES:
-            entities.append(
-                SigenergySwitch(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{ac_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_AC_CHARGER,
-                    device_id=ac_charger_id,
-                    device_name=ac_charger_name,
-                )
-            )
-        ac_charger_no += 1
+    # Add AC charger Switches
+    for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySwitch,
+                                           AC_CHARGER_SWITCHES, DEVICE_TYPE_AC_CHARGER)
 
-    # Add DC charger switches
-    dc_charger_no = 0
-    # Iterate through the connection details dictionary
-    for dc_charger_name, connection_details in coordinator.hub.dc_charger_connections.items():
-        # Extract the slave ID from the details
-        dc_charger_id = connection_details.get(CONF_SLAVE_ID)
-        if dc_charger_id is None:
-            _LOGGER.warning("Missing slave ID for DC charger '%s' in configuration, skipping switch setup", dc_charger_name)
-            continue
-
-        _LOGGER.debug("Adding switches for DC charger %s (ID: %s)", dc_charger_name, dc_charger_id)
-        for description in DC_CHARGER_SWITCHES:
-            entities.append(
-                SigenergySwitch(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{dc_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_DC_CHARGER,
-                    device_id=dc_charger_id,
-                    device_name=dc_charger_name,
-                    # Note: The DC_CHARGER_SWITCHES definitions might need adjustment
-                    # as they currently reference 'inverter_id' in their lambda functions.
-                    # This might cause issues later if not corrected.
-                )
-            )
-        dc_charger_no += 1
-
+    # Add DC charger Switches
+    for device_name, device_conn in coordinator.hub.dc_charger_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySwitch,
+                                           DC_CHARGER_SWITCHES, DEVICE_TYPE_DC_CHARGER)
+        
+    _LOGGER.debug(f"Class to add {SigenergySwitch}")
     async_add_entities(entities)
-
+    return
 
 class SigenergySwitch(CoordinatorEntity, SwitchEntity):
     """Representation of a Sigenergy switch."""
@@ -211,7 +151,6 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
     def __init__(
         self,
         coordinator: SigenergyDataUpdateCoordinator,
-        hub: Any,
         description: SigenergySwitchEntityDescription,
         name: str,
         device_type: str,
@@ -221,7 +160,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         """Initialize the switch."""
         super().__init__(coordinator)
         self.entity_description = description
-        self.hub = hub
+        self.hub = coordinator.hub
         self._attr_name = name
         self._device_type = device_type
         self._device_id = device_id

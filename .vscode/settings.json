@@ -1,6 +1,17 @@
 {
+    "python.analysis.extraPaths": [
+        "./Reference/core-dev",
+        "./Reference",
+
+    ],
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.autoSearchPaths": true,
+    "python.analysis.useLibraryCodeForTypes": true,
     "pylint.args": [
         "--disable=E0401,E1123,W0613",
-        "--ignore=Reference/core-dev"
-      ],
-  }
+        "--ignore=Reference/core-dev",
+        "--ignore=Reference/pymodbus",
+        "--init-hook=import sys; sys.path.append('Reference/core-dev')",
+      ]
+    }

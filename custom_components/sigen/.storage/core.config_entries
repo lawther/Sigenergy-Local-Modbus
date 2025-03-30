@@ -14,10 +14,6 @@
           "port": 502,
           "name": "Sigenergy ESS",
           "plant_id": 247,
-          "inverter_count": 1,
-          "ac_charger_count": 0,
-          "inverter_slave_ids": [1],
-          "ac_charger_slave_ids": []
         },
         "options": {
           "scan_interval": 30

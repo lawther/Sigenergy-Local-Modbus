@@ -20,9 +20,11 @@ from .const import (
     DOMAIN,
     EMSWorkMode,
     RemoteEMSControlMode,
+    DEVICE_TYPE_DC_CHARGER,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
+from .common import generate_sigen_entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -155,8 +157,8 @@ INVERTER_SELECTS = [
     ),
 ]
 
-AC_CHARGER_SELECTS = [
-]
+AC_CHARGER_SELECTS = []
+DC_CHARGER_SELECTS = []
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -164,64 +166,31 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Sigenergy select platform."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    hub = hass.data[DOMAIN][config_entry.entry_id]["hub"]
-    entities = []
-
-    # Add plant selects
+    coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     plant_name = config_entry.data[CONF_NAME]
-    for description in PLANT_SELECTS:
-        entities.append(
-            SigenergySelect(
-                coordinator=coordinator,
-                hub=hub,
-                description=description,
-                name=f"{plant_name} {description.name}",
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-            )
-        )
+    _LOGGER.debug(f"Starting to add {SigenergySelect}")
+    # Add plant Switches
+    entities : list[SigenergySelect] = generate_sigen_entity(plant_name, None, None, coordinator, SigenergySelect,
+                                           PLANT_SELECTS, DEVICE_TYPE_PLANT)
+
+    # Add inverter Selects
+    for device_name, device_conn in coordinator.hub.inverter_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySelect,
+                                           INVERTER_SELECTS, DEVICE_TYPE_INVERTER)
+
+    # Add AC charger Switches
+    for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySelect,
+                                           AC_CHARGER_SELECTS, DEVICE_TYPE_AC_CHARGER)
+
+    # Add DC charger Switches
+    for device_name, device_conn in coordinator.hub.dc_charger_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySelect,
+                                           DC_CHARGER_SELECTS, DEVICE_TYPE_DC_CHARGER)
         
-    # Add inverter selects
-    inverter_no = 1
-    for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
-        for description in INVERTER_SELECTS:
-            entities.append(
-                SigenergySelect(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{inverter_name} {description.name}",
-                    device_type=DEVICE_TYPE_INVERTER,
-                    device_id=inverter_id,
-                    device_name=inverter_name,
-                )
-            )
-        inverter_no += 1
-
-    # Add AC charger selects
-    ac_charger_no = 1
-    for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}AC Charger{'' if ac_charger_no == 1 else f' {ac_charger_no}'}"
-        _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
-        for description in AC_CHARGER_SELECTS:
-            entities.append(
-                SigenergySelect(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{ac_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_AC_CHARGER,
-                    device_id=ac_charger_id,
-                    device_name=ac_charger_name,
-                )
-            )
-        ac_charger_no += 1
-
+    _LOGGER.debug(f"Class to add {SigenergySelect}")
     async_add_entities(entities)
-
+    return
 
 class SigenergySelect(CoordinatorEntity, SelectEntity):
     """Representation of a Sigenergy select."""
@@ -231,7 +200,6 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
     def __init__(
         self,
         coordinator: SigenergyDataUpdateCoordinator,
-        hub: Any,
         description: SigenergySelectEntityDescription,
         name: str,
         device_type: str,
@@ -241,7 +209,7 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         """Initialize the select."""
         super().__init__(coordinator)
         self.entity_description = description
-        self.hub = hub
+        self.hub = coordinator.hub
         self._attr_name = name
         self._device_type = device_type
         self._device_id = device_id

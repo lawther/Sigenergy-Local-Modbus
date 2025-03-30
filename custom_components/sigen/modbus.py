@@ -5,6 +5,7 @@ import asyncio
 import logging
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
@@ -18,9 +19,7 @@ from pymodbus.client.mixin import ModbusClientMixin
 
 from .const import ModbusRegisterDefinition
 from .const import (
-    CONF_AC_CHARGER_COUNT,
     CONF_AC_CHARGER_SLAVE_ID,
-    CONF_DC_CHARGER_COUNT,
     CONF_DC_CHARGER_CONNECTIONS,
     CONF_INVERTER_COUNT,
     CONF_INVERTER_SLAVE_ID,
@@ -28,8 +27,6 @@ from .const import (
     CONF_AC_CHARGER_CONNECTIONS,
     CONF_PLANT_ID,
     CONF_SLAVE_ID,
-    DEFAULT_AC_CHARGER_COUNT,
-    DEFAULT_DC_CHARGER_COUNT,
     DEFAULT_INVERTER_COUNT,
     DEFAULT_PLANT_SLAVE_ID,
     DataType,
@@ -47,6 +44,14 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+@dataclass
+class ModbusConnectionConfig:
+    """Configuration for a Modbus connection."""
+    name: str
+    host: str
+    port: int
+    slave_id: int
 
 
 @contextmanager
@@ -69,13 +74,10 @@ class SigenergyModbusError(HomeAssistantError):
 
 class SigenergyModbusHub:
     """Modbus hub for Sigenergy ESS."""
-    """Modbus hub for Sigenergy ESS."""
 
     def __init__(
         self,
         hass: HomeAssistant,
-        host: str,
-        port: int,
         config_entry: ConfigEntry,
     ) -> None:
         """Initialize the Modbus hub."""
@@ -88,28 +90,36 @@ class SigenergyModbusHub:
         self._locks: Dict[Tuple[str, int], asyncio.Lock] = {}
         self._connected: Dict[Tuple[str, int], bool] = {}
         
-        # Store default connection for plant
-        self._plant_host = host
-        self._plant_port = port
-        
-        # Get slave IDs from config
+        # Store connection for plant
+        self._plant_host = config_entry.data[CONF_HOST]
+        self._plant_port = config_entry.data[CONF_PORT]
         self.plant_id = config_entry.data.get(CONF_PLANT_ID, DEFAULT_PLANT_SLAVE_ID)
-        self.inverter_count = config_entry.data.get(CONF_INVERTER_COUNT, DEFAULT_INVERTER_COUNT)
-        self.ac_charger_count = config_entry.data.get(CONF_AC_CHARGER_COUNT, DEFAULT_AC_CHARGER_COUNT)
-        self.dc_charger_count = config_entry.data.get(CONF_DC_CHARGER_COUNT, DEFAULT_DC_CHARGER_COUNT)
-        
+
+        # Get inverter connections
+        self.inverter_connections = config_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
+        _LOGGER.debug("Inverter connections: %s", self.inverter_connections)
+        self.inverter_count = len(self.inverter_connections)
+
+        # Get AC Charger connections
+        self.ac_charger_connections = config_entry.data.get(CONF_AC_CHARGER_CONNECTIONS, {})
+        _LOGGER.debug("AC Charger connections: %s", self.ac_charger_connections)
+        self.ac_charger_count = len(self.ac_charger_connections)
+
+        # Get DC Charger connections
+        self.dc_charger_connections = config_entry.data.get(CONF_DC_CHARGER_CONNECTIONS, {})
+        _LOGGER.debug("DC Charger connections: %s", self.dc_charger_connections)
+        self.dc_charger_count = len(self.dc_charger_connections)
+
+
         # Get specific slave IDs and their connection details
         self.inverter_slave_ids = config_entry.data.get(
             CONF_INVERTER_SLAVE_ID, list(range(1, self.inverter_count + 1))
         )
-        self.inverter_connections = config_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
         
         # Other slave IDs and their connection details
         self.ac_charger_slave_ids = config_entry.data.get(
             CONF_AC_CHARGER_SLAVE_ID, list(range(self.inverter_count + 1, self.inverter_count + self.ac_charger_count + 1))
         )
-        self.ac_charger_connections = config_entry.data.get(CONF_AC_CHARGER_CONNECTIONS, {})
-        self.dc_charger_connections = config_entry.data.get(CONF_DC_CHARGER_CONNECTIONS, {})
 
         # Read-only mode setting
         self.read_only = config_entry.data.get(CONF_READ_ONLY, DEFAULT_READ_ONLY)

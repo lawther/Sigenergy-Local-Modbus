@@ -38,6 +38,7 @@ from .const import (
 from .coordinator import SigenergyDataUpdateCoordinator
 from .calculated_sensor import SigenergyCalculations as SC, SigenergyCalculatedSensors as SCS, SigenergyIntegrationSensor
 from .static_sensor import StaticSensors as SS
+from .common import generate_sigen_entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,7 +49,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Sigenergy sensor platform."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    plant_name = config_entry.data[CONF_NAME]
+    _LOGGER.debug(f"Starting to add {SigenergySensor}")
+
+
     entities = []
     
     # Get the Home Assistant entity registry
@@ -76,38 +81,41 @@ async def async_setup_entry(
         
 
     _LOGGER.debug("Setting up sensors for %s", config_entry.data[CONF_NAME])
-    _LOGGER.debug("Inverters: %s", coordinator.hub.inverter_slave_ids)
-    _LOGGER.debug("config_entry: %s", config_entry)
-    _LOGGER.debug("coordinator: %s", coordinator)
-    _LOGGER.debug("config_entry.data: %s", config_entry.data)
-    _LOGGER.debug("coordinator.hub: %s", coordinator.hub)
-    _LOGGER.debug("coordinator.hub.config_entry: %s", coordinator.hub.config_entry)
-    _LOGGER.debug("coordinator.hub.config_entry.data: %s", coordinator.hub.config_entry.data)
-    _LOGGER.debug("coordinator.hub.config_entry.entry_id: %s", coordinator.hub.config_entry.entry_id)
+    _LOGGER.debug("Inverters: %s", coordinator.hub.inverter_connections)
+    # _LOGGER.debug("config_entry: %s", config_entry)
+    # _LOGGER.debug("coordinator: %s", coordinator)
+    # _LOGGER.debug("config_entry.data: %s", config_entry.data)
+    # _LOGGER.debug("coordinator.hub: %s", coordinator.hub)
+    # _LOGGER.debug("coordinator.hub.config_entry: %s", coordinator.hub.config_entry)
+    # _LOGGER.debug("coordinator.hub.config_entry.data: %s", coordinator.hub.config_entry.data)
+    # _LOGGER.debug("coordinator.hub.config_entry.entry_id: %s", coordinator.hub.config_entry.entry_id)
 
     # Set plant name
-    plant_name : str = config_entry.data[CONF_NAME]
-
-    _LOGGER.debug("Setting up sensors for %s", plant_name)
 
     # Add plant sensors
     _LOGGER.debug("[CS][Setup] Adding plant sensors from SS.PLANT_SENSORS + SCS.PLANT_SENSORS")
-    for description in SS.PLANT_SENSORS + SCS.PLANT_SENSORS:
-        sensor_name = f"{plant_name} {description.name}"
-        entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-        _LOGGER.debug("[CS][Setup] Creating plant sensor with name: %s, entity_id: %s, key: %s, value_fn: %s",
-                     sensor_name, entity_id, description.key, getattr(description, 'value_fn', None))
+    entities : list[SigenergySensor] = generate_sigen_entity(plant_name, None, None, coordinator, SigenergySensor,
+                                           SS.PLANT_SENSORS + SCS.PLANT_SENSORS, DEVICE_TYPE_PLANT)
+    
+    # entities += generate_sigen_entity(plant_name, None, None, coordinator, SigenergySensor,
+    #                                        SCS.PLANT_INTEGRATION_SENSORS, DEVICE_TYPE_PLANT)
+
+    # for description in SS.PLANT_SENSORS + SCS.PLANT_SENSORS:
+    #     sensor_name = f"{plant_name} {description.name}"
+    #     entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
+    #     _LOGGER.debug("[CS][Setup] Creating plant sensor with name: %s, entity_id: %s, key: %s, value_fn: %s",
+    #                  sensor_name, entity_id, description.key, getattr(description, 'value_fn', None))
         
-        entities.append(
-            SigenergySensor(
-                coordinator=coordinator,
-                description=description,
-                name=sensor_name,
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-            )
-        )
+    #     entities.append(
+    #         SigenergySensor(
+    #             coordinator=coordinator,
+    #             description=description,
+    #             name=sensor_name,
+    #             device_type=DEVICE_TYPE_PLANT,
+    #             device_id=None,
+    #             device_name=plant_name,
+    #         )
+    #     )
     
     # Add plant integration sensors
     for description in SCS.PLANT_INTEGRATION_SENSORS:

@@ -29,6 +29,7 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
+from .common import(generate_device_name, generate_sigen_entity)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -425,93 +426,35 @@ AC_CHARGER_NUMBERS = [
 DC_CHARGER_NUMBERS = []
 
 
-
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Sigenergy number platform."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    hub = hass.data[DOMAIN][config_entry.entry_id]["hub"]
-    entities = []
-
-    # Add plant numbers
+    coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     plant_name = config_entry.data[CONF_NAME]
-    for description in PLANT_NUMBERS:
-        entities.append(
-            SigenergyNumber(
-                coordinator=coordinator,
-                hub=hub,
-                description=description,
-                name=f"{plant_name} {description.name}",
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-            )
-        )
+    _LOGGER.debug(f"Starting to add {SigenergyNumber}")
+    # Add plant numbers
+    entities : list[SigenergyNumber] = generate_sigen_entity(plant_name, None, None, coordinator, SigenergyNumber,
+                                           PLANT_NUMBERS, DEVICE_TYPE_PLANT)
 
     # Add inverter numbers
-    inverter_no = 1
-    for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
-        for description in INVERTER_NUMBERS:
-            entities.append(
-                SigenergyNumber(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{plant_name} Inverter {inverter_id} {description.name}",
-                    device_type=DEVICE_TYPE_INVERTER,
-                    device_id=inverter_id,
-                    device_name=inverter_name,
-                )
-            )
-        inverter_no += 1
+    for device_name, device_conn in coordinator.hub.inverter_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergyNumber,
+                                           INVERTER_NUMBERS, DEVICE_TYPE_INVERTER)
 
     # Add AC charger numbers
-    ac_charger_no = 0
-    for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
-        for description in AC_CHARGER_NUMBERS:
-            entities.append(
-                SigenergyNumber(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{ac_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_AC_CHARGER,
-                    device_id=ac_charger_id,
-                    device_name=ac_charger_name,
-                )
-            )
-        ac_charger_no += 1
+    for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergyNumber,
+                                           AC_CHARGER_NUMBERS, DEVICE_TYPE_AC_CHARGER)
 
     # Add DC charger numbers
-    dc_charger_no = 0
-    # Iterate through the connection details dictionary
-    for dc_charger_name, connection_details in coordinator.hub.dc_charger_connections.items():
-        # Extract the slave ID from the details
-        dc_charger_id = connection_details.get(CONF_SLAVE_ID)
-        if dc_charger_id is None:
-            _LOGGER.warning("Missing slave ID for DC charger '%s' in configuration, skipping number setup", dc_charger_name)
-            continue
-
-        _LOGGER.debug("Adding numbers for DC charger %s (ID: %s)", dc_charger_name, dc_charger_id)
-        for description in DC_CHARGER_NUMBERS:
-            entities.append(
-                SigenergyNumber(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{dc_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_DC_CHARGER,
-                    device_id=dc_charger_id,
-                    device_name=dc_charger_name,
-                )
-            )
-        dc_charger_no += 1
-
+    for device_name, device_conn in coordinator.hub.dc_charger_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergyNumber,
+                                           DC_CHARGER_NUMBERS, DEVICE_TYPE_DC_CHARGER)
+        
+    _LOGGER.debug(f"Class to add {SigenergyNumber}")
     async_add_entities(entities)
 
 
@@ -523,7 +466,6 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
     def __init__(
         self,
         coordinator: SigenergyDataUpdateCoordinator,
-        hub: Any,
         description: SigenergyNumberEntityDescription,
         name: str,
         device_type: str,
@@ -533,7 +475,7 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
         """Initialize the number."""
         super().__init__(coordinator)
         self.entity_description = description
-        self.hub = hub
+        self.hub = coordinator.hub
         self._attr_name = name
         self._device_type = device_type
         self._device_id = device_id

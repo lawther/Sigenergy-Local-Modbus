@@ -27,8 +27,6 @@ CONF_SLAVE_ID = "slave_id"
 CONF_PLANT_ID = "plant_id"
 CONF_SCAN_INTERVAL = "scan_interval"
 CONF_INVERTER_COUNT = "inverter_count"
-CONF_AC_CHARGER_COUNT = "ac_charger_count"
-CONF_DC_CHARGER_COUNT = "dc_charger_count"
 CONF_INVERTER_SLAVE_ID = "inverter_slave_ids"
 CONF_INVERTER_CONNECTIONS = "inverter_connections"
 CONF_AC_CHARGER_SLAVE_ID = "ac_charger_slave_ids"
@@ -65,8 +63,6 @@ DEFAULT_PLANT_SLAVE_ID = 247  # Plant address
 DEFAULT_INVERTER_SLAVE_ID = 1  # Default Inverter address
 DEFAULT_SCAN_INTERVAL = 5
 DEFAULT_INVERTER_COUNT = 1
-DEFAULT_AC_CHARGER_COUNT = 0
-DEFAULT_DC_CHARGER_COUNT = 0
 DEFAULT_READ_ONLY = True  # Default to read-only mode
 
 # Platforms
