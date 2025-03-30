@@ -97,26 +97,6 @@ async def async_setup_entry(
     entities : list[SigenergySensor] = generate_sigen_entity(plant_name, None, None, coordinator, SigenergySensor,
                                            SS.PLANT_SENSORS + SCS.PLANT_SENSORS, DEVICE_TYPE_PLANT)
     
-    # entities += generate_sigen_entity(plant_name, None, None, coordinator, SigenergySensor,
-    #                                        SCS.PLANT_INTEGRATION_SENSORS, DEVICE_TYPE_PLANT)
-
-    # for description in SS.PLANT_SENSORS + SCS.PLANT_SENSORS:
-    #     sensor_name = f"{plant_name} {description.name}"
-    #     entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-    #     _LOGGER.debug("[CS][Setup] Creating plant sensor with name: %s, entity_id: %s, key: %s, value_fn: %s",
-    #                  sensor_name, entity_id, description.key, getattr(description, 'value_fn', None))
-        
-    #     entities.append(
-    #         SigenergySensor(
-    #             coordinator=coordinator,
-    #             description=description,
-    #             name=sensor_name,
-    #             device_type=DEVICE_TYPE_PLANT,
-    #             device_id=None,
-    #             device_name=plant_name,
-    #         )
-    #     )
-    
     # Add plant integration sensors
     for description in SCS.PLANT_INTEGRATION_SENSORS:
         # Look up the source entity ID based on the source key
