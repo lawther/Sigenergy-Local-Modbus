@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .common import(generate_device_name, generate_sigen_entity)
+from .common import *
 from .const import (
     CONF_SLAVE_ID, # Import CONF_SLAVE_ID
     DEVICE_TYPE_AC_CHARGER,
@@ -156,6 +156,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         device_type: str,
         device_id: Optional[int],
         device_name: Optional[str] = "",
+        pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
@@ -164,6 +165,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         self._attr_name = name
         self._device_type = device_type
         self._device_id = device_id
+        self._pv_string_idx = pv_string_idx
         
         # Get the device number if any as a string for use in names
         device_number_str = ""
@@ -173,13 +175,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
                 device_number_str = f" {parts[-1]}"
 
         # Set unique ID
-        if device_type == DEVICE_TYPE_PLANT:
-            # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}"
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
-        else:
-            # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_id}_{description.key}"
-            # Used for testing in development to allow multiple sensors with the same unique ID
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
+            self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator, description.key, pv_string_idx)
         
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:

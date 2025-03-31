@@ -64,13 +64,20 @@ def generate_sigen_entity(
         }
         
         if hasattr(description, 'source_key') and description.source_key:
-            entity_kwargs["source_entity_id"] = get_source_entity_id(
+            source_entity_id  = get_source_entity_id(
                 device_type,
-                device_id if device_id else 0,  # Plant has default device ID of 0 as it's a single device
+                device_name,
+                # device_id if device_id else 0,  # Plant has default device ID of 0 as it's a single device
                 description.source_key,
                 coordinator,
                 hass
             )
+            if source_entity_id:
+                entity_kwargs["source_entity_id"] = source_entity_id
+                _LOGGER.debug("Using source entity ID: %s", source_entity_id)
+            else:
+                _LOGGER.warning("No source entity ID found for %s. Skipping the entity.", description.source_key)
+                continue
 
         if hasattr(description, 'round_digits') and description.round_digits is not None:
             entity_kwargs["round_digits"] = description.round_digits
@@ -84,7 +91,7 @@ def generate_sigen_entity(
     return entities
 
 @staticmethod
-def get_source_entity_id(device_type, device_id, source_key, coordinator, hass):
+def get_source_entity_id(device_type, device_name, source_key, coordinator, hass):
     """Get the source entity ID for an integration sensor."""
     # Try to find entities by unique ID pattern
     try:
@@ -92,16 +99,42 @@ def get_source_entity_id(device_type, device_id, source_key, coordinator, hass):
         ha_entity_registry = async_get_entity_registry(hass)
 
         # Determine the unique ID pattern to look for
-        config_entry_id = coordinator.hub.config_entry.entry_id
-        _LOGGER.debug("Looking for entity with config entry ID: %s, source key: %s, device type: %s, device ID: %s",
-                        config_entry_id, source_key, device_type, device_id)
-        
-        unique_id_pattern = f"{config_entry_id}_{device_type}{f'_{device_id}' if device_id > 1 else ''}_{source_key}"
+        unique_id_pattern = generate_unique_entity_id(
+            device_type=device_type,
+            device_name=device_name,
+            coordinator=coordinator,
+            attr_key=source_key
+        )
 
         _LOGGER.debug("Looking for entity with unique ID pattern: %s", unique_id_pattern)
         entity_id = ha_entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id_pattern)
-        _LOGGER.debug("Found entity ID: %s", entity_id)
+
+        if entity_id is None:
+            _LOGGER.warning("No entity found for unique ID pattern: %s", unique_id_pattern)
+            _LOGGER.debug("unique ID pattern constructed from: \n config_entry_id: %s \n device_type: %s \n device_name: %s \n source_key: %s",
+                            coordinator.hub.config_entry.entry_id, device_type, device_name, source_key)
+        else:
+            _LOGGER.debug("Found entity ID: %s", entity_id)
 
         return entity_id
     except Exception as ex:
         _LOGGER.warning("Error looking for entity with config entry ID: %s", ex)
+
+def generate_unique_entity_id(
+        device_type: str,
+        device_name: str | None,
+        coordinator,
+        attr_key: str,
+        pv_string_idx: int | None = None,
+) -> str:
+    """Generate a unique ID for the entity."""
+
+    # Use the device name if available, otherwise use the device type
+    unique_device_part = str(device_name).lower().replace(' ', '_') if device_name else device_type
+    if pv_string_idx is not None:
+        unique_id = f"{coordinator.hub.config_entry.entry_id}_{unique_device_part}_pv{pv_string_idx}_{attr_key}"
+    else:
+        unique_id = f"{coordinator.hub.config_entry.entry_id}_{unique_device_part}_{attr_key}"
+
+    _LOGGER.debug("Generated unique ID: %s", unique_id)
+    return unique_id

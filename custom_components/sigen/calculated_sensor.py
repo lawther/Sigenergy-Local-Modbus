@@ -35,6 +35,7 @@ from .const import (
     DEVICE_TYPE_INVERTER,
     DOMAIN,
 )
+from .common import *
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -402,6 +403,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         source_entity_id: Optional[str] = None,
         round_digits: Optional[int] = None,
         max_sub_interval: Optional[timedelta] = None,
+        pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the integration sensor."""
         CoordinatorEntity.__init__(self, coordinator)
@@ -413,6 +415,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         self._device_info_override = device_info
         self._source_entity_id = source_entity_id
         self._round_digits = round_digits
+        self._pv_string_idx = pv_string_idx
         
         # Initialize state variables
         self._state: Decimal | None = None
@@ -435,16 +438,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
                       name, max_sub_interval)
         
         # Set unique ID
-        if device_type == DEVICE_TYPE_PLANT:
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
-        else:
-            device_number_str = ""
-            if device_name:
-                parts = device_name.split()
-                if parts and parts[-1].isdigit():
-                    device_number_str = f" {parts[-1]}"
-            
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
+        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator, description.key, pv_string_idx)
         
         # Set device info
         if self._device_info_override:

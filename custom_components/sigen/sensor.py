@@ -37,7 +37,7 @@ from .const import (
 from .coordinator import SigenergyDataUpdateCoordinator
 from .calculated_sensor import SigenergyCalculations as SC, SigenergyCalculatedSensors as SCS, SigenergyIntegrationSensor
 from .static_sensor import StaticSensors as SS
-from .common import generate_sigen_entity, get_source_entity_id
+from .common import generate_sigen_entity, get_source_entity_id, generate_unique_entity_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,14 +60,14 @@ async def async_setup_entry(
     # Add plant sensors
     _LOGGER.debug("[CS][Setup] Adding plant sensors from SS.PLANT_SENSORS + SCS.PLANT_SENSORS")
     # Static Sensors:
-    entities.extend(generate_sigen_entity(plant_name, None, None, coordinator, SigenergySensor,
+    async_add_entities(generate_sigen_entity(plant_name, None, None, coordinator, SigenergySensor,
                                            SS.PLANT_SENSORS, DEVICE_TYPE_PLANT))
     # Calculated Sensors:
-    entities.extend(generate_sigen_entity(plant_name, None, None, coordinator, SigenergySensor,
+    async_add_entities(generate_sigen_entity(plant_name, None, None, coordinator, SigenergySensor,
                                            SCS.PLANT_SENSORS, DEVICE_TYPE_PLANT))
     
     # Calculated Integration Sensors:
-    entities.extend(generate_sigen_entity(plant_name, None, None, coordinator, SigenergyIntegrationSensor,
+    async_add_entities(generate_sigen_entity(plant_name, None, None, coordinator, SigenergyIntegrationSensor,
                                            SCS.PLANT_INTEGRATION_SENSORS, DEVICE_TYPE_PLANT, hass))
 
 
@@ -76,15 +76,28 @@ async def async_setup_entry(
 
     for device_name, device_conn in coordinator.hub.inverter_connections.items():
         # Static Sensors:
-        entities.extend(generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySensor,
+        async_add_entities(generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySensor,
                                             SS.INVERTER_SENSORS, DEVICE_TYPE_INVERTER))
         # Calculated Sensors:
-        entities.extend(generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySensor,
+        async_add_entities(generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySensor,
                                             SCS.INVERTER_SENSORS, DEVICE_TYPE_INVERTER))
         
         # Calculated Integration Sensors:
-        entities.extend(generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergyIntegrationSensor,
+        async_add_entities(generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergyIntegrationSensor,
                                             SCS.INVERTER_INTEGRATION_SENSORS, DEVICE_TYPE_INVERTER, hass))
+        
+        # PV strings
+        _LOGGER.debug(f"inverter_ids: {coordinator.data['inverters']}")
+        # inverter_data = coordinator.data["inverters"][inverter_id]
+        
+        # pv_string_count = inverter_data.get("inverter_pv_string_count", 0)
+        
+        # if pv_string_count and isinstance(pv_string_count, (int, float)) and pv_string_count > 0:
+        #     _LOGGER.debug("Adding %d PV string devices for inverter %s with name %s", pv_string_count, inverter_id, inverter_name)
+            
+        #     # Create sensors for each PV string
+        #     for pv_idx in range(1, int(pv_string_count) + 1):
+        #         try:
 
 
 
@@ -92,58 +105,6 @@ async def async_setup_entry(
     for inverter_id in coordinator.hub.inverter_slave_ids:
         inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
         _LOGGER.debug("Adding inverter_id %s for plant %s with inverter_no %s as %s", inverter_id, plant_name, inverter_no, inverter_name)
-    #     _LOGGER.debug("Plant name: %s divided by space first part: %s, second part: %s, last part: %s", plant_name, plant_name.split()[0], plant_name.split()[1], plant_name.split()[-1])
-        
-    #     # Add inverter sensors
-    #     for description in SS.INVERTER_SENSORS + SCS.INVERTER_SENSORS:
-    #         sensor_name = f"{inverter_name} {description.name}"
-    #         entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-            
-    #         entities.append(
-    #             SigenergySensor(
-    #                 coordinator=coordinator,
-    #                 description=description,
-    #                 name=sensor_name,
-    #                 device_type=DEVICE_TYPE_INVERTER,
-    #                 device_id=inverter_id,
-    #                 device_name=inverter_name,
-    #             )
-    #         )
-            
-    #     # Add inverter integration sensors
-    #     for description in SCS.INVERTER_INTEGRATION_SENSORS:
-    #         # Look up the source entity ID based on the source key
-    #         source_entity_id = get_source_entity_id(
-    #             DEVICE_TYPE_INVERTER,
-    #             inverter_id,
-    #             description.source_key,
-    #             coordinator,
-    #             hass
-    #         )
-            
-    #         if source_entity_id:
-    #             _LOGGER.debug("Creating inverter integration sensor with source entity ID: %s", source_entity_id)
-    #             entities.append(
-    #                 SigenergyIntegrationSensor(
-    #                     coordinator=coordinator,
-    #                     description=description,
-    #                     name=f"{inverter_name} {description.name}",
-    #                     device_type=DEVICE_TYPE_INVERTER,
-    #                     device_id=inverter_id,
-    #                     device_name=inverter_name,
-    #                     source_entity_id=source_entity_id,
-    #                     round_digits=description.round_digits,
-    #                     max_sub_interval=description.max_sub_interval,
-    #                 )
-    #             )
-    #         else:
-    #             # Log more detailed information about the missing source entity
-    #             _LOGGER.warning(
-    #                 "Skipping integration sensor %s because source entity with key %s not found",
-    #                 f"{inverter_name} {description.name}",
-    #                 description.source_key
-    #             )
-                
         # # Add PV string sensors if we have PV string data
         # if coordinator.data and "inverters" in coordinator.data and inverter_id in coordinator.data["inverters"]:
         #     inverter_data = coordinator.data["inverters"][inverter_id]
@@ -295,17 +256,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             _LOGGER.debug("Device number string for %s: %s", device_name, device_number_str)
 
             # Set unique ID
-            if device_type == DEVICE_TYPE_PLANT:
-                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
-                _LOGGER.debug("Unique ID for plant sensor %s", self._attr_unique_id)
-            elif device_type == DEVICE_TYPE_INVERTER and pv_string_idx is not None:
-                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_pv{pv_string_idx}_{description.key}"
-                _LOGGER.debug("Unique ID for PV string sensor %s", self._attr_unique_id)
-            else:
-                # Use device_name directly for unique ID generation for chargers/inverters
-                unique_device_part = str(device_name).lower().replace(' ', '_') if device_name else device_type
-                self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{unique_device_part}_{description.key}"
-                _LOGGER.debug("Unique ID for %s sensor %s", device_type, self._attr_unique_id)
+            self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator, description.key, pv_string_idx)
 
             # Set device info (use provided device_info if available)
             if self._device_info_override:
