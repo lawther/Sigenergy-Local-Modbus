@@ -5,8 +5,9 @@ import logging
 from datetime import timedelta
 from typing import Any, Optional
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
+from homeassistant.core import HomeAssistant
 
-from .const import (CONF_SLAVE_ID)
+from .const import (CONF_SLAVE_ID, DOMAIN, DEVICE_TYPE_INVERTER, DEVICE_TYPE_PLANT)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,9 +30,7 @@ def generate_sigen_entity(
         entity_class: type,
         entity_description: list,
         device_type: str,
-        source_entity_id: Optional[str] = None,
-        round_digits: Optional[int] = None,
-        max_sub_interval: Optional[int] = None
+        hass: Optional[HomeAssistant] = None
         ) -> list:
     """
     Generate entities for Sigenergy components.
@@ -48,40 +47,13 @@ def generate_sigen_entity(
     Returns:
         list: A list of instantiated entities for the device
     """
-    if device_name is None:
-        device_name = plant_name
-        device_id = None
-    else:
-        device_name = generate_device_name(plant_name, device_name)
-        device_id = device_conn[CONF_SLAVE_ID]
-
-    # Helper function to get source entity ID
-    def get_source_entity_id(device_type, device_id, source_key):
-        """Get the source entity ID for an integration sensor."""
-        # Try to find entities by unique ID pattern
-        try:
-            # Get the Home Assistant entity registry to search
-            ha_entity_registry = async_get_entity_registry(hass)
-            
-            # Determine the unique ID pattern to look for
-            config_entry_id = coordinator.hub.config_entry.entry_id
-            _LOGGER.debug("Looking for entity with config entry ID: %s, source key: %s, device type: %s, device ID: %s",
-                            config_entry_id, source_key, device_type, device_id)
-            
-            unique_id_pattern = f"{config_entry_id}_{device_type}{f'_{device_id}' if device_id > 1 else ''}_{source_key}"
-
-            _LOGGER.debug("Looking for entity with unique ID pattern: %s", unique_id_pattern)
-            entity_id = ha_entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id_pattern)
-            _LOGGER.debug("Found entity ID: %s", entity_id)
-
-            return entity_id
-        except Exception as ex:
-            _LOGGER.warning("Error looking for entity with config entry ID: %s", ex)
-        
+    device_name = generate_device_name(plant_name, device_name) if device_name else plant_name
+    device_id = device_conn[CONF_SLAVE_ID] if device_conn else None
 
     entities = []
     for description in entity_description:
         _LOGGER.debug("Description: %s", description)
+
         entity_kwargs = {
             "coordinator": coordinator,
             "description": description,
@@ -91,15 +63,45 @@ def generate_sigen_entity(
             "device_name": device_name,
         }
         
-        if source_entity_id is not None:
-            entity_kwargs["source_entity_id"] = source_entity_id
+        if hasattr(description, 'source_key') and description.source_key:
+            entity_kwargs["source_entity_id"] = get_source_entity_id(
+                device_type,
+                device_id if device_id else 0,  # Plant has default device ID of 0 as it's a single device
+                description.source_key,
+                coordinator,
+                hass
+            )
+
+        if hasattr(description, 'round_digits') and description.round_digits is not None:
+            entity_kwargs["round_digits"] = description.round_digits
             
-        if round_digits is not None:
-            entity_kwargs["round_digits"] = round_digits
-            
-        if max_sub_interval is not None:
-            entity_kwargs["max_sub_interval"] = max_sub_interval
-            
+        if hasattr(description, 'max_sub_interval') and description.max_sub_interval is not None:
+            entity_kwargs["max_sub_interval"] = description.max_sub_interval
+        
+        if device_type == DEVICE_TYPE_INVERTER and hass is not None:
+            _LOGGER.debug("Creating inverter entity: %s with kwargs: %s", description.key, entity_kwargs)
         entities.append(entity_class(**entity_kwargs))
     return entities
 
+@staticmethod
+def get_source_entity_id(device_type, device_id, source_key, coordinator, hass):
+    """Get the source entity ID for an integration sensor."""
+    # Try to find entities by unique ID pattern
+    try:
+        # Get the Home Assistant entity registry
+        ha_entity_registry = async_get_entity_registry(hass)
+
+        # Determine the unique ID pattern to look for
+        config_entry_id = coordinator.hub.config_entry.entry_id
+        _LOGGER.debug("Looking for entity with config entry ID: %s, source key: %s, device type: %s, device ID: %s",
+                        config_entry_id, source_key, device_type, device_id)
+        
+        unique_id_pattern = f"{config_entry_id}_{device_type}{f'_{device_id}' if device_id > 1 else ''}_{source_key}"
+
+        _LOGGER.debug("Looking for entity with unique ID pattern: %s", unique_id_pattern)
+        entity_id = ha_entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id_pattern)
+        _LOGGER.debug("Found entity ID: %s", entity_id)
+
+        return entity_id
+    except Exception as ex:
+        _LOGGER.warning("Error looking for entity with config entry ID: %s", ex)
