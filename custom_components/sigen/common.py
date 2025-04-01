@@ -59,7 +59,7 @@ def generate_sigen_entity(
             "description": description,
             "name": f"{device_name} {description.name}",
             "device_type": device_type,
-            "device_id": device_id,
+            "device_id": generate_device_id(device_name, device_type),
             "device_name": device_name,
         }
         
@@ -120,6 +120,7 @@ def get_source_entity_id(device_type, device_name, source_key, coordinator, hass
     except Exception as ex:
         _LOGGER.warning("Error looking for entity with config entry ID: %s", ex)
 
+@staticmethod
 def generate_unique_entity_id(
         device_type: str,
         device_name: str | None,
@@ -130,7 +131,7 @@ def generate_unique_entity_id(
     """Generate a unique ID for the entity."""
 
     # Use the device name if available, otherwise use the device type
-    unique_device_part = str(device_name).lower().replace(' ', '_') if device_name else device_type
+    unique_device_part = generate_device_id(device_name, device_type)
     if pv_string_idx is not None:
         unique_id = f"{coordinator.hub.config_entry.entry_id}_{unique_device_part}_pv{pv_string_idx}_{attr_key}"
     else:
@@ -138,3 +139,11 @@ def generate_unique_entity_id(
 
     _LOGGER.debug("Generated unique ID: %s", unique_id)
     return unique_id
+
+@staticmethod
+def generate_device_id(
+    device_name: str,
+    device_type: str,
+) -> str:
+    unique_device_part = str(device_name).lower().replace(' ', '_') if device_name else device_type
+    return unique_device_part

@@ -87,7 +87,7 @@ async def async_setup_entry(
                                             SCS.INVERTER_INTEGRATION_SENSORS, DEVICE_TYPE_INVERTER, hass))
         
         # PV strings
-        _LOGGER.debug(f"inverter_ids: {coordinator.data['inverters']}")
+        _LOGGER.debug(f"inverter_ids: {coordinator.data}")
         # inverter_data = coordinator.data["inverters"][inverter_id]
         
         # pv_string_count = inverter_data.get("inverter_pv_string_count", 0)
@@ -101,10 +101,10 @@ async def async_setup_entry(
 
 
 
-    inverter_no = 1
-    for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
-        _LOGGER.debug("Adding inverter_id %s for plant %s with inverter_no %s as %s", inverter_id, plant_name, inverter_no, inverter_name)
+    # inverter_no = 1
+    # for inverter_id in coordinator.hub.inverter_slave_ids:
+    #     inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
+    #     _LOGGER.debug("Adding inverter_id %s for plant %s with inverter_no %s as %s", inverter_id, plant_name, inverter_no, inverter_name)
         # # Add PV string sensors if we have PV string data
         # if coordinator.data and "inverters" in coordinator.data and inverter_id in coordinator.data["inverters"]:
         #     inverter_data = coordinator.data["inverters"][inverter_id]
@@ -161,7 +161,7 @@ async def async_setup_entry(
         #                 _LOGGER.error("Error creating device for PV string %d: %s", pv_idx, ex)
         
         # # Increment inverter counter
-        inverter_no += 1
+        # inverter_no += 1
 
     # Add AC charger sensors
     ac_charger_no = 0
