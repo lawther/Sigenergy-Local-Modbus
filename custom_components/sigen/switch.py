@@ -1,6 +1,8 @@
 """Switch platform for Sigenergy ESS integration."""
 from __future__ import annotations
 import logging
+import asyncio
+from typing import Coroutine
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -32,10 +34,12 @@ class SigenergySwitchEntityDescription(SwitchEntityDescription):
     """Class describing Sigenergy switch entities."""
 
     # Provide default lambdas instead of None to satisfy type checker
-    is_on_fn: Callable[[Dict[str, Any], Optional[int]], bool] = lambda data, id: False
-    turn_on_fn: Callable[[Any, Optional[int]], None] = lambda hub, id: None
-    turn_off_fn: Callable[[Any, Optional[int]], None] = lambda hub, id: None
-    available_fn: Callable[[Dict[str, Any], Optional[int]], bool] = lambda data, _: True
+    # The second argument 'identifier' will be device_name for inverters, device_id otherwise
+    is_on_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, identifier: False # Remains synchronous
+    # Make turn_on/off functions async and update type hint
+    turn_on_fn: Callable[[Any, Optional[Any]], Coroutine[Any, Any, None]] = lambda hub, identifier: asyncio.sleep(0) # Placeholder async lambda
+    turn_off_fn: Callable[[Any, Optional[Any]], Coroutine[Any, Any, None]] = lambda hub, identifier: asyncio.sleep(0) # Placeholder async lambda
+    available_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, _: True
     entity_registry_enabled_default: bool = True
 
 
@@ -44,26 +48,26 @@ PLANT_SWITCHES = [
         key="plant_start_stop",
         name="Plant Power",
         icon="mdi:power",
-        is_on_fn=lambda data, _: data["plant"].get("plant_running_state") == 1,
-        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_start_stop", 1),
-        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_start_stop", 0),
+        is_on_fn=lambda data, _: data["plant"].get("plant_running_state") == 1, # Sync
+        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_start_stop", 1), # Already returns awaitable
+        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_start_stop", 0), # Already returns awaitable
     ),
     SigenergySwitchEntityDescription(
         key="plant_remote_ems_enable",
         name="Remote EMS (Controled by Home Assistant)",
         icon="mdi:home-assistant",
         is_on_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
-        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_remote_ems_enable", 1),
-        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_remote_ems_enable", 0),
+        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_remote_ems_enable", 1), # Already returns awaitable
+        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_remote_ems_enable", 0), # Already returns awaitable
     ),
     SigenergySwitchEntityDescription(
         key="plant_independent_phase_power_control_enable",
         name="Independent Phase Power Control",
         icon="mdi:tune",
         entity_category=EntityCategory.CONFIG,
-        is_on_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
-        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_independent_phase_power_control_enable", 1),
-        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_independent_phase_power_control_enable", 0),
+        is_on_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1, # Sync
+        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_independent_phase_power_control_enable", 1), # Already returns awaitable
+        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_independent_phase_power_control_enable", 0), # Already returns awaitable
     ),
 ]
 
@@ -72,18 +76,20 @@ INVERTER_SWITCHES = [
         key="inverter_start_stop",
         name="Inverter Power",
         icon="mdi:power",
-        is_on_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_running_state") == 1,
-        turn_on_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_start_stop", 1),
-        turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_start_stop", 0),
+        # Use device_name (inverter_name) instead of device_id (now passed as the second arg 'identifier')
+        is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_running_state") == 1,
+        turn_on_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "inverter_start_stop", 1), # Already returns awaitable
+        turn_off_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "inverter_start_stop", 0), # Already returns awaitable
     ),
     SigenergySwitchEntityDescription(
         key="inverter_remote_ems_dispatch_enable",
         name="Remote EMS Dispatch",
         icon="mdi:remote",
         entity_category=EntityCategory.CONFIG,
-        is_on_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_remote_ems_dispatch_enable") == 1,
-        turn_on_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_remote_ems_dispatch_enable", 1),
-        turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "inverter_remote_ems_dispatch_enable", 0),
+        # Use device_name (inverter_name) instead of device_id (now passed as the second arg 'identifier')
+        is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_remote_ems_dispatch_enable") == 1,
+        turn_on_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "inverter_remote_ems_dispatch_enable", 1), # Already returns awaitable
+        turn_off_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "inverter_remote_ems_dispatch_enable", 0), # Already returns awaitable
     ),
 ]
 AC_CHARGER_SWITCHES = [
@@ -91,9 +97,10 @@ AC_CHARGER_SWITCHES = [
         key="ac_charger_start_stop",
         name="AC Charger Power",
         icon="mdi:ev-station",
-        is_on_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("ac_charger_system_state") > 0,
-        turn_on_fn=lambda hub, ac_charger_id: hub.async_write_ac_charger_parameter(ac_charger_id, "ac_charger_start_stop", 0),
-        turn_off_fn=lambda hub, ac_charger_id: hub.async_write_ac_charger_parameter(ac_charger_id, "ac_charger_start_stop", 1),
+        # identifier here is ac_charger_id
+        is_on_fn=lambda data, identifier: data["ac_chargers"].get(identifier, {}).get("ac_charger_system_state") > 0,
+        turn_on_fn=lambda hub, identifier: hub.async_write_ac_charger_parameter(identifier, "ac_charger_start_stop", 0), # Already returns awaitable
+        turn_off_fn=lambda hub, identifier: hub.async_write_ac_charger_parameter(identifier, "ac_charger_start_stop", 1), # Already returns awaitable
     ),
 ]
 
@@ -103,9 +110,10 @@ DC_CHARGER_SWITCHES = [
         name="DC Charger",
         icon="mdi:ev-station",
         # consider changing is_on_fn to check for dc_charger_output_power > 0 if the below doesn't work
-        is_on_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("dc_charger_start_stop") == 0,
-        turn_on_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "dc_charger_start_stop", 0),
-        turn_off_fn=lambda hub, inverter_id: hub.async_write_inverter_parameter(inverter_id, "dc_charger_start_stop", 1),
+        # identifier here is dc_charger_id (but it's accessing inverter data?) - This seems wrong, needs review based on coordinator data structure
+        is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_start_stop") == 0, # TODO: Review this logic - should likely use dc_charger data
+        turn_on_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "dc_charger_start_stop", 0), # TODO: Review this logic - Already returns awaitable
+        turn_off_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "dc_charger_start_stop", 1), # TODO: Review this logic - Already returns awaitable
     ),
 ]
 
@@ -164,7 +172,8 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         self.hub = coordinator.hub
         self._attr_name = name
         self._device_type = device_type
-        self._device_id = device_id
+        self._device_id = device_id # Keep slave ID if needed elsewhere, but prefer name for inverter lookups
+        self._device_name = device_name # Store device name
         self._pv_string_idx = pv_string_idx
         
         # Get the device number if any as a string for use in names
@@ -174,14 +183,14 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
             if parts and parts[-1].isdigit():
                 device_number_str = f" {parts[-1]}"
 
-        # Set unique ID
+        # Set unique ID (already uses device_name)
             self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator, description.key, pv_string_idx)
         
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
-                name=device_name,
+                name=device_name, # Should be plant_name here
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
                 # via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
@@ -192,7 +201,8 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
             serial_number = None
             sw_version = None
             if coordinator.data and "inverters" in coordinator.data:
-                inverter_data = coordinator.data["inverters"].get(device_id, {})
+                # Use device_name (inverter_name) to fetch data
+                inverter_data = coordinator.data["inverters"].get(device_name, {})
                 model = inverter_data.get("inverter_model_type")
                 serial_number = inverter_data.get("inverter_serial_number")
                 sw_version = inverter_data.get("inverter_machine_firmware_version")
@@ -229,7 +239,9 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         if self.coordinator.data is None:
             return False
             
-        return self.entity_description.is_on_fn(self.coordinator.data, self._device_id)
+        # Pass device_name for inverters, device_id otherwise
+        identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+        return self.entity_description.is_on_fn(self.coordinator.data, identifier)
 
     @property
     def available(self) -> bool:
@@ -243,19 +255,21 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
             return (
                 self.coordinator.data is not None
                 and "inverters" in self.coordinator.data
-                and self._device_id in self.coordinator.data["inverters"]
+                # Check availability using device_name (inverter_name)
+                and self._device_name in self.coordinator.data["inverters"]
             )
         elif self._device_type == DEVICE_TYPE_AC_CHARGER:
             return (
                 self.coordinator.data is not None
                 and "ac_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["ac_chargers"]
+                and self._device_id in self.coordinator.data["ac_chargers"] # AC Chargers still use ID
             )
         elif self._device_type == DEVICE_TYPE_DC_CHARGER:
+             # TODO: Review DC Charger availability logic based on coordinator data structure
             return (
                 self.coordinator.data is not None
                 and "dc_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["dc_chargers"]
+                and self._device_id in self.coordinator.data["dc_chargers"] # DC Chargers likely still use ID
             )
 
         return False
@@ -263,7 +277,9 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
         try:
-            await self.entity_description.turn_on_fn(self.hub, self._device_id)
+            # Pass device_name for inverters, device_id otherwise
+            identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+            await self.entity_description.turn_on_fn(self.hub, identifier)
             await self.coordinator.async_request_refresh()
         except SigenergyModbusError as error:
             _LOGGER.error("Failed to turn on %s: %s", self.name, error)
@@ -271,7 +287,9 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
         try:
-            await self.entity_description.turn_off_fn(self.hub, self._device_id)
+            # Pass device_name for inverters, device_id otherwise
+            identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+            await self.entity_description.turn_off_fn(self.hub, identifier)
             await self.coordinator.async_request_refresh()
         except SigenergyModbusError as error:
             _LOGGER.error("Failed to turn off %s: %s", self.name, error)

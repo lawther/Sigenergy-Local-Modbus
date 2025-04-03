@@ -48,8 +48,9 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Fetch inverter data for each inverter
                 inverter_data = {}
-                for inverter_id in self.hub.inverter_slave_ids:
-                    inverter_data[inverter_id] = await self.hub.async_read_inverter_data(inverter_id)
+                for inverter_name in self.hub.inverter_connections.keys():
+                    inverter_data[inverter_name] = await self.hub.async_read_inverter_data(inverter_name)
+                    # _LOGGER.debug("Inverter data for %s: %s", inverter_name, inverter_data[inverter_name])
 
                 # Fetch AC charger data for each AC charger
                 ac_charger_data = {}
@@ -78,7 +79,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 }
 
                 # Log the final DC charger data structure
-                _LOGGER.debug("Coordinator Update: Final dc_chargers data: %s", dc_charger_data)
+                # _LOGGER.debug("Coordinator Update: Final dc_chargers data: %s", dc_charger_data)
 
                 return data
         except asyncio.TimeoutError as exception:

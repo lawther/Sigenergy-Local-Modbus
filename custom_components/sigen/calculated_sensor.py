@@ -179,15 +179,17 @@ class SigenergyCalculations:
             
         try:
             pv_idx = extra_params.get("pv_idx")
-            device_id = extra_params.get("device_id")
+            # Expect device_name instead of device_id
+            device_name = extra_params.get("device_name") 
             
-            if not pv_idx or not device_id:
-                _LOGGER.debug("Missing PV string index or device ID for power calculation")
+            if not pv_idx or not device_name:
+                _LOGGER.debug("Missing PV string index or device name for power calculation")
                 return None
                 
-            inverter_data = coordinator_data.get("inverters", {}).get(device_id, {})
+            # Use device_name to look up inverter data
+            inverter_data = coordinator_data.get("inverters", {}).get(device_name, {})
             _LOGGER.debug("[CS][PV Power] Retrieved inverter data for device %s: %s",
-                        device_id, bool(inverter_data))
+                        device_name, bool(inverter_data))
             if not inverter_data:
                 _LOGGER.debug("[CS][PV Power] No inverter data available for power calculation")
                 return None
@@ -411,7 +413,8 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         self.entity_description = description
         self._attr_name = name
         self._device_type = device_type
-        self._device_id = device_id
+        self._device_id = device_id # Keep slave ID if needed
+        self._device_name = device_name # Store device name
         self._device_info_override = device_info
         self._source_entity_id = source_entity_id
         self._round_digits = round_digits
@@ -437,7 +440,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         _LOGGER.debug("[CS][Integration] Created sensor %s with max_sub_interval: %s", 
                       name, max_sub_interval)
         
-        # Set unique ID
+        # Set unique ID (already uses device_name)
         self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator, description.key, pv_string_idx)
         
         # Set device info
@@ -448,7 +451,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             if device_type == DEVICE_TYPE_PLANT:
                 self._attr_device_info = DeviceInfo(
                     identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
-                    name=device_name,
+                    name=device_name, # Should be plant_name
                     manufacturer="Sigenergy",
                     model="Energy Storage System",
                 )
@@ -458,7 +461,8 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
                 serial_number = None
                 sw_version = None
                 if coordinator.data and "inverters" in coordinator.data:
-                    inverter_data = coordinator.data["inverters"].get(device_id, {})
+                    # Use device_name (inverter_name) to fetch data
+                    inverter_data = coordinator.data["inverters"].get(device_name, {}) 
                     model = inverter_data.get("inverter_model_type")
                     serial_number = inverter_data.get("inverter_serial_number")
                     sw_version = inverter_data.get("inverter_machine_firmware_version")
@@ -545,7 +549,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         # Restore previous state if available
         last_state = await self.async_get_last_state()
         _LOGGER.debug("[CS][Integration] Attempting to restore state for %s: %s",
-                    self.entity_id, last_state.state if last_state else None)
+                     self.entity_id, last_state.state if last_state else None)
         if last_state and last_state.state not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             try:
                 self._state = Decimal(last_state.state)
@@ -555,6 +559,11 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
                 _LOGGER.warning("Could not restore last state for %s", self.entity_id)
         
         # Set up appropriate handlers based on max_sub_interval
+        # Ensure source_entity_id is valid before proceeding
+        if not isinstance(self._source_entity_id, str):
+            _LOGGER.error("Source entity ID is not a valid string for %s: %s", self.entity_id, self._source_entity_id)
+            return # Cannot set up tracking without a valid source ID
+            
         if self._max_sub_interval is not None:
             source_state = self.hass.states.get(self._source_entity_id)
             _LOGGER.debug("[Callback] Setting up max interval handling for %s with source state %s",
@@ -571,6 +580,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
                      self._source_entity_id,
                      source_entity is not None,
                      source_entity.state if source_entity else "N/A")
+ # Use the checked source_entity_id
                      
         # Add more detailed logging about the source entity
         _LOGGER.debug("[CS][Integration] All available entities with 'sigen' in the name:")
@@ -589,6 +599,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass, [self._source_entity_id], handle_state_change
+ # Use the checked source_entity_id
             )
         )
 
@@ -840,7 +851,8 @@ class SigenergyCalculatedSensors:
             icon="mdi:clock",
             device_class=SensorDeviceClass.TIMESTAMP,
             entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=SigenergyCalculations.epoch_to_datetime,
+            # Adapt function signature to match expected value_fn
+            value_fn=lambda value, coord_data, _: SigenergyCalculations.epoch_to_datetime(value, coord_data),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
         ),
         SigenergyCalculations.SigenergySensorEntityDescription(
@@ -848,14 +860,16 @@ class SigenergyCalculatedSensors:
             name="System Timezone",
             icon="mdi:earth",
             entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=SigenergyCalculations.minutes_to_gmt,
+            # Adapt function signature
+            value_fn=lambda value, _, __: SigenergyCalculations.minutes_to_gmt(value),
         ),
         # EMS Work Mode sensor with value mapping
         SigenergyCalculations.SigenergySensorEntityDescription(
             key="plant_ems_work_mode",
             name="EMS Work Mode",
             icon="mdi:home-battery",
-            value_fn=lambda value: {
+            # Adapt function signature
+            value_fn=lambda value, _, __: {
                 EMSWorkMode.MAX_SELF_CONSUMPTION: "Maximum Self Consumption",
                 EMSWorkMode.AI_MODE: "AI Mode",
                 EMSWorkMode.TOU: "Time of Use",
@@ -906,7 +920,8 @@ class SigenergyCalculatedSensors:
             name="Startup Time",
             device_class=SensorDeviceClass.TIMESTAMP,
             entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=SigenergyCalculations.epoch_to_datetime,
+            # Adapt function signature
+            value_fn=lambda value, coord_data, _: SigenergyCalculations.epoch_to_datetime(value, coord_data),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
         ),
         SigenergyCalculations.SigenergySensorEntityDescription(
@@ -914,7 +929,8 @@ class SigenergyCalculatedSensors:
             name="Shutdown Time",
             device_class=SensorDeviceClass.TIMESTAMP,
             entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=SigenergyCalculations.epoch_to_datetime,
+            # Adapt function signature
+            value_fn=lambda value, coord_data, _: SigenergyCalculations.epoch_to_datetime(value, coord_data),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
         ),
     ]

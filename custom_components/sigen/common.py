@@ -47,8 +47,8 @@ def generate_sigen_entity(
     Returns:
         list: A list of instantiated entities for the device
     """
-    device_name = generate_device_name(plant_name, device_name) if device_name else plant_name
-    device_id = device_conn[CONF_SLAVE_ID] if device_conn else None
+    # device_name = generate_device_name(plant_name, device_name) if device_name else plant_name
+    device_name = device_name if device_name else plant_name
 
     entities = []
     for description in entity_description:
@@ -76,8 +76,8 @@ def generate_sigen_entity(
                 entity_kwargs["source_entity_id"] = source_entity_id
                 _LOGGER.debug("Using source entity ID: %s", source_entity_id)
             else:
-                _LOGGER.warning("No source entity ID found for %s. Skipping the entity.", description.source_key)
-                continue
+                _LOGGER.warning("No source entity ID found for source key '%s' (device: %s). Skipping entity '%s'.", description.source_key, device_name, description.name)
+                continue # Skip this entity
 
         if hasattr(description, 'round_digits') and description.round_digits is not None:
             entity_kwargs["round_digits"] = description.round_digits
@@ -85,9 +85,18 @@ def generate_sigen_entity(
         if hasattr(description, 'max_sub_interval') and description.max_sub_interval is not None:
             entity_kwargs["max_sub_interval"] = description.max_sub_interval
         
-        if device_type == DEVICE_TYPE_INVERTER and hass is not None:
-            _LOGGER.debug("Creating inverter entity: %s with kwargs: %s", description.key, entity_kwargs)
-        entities.append(entity_class(**entity_kwargs))
+        # if device_type == DEVICE_TYPE_INVERTER:
+        #     _LOGGER.debug("Creating inverter entity: %s with kwargs: %s", description.key, entity_kwargs)
+
+        try:
+            new_entity = entity_class(**entity_kwargs)
+            entities.append(new_entity)
+            # _LOGGER.debug("Created entity: %s", new_entity)
+
+        except Exception as ex:
+            _LOGGER.exception("Error creating entity '%s' for device '%s': %s", description.name, device_name, ex) # Use .exception
+            _LOGGER.debug("Entity creation failed with description: %s", description)
+            _LOGGER.debug("Entity creation failed with kwargs: %s", entity_kwargs)
     return entities
 
 @staticmethod

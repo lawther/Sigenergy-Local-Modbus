@@ -111,11 +111,6 @@ class SigenergyModbusHub:
         self.dc_charger_count = len(self.dc_charger_connections)
 
 
-        # Get specific slave IDs and their connection details
-        self.inverter_slave_ids = config_entry.data.get(
-            CONF_INVERTER_SLAVE_ID, list(range(1, self.inverter_count + 1))
-        )
-        
         # Other slave IDs and their connection details
         self.ac_charger_slave_ids = config_entry.data.get(
             CONF_AC_CHARGER_SLAVE_ID, list(range(self.inverter_count + 1, self.inverter_count + self.ac_charger_count + 1))
@@ -659,22 +654,32 @@ class SigenergyModbusHub:
         
         return data
 
-    async def async_read_inverter_data(self, inverter_id: int) -> Dict[str, Any]:
+    async def async_read_inverter_data(self, inverter_name: str) -> Dict[str, Any]:
         """Read all supported inverter data."""
         data = {}
 
+        # Look up inverter details by name
+        if inverter_name not in self.inverter_connections:
+            _LOGGER.error("Unknown inverter name provided for reading data: %s", inverter_name)
+            return {} # Return empty dict if inverter name is not found
+        inverter_info = self.inverter_connections[inverter_name]
+        slave_id = inverter_info.get(CONF_SLAVE_ID)
+        if slave_id is None:
+            _LOGGER.error("Slave ID not configured for inverter: %s", inverter_name)
+            return {} # Return empty dict if slave ID is missing
+
         # Probe registers if not done yet for this inverter
-        if inverter_id not in self.inverter_registers_probed:
+        if inverter_name not in self.inverter_registers_probed:
             try:
-                await self.async_probe_registers(inverter_id, INVERTER_RUNNING_INFO_REGISTERS)
+                await self.async_probe_registers(slave_id, INVERTER_RUNNING_INFO_REGISTERS)
                 # Also probe parameter registers that can be read
-                await self.async_probe_registers(inverter_id, {
+                await self.async_probe_registers(slave_id, {
                     name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
                     if reg.register_type != RegisterType.WRITE_ONLY
                 })
-                self.inverter_registers_probed.add(inverter_id)
+                self.inverter_registers_probed.add(inverter_name)
             except Exception as ex:
-                _LOGGER.error("Failed to probe inverter %d registers: %s", inverter_id, ex)
+                _LOGGER.error("Failed to probe inverter '%s' (Slave ID: %d) registers: %s", inverter_name, slave_id, ex)
                 # Continue with reading, some registers might still work
 
         # Read registers from both running info and parameter registers
@@ -689,7 +694,7 @@ class SigenergyModbusHub:
             if register_def.is_supported is not False:  # Read if supported or unknown
                 try:
                     registers = await self.async_read_registers(
-                        slave_id=inverter_id,
+                        slave_id=slave_id,
                         address=register_def.address,
                         count=register_def.count,
                         register_type=register_def.register_type,
@@ -700,8 +705,8 @@ class SigenergyModbusHub:
                         if register_def.is_supported is None:
                             register_def.is_supported = False
                             if register_name.startswith("pv") and register_name.endswith("_voltage"):
-                                _LOGGER.debug("PV voltage register %s is not supported for inverter %d",
-                                           register_name, inverter_id)
+                                _LOGGER.debug("PV voltage register %s is not supported for inverter '%s' (Slave ID: %d)",
+                                           register_name, inverter_name, slave_id)
                         continue
 
                     value = self._decode_value(
@@ -711,14 +716,14 @@ class SigenergyModbusHub:
                     )
 
                     data[register_name] = value
-                    # _LOGGER.debug("Read register %s = %s from inverter %d", register_name, value, inverter_id)
+                    # _LOGGER.debug("Read register %s = %s from inverter '%s' (Slave ID: %d)", register_name, value, inverter_name, slave_id)
 
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
                         register_def.is_supported = True
 
                 except Exception as ex:
-                    _LOGGER.error("Error reading inverter %d register %s: %s", inverter_id, register_name, ex)
+                    _LOGGER.error("Error reading inverter '%s' (Slave ID: %d) register %s: %s", inverter_name, slave_id, register_name, ex)
                     data[register_name] = None
                     # If this is the first time we fail to read this register, mark it as unsupported
                     if register_def.is_supported is None:
@@ -1015,7 +1020,7 @@ class SigenergyModbusHub:
 
     async def async_write_inverter_parameter(
         self, 
-        inverter_id: int, 
+        inverter_name: str,
         register_name: str, 
         value: Union[int, float, str]
     ) -> None:
@@ -1023,6 +1028,14 @@ class SigenergyModbusHub:
         # Check if read-only mode is enabled
         if self.read_only:
             raise SigenergyModbusError("Cannot write parameter while in read-only mode")
+            
+        # Look up inverter details by name
+        if inverter_name not in self.inverter_connections:
+            raise SigenergyModbusError(f"Unknown inverter name provided for writing parameter: {inverter_name}")
+        inverter_info = self.inverter_connections[inverter_name]
+        slave_id = inverter_info.get(CONF_SLAVE_ID)
+        if slave_id is None:
+            raise SigenergyModbusError(f"Slave ID not configured for inverter: {inverter_name}")
             
         if register_name not in INVERTER_PARAMETER_REGISTERS:
             raise SigenergyModbusError(f"Unknown inverter parameter: {register_name}")
@@ -1037,14 +1050,14 @@ class SigenergyModbusHub:
         
         if len(encoded_values) == 1:
             await self.async_write_register(
-                slave_id=inverter_id,
+                slave_id=slave_id,
                 address=register_def.address,
                 value=encoded_values[0],
                 register_type=register_def.register_type,
             )
         else:
             await self.async_write_registers(
-                slave_id=inverter_id,
+                slave_id=slave_id,
                 address=register_def.address,
                 values=encoded_values,
                 register_type=register_def.register_type,

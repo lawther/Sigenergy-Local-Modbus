@@ -129,41 +129,7 @@ def validate_slave_id(
         
     return errors
 
-def validate_slave_ids(raw_ids: str, field_name: str) -> Tuple[List[int], Dict[str, str]]:
-    """Validate slave IDs from a comma-separated string.
-    
-    Returns:
-        Tuple containing list of valid IDs and dict of errors (if any)
-        An empty string input will return an empty list with no errors.
-    """
-    errors = {}
-    id_list = []
-    
-    # Skip validation for empty strings (indicating no devices of this type)
-    if not raw_ids or raw_ids.strip() == "":
-        return [], errors
-    
-    for part in raw_ids.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if part.isdigit():
-            val = int(part)
-            if not (1 <= val <= 246):
-                errors[field_name] = "each_id_must_be_between_1_and_246"
-                break
-            id_list.append(val)
-        else:
-            errors[field_name] = "invalid_integer_value"
-            break
-            
-    # Check for duplicate IDs
-    if not errors and not _LOGGER.isEnabledFor(logging.DEBUG):
-        if len(set(id_list)) != len(id_list):
-            errors[field_name] = "duplicate_ids_found"
-            
-    return id_list, errors
-
+# Unused function validate_slave_ids removed
 @config_entries.HANDLERS.register(DOMAIN)
 class SigenergyConfigFlow(config_entries.ConfigFlow):
     """Handle a config flow for Sigenergy ESS."""
@@ -238,10 +204,12 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             if not (1 <= inverter_id <= 246):
                 errors[CONF_INVERTER_SLAVE_ID] = "each_id_must_be_between_1_and_246"
             elif not _LOGGER.isEnabledFor(logging.DEBUG):
+                # Check against existing inverter connections in all plant entries
                 for entry in self.hass.config_entries.async_entries(DOMAIN):
-                    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_INVERTER:
-                        existing_id = entry.data.get(CONF_INVERTER_SLAVE_ID)
-                        if existing_id and inverter_id in existing_id:
+                    if entry.data.get(CONF_DEVICE_TYPE) == DEVICE_TYPE_PLANT:
+                        inverter_connections = entry.data.get(CONF_INVERTER_CONNECTIONS, {})
+                        existing_ids = [conn.get(CONF_SLAVE_ID) for conn in inverter_connections.values()]
+                        if inverter_id in existing_ids:
                             errors[CONF_INVERTER_SLAVE_ID] = "duplicate_ids_found"
                             break
         except (ValueError, TypeError):
@@ -255,7 +223,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             )
 
         # Store the validated lists
-        self._data[CONF_INVERTER_SLAVE_ID] = [inverter_id]
+        # CONF_INVERTER_SLAVE_ID list is no longer stored separately
         self._data[CONF_AC_CHARGER_SLAVE_ID] = []
         self._data[CONF_DC_CHARGER_CONNECTIONS] = {}
 
@@ -351,8 +319,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Check for duplicate IDs
         plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
         if plant_entry:
-            plant_inverters = plant_entry.data.get(CONF_INVERTER_SLAVE_ID, [])
-            if slave_id in plant_inverters and not _LOGGER.isEnabledFor(logging.DEBUG):
+            # Check against existing inverter slave IDs in the connections dictionary
+            inverter_connections = plant_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
+            existing_ids = [conn.get(CONF_SLAVE_ID) for conn in inverter_connections.values()]
+            if slave_id in existing_ids and not _LOGGER.isEnabledFor(logging.DEBUG):
                 errors[CONF_SLAVE_ID] = "duplicate_ids_found"
                 return self.async_show_form(
                     step_id=STEP_INVERTER_CONFIG,
@@ -361,7 +331,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 )
             
             # Get the inverter name based on number of existing inverters
-            inverter_no = len(plant_inverters)
+            inverter_no = len(existing_ids) # Use the count from connections
             inverter_name = f"Inverter{' ' if inverter_no == 0 else f' {inverter_no + 1} '}"
             
             # Create or update the inverter connections dictionary
@@ -374,7 +344,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             }
             
             # Update the plant's configuration with the new inverter
-            new_data[CONF_INVERTER_SLAVE_ID] = plant_inverters + [slave_id]
+            # CONF_INVERTER_SLAVE_ID list is no longer updated separately
             new_data[CONF_INVERTER_CONNECTIONS] = inverter_connections
             
             self.hass.config_entries.async_update_entry(
@@ -412,11 +382,13 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
         if plant_entry:
             plant_ac_chargers = plant_entry.data.get(CONF_AC_CHARGER_SLAVE_ID, [])
-            plant_inverters = plant_entry.data.get(CONF_INVERTER_SLAVE_ID, [])
+            # Get inverter slave IDs from the connections dictionary
+            inverter_connections = plant_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
+            plant_inverter_ids = [conn.get(CONF_SLAVE_ID) for conn in inverter_connections.values()]
             
             if slave_id in plant_ac_chargers:
                 errors[CONF_SLAVE_ID] = "duplicate_ids_found"
-            elif slave_id in plant_inverters:
+            elif slave_id in plant_inverter_ids:
                 errors[CONF_SLAVE_ID] = "ac_charger_conflicts_inverter"
                 
             if errors:
@@ -1080,48 +1052,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data={})
         return self.async_create_entry(title="", data={})
 
-    def _create_reconfigure_schema(self, inv_ids: str = "") -> vol.Schema:
-        """Create schema for reconfiguring device IDs with default or provided values."""
-        if not inv_ids:
-            current_ids = self._data.get(CONF_INVERTER_SLAVE_ID, [])
-            inv_ids = ", ".join(str(i) for i in current_ids) if current_ids else ""
-        
-        return vol.Schema({
-            vol.Required(CONF_INVERTER_SLAVE_ID, default=inv_ids): str,
-        })
-
-    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
-        """Handle reconfiguration of existing inverter and AC charger slave IDs."""
-        errors = {}
-        
-        if user_input is None:
-            schema = self._create_reconfigure_schema()
-            return self.async_show_form(
-                step_id=STEP_RECONFIGURE,
-                data_schema=schema
-            )
-        
-
-        # Simple validation
-        inverter_id_str = user_input.get(CONF_INVERTER_SLAVE_ID, "")
-        if not inverter_id_str.isdigit():
-            errors[CONF_INVERTER_SLAVE_ID] = "invalid_integer_value"
-        else:
-            inverter_id = int(inverter_id_str)
-            if not (1 <= inverter_id <= 246):
-                errors[CONF_INVERTER_SLAVE_ID] = "each_id_must_be_between_1_and_246"
-
-        
-        if errors:
-            schema = self._create_reconfigure_schema(inverter_id_str)
-            return self.async_show_form(
-                step_id=STEP_RECONFIGURE,
-                data_schema=schema, errors=errors
-            )
-
-        
-        # Update configuration
-        new_data = dict(self._data)
-        new_data[CONF_INVERTER_SLAVE_ID] = [int(inverter_id_str)]
-        self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-        return self.async_create_entry(title="", data={})
+    # _create_reconfigure_schema and async_step_reconfigure removed
+    # Reconfiguration is now handled via device selection (async_step_select_device)
+    # and modifying individual devices (async_step_inverter_config, etc.)
