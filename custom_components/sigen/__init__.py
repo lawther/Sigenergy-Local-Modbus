@@ -26,6 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Sigenergy ESS from a config entry."""
     _LOGGER.debug("async_setup_entry: Starting setup for entry: %s", entry.title)
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    _LOGGER.debug("async_setup_entry: Scan interval set to %s seconds", scan_interval)
 
     hub = SigenergyModbusHub(hass, entry)
     _LOGGER.debug("async_setup_entry: SigenergyModbusHub created: %s", hub)
