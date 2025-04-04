@@ -222,14 +222,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 errors=errors
             )
 
-        # Store the validated lists
-        # CONF_INVERTER_SLAVE_ID list is no longer stored separately
-        self._data[CONF_AC_CHARGER_SLAVE_ID] = []
-        self._data[CONF_DC_CHARGER_CONNECTIONS] = {}
-
-
         # Create the inverter connections dictionary for the implicit first inverter
-        inverter_name = "Inverter 1"
+        inverter_name = "Inverter"
         self._data[CONF_INVERTER_CONNECTIONS] = {
             inverter_name: {
                 CONF_HOST: self._data[CONF_HOST],
@@ -332,7 +326,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             
             # Get the inverter name based on number of existing inverters
             inverter_no = len(existing_ids) # Use the count from connections
-            inverter_name = f"Inverter{' ' if inverter_no == 0 else f' {inverter_no + 1} '}"
+            inverter_name = f"Inverter{'' if inverter_no == 0 else f' {inverter_no + 1} '}"
             
             # Create or update the inverter connections dictionary
             new_data = dict(plant_entry.data)

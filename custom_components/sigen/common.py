@@ -47,7 +47,6 @@ def generate_sigen_entity(
     Returns:
         list: A list of instantiated entities for the device
     """
-    # device_name = generate_device_name(plant_name, device_name) if device_name else plant_name
     device_name = device_name if device_name else plant_name
 
     entities = []
@@ -67,7 +66,6 @@ def generate_sigen_entity(
             source_entity_id  = get_source_entity_id(
                 device_type,
                 device_name,
-                # device_id if device_id else 0,  # Plant has default device ID of 0 as it's a single device
                 description.source_key,
                 coordinator,
                 hass
