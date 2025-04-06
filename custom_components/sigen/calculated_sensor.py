@@ -35,7 +35,6 @@ from .const import (
     DEVICE_TYPE_INVERTER,
     DOMAIN,
 )
-from .common import *
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -439,9 +438,6 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
 
         _LOGGER.debug("[CS][Integration] Created sensor %s with max_sub_interval: %s", 
                       name, max_sub_interval)
-        
-        # Set unique ID (already uses device_name)
-        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator, description.key, pv_string_idx)
         
         # Set device info
         if self._device_info_override:

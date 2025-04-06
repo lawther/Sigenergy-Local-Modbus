@@ -6,6 +6,8 @@ from datetime import timedelta
 from typing import Any, Optional
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
+from .calculated_sensor import SigenergyCalculations as SC, SigenergyCalculatedSensors as SCS, SigenergyIntegrationSensor
 
 from .const import (CONF_SLAVE_ID, DOMAIN, DEVICE_TYPE_INVERTER, DEVICE_TYPE_PLANT)
 
@@ -30,7 +32,9 @@ def generate_sigen_entity(
         entity_class: type,
         entity_description: list,
         device_type: str,
-        hass: Optional[HomeAssistant] = None
+        hass: Optional[HomeAssistant] = None,
+        device_info: Optional[DeviceInfo] = None,
+        pv_string_idx: Optional[int] = None,
         ) -> list:
     """
     Generate entities for Sigenergy components.
@@ -51,16 +55,36 @@ def generate_sigen_entity(
 
     entities = []
     for description in entity_description:
-        _LOGGER.debug("Description: %s", description)
+
+        if pv_string_idx is not None:
+            _LOGGER.debug("PV String Index: %s for %s", pv_string_idx, description.key)
+            description = SC.SigenergySensorEntityDescription.from_entity_description(
+                description,
+                extra_params={"pv_idx": pv_string_idx, "device_id": device_name},
+            )
+            pv_string_name = f"{device_name} PV {pv_string_idx}"
+
+            # final_device_name = f"{device_name} {description.name}"
+            sensor_name = f"{pv_string_name} {description.name}"
+            sensor_id = pv_string_name
+            # _LOGGER.debug("Entity ID: %s", entity_id)
+        else:
+            sensor_name = f"{device_name} {description.name}"
+            sensor_id = sensor_name
 
         entity_kwargs = {
             "coordinator": coordinator,
             "description": description,
-            "name": f"{device_name} {description.name}",
+            "name": sensor_name,
             "device_type": device_type,
-            "device_id": generate_device_id(device_name, device_type),
+            "device_id": generate_device_id(sensor_id, device_type),
             "device_name": device_name,
         }
+
+        if device_info:
+            entity_kwargs["device_info"] = device_info
+        if pv_string_idx:
+            entity_kwargs["pv_string_idx"] = pv_string_idx
         
         if hasattr(description, 'source_key') and description.source_key:
             source_entity_id  = get_source_entity_id(
@@ -77,19 +101,22 @@ def generate_sigen_entity(
                 _LOGGER.warning("No source entity ID found for source key '%s' (device: %s). Skipping entity '%s'.", description.source_key, device_name, description.name)
                 continue # Skip this entity
 
+
         if hasattr(description, 'round_digits') and description.round_digits is not None:
             entity_kwargs["round_digits"] = description.round_digits
             
         if hasattr(description, 'max_sub_interval') and description.max_sub_interval is not None:
             entity_kwargs["max_sub_interval"] = description.max_sub_interval
         
+        if pv_string_idx:
+            _LOGGER.debug("Creating entity for PV string index: %s with kwargs: %s", pv_string_idx, entity_kwargs)
         # if device_type == DEVICE_TYPE_INVERTER:
         #     _LOGGER.debug("Creating inverter entity: %s with kwargs: %s", description.key, entity_kwargs)
 
         try:
             new_entity = entity_class(**entity_kwargs)
             entities.append(new_entity)
-            # _LOGGER.debug("Created entity: %s", new_entity)
+            _LOGGER.debug("Created entity: %s", new_entity)
 
         except Exception as ex:
             _LOGGER.exception("Error creating entity '%s' for device '%s': %s", description.name, device_name, ex) # Use .exception

@@ -57,11 +57,11 @@ def _get_grid_code_display(data, device_name): # Changed inverter_id to device_n
     """Get the display value for grid code with debug logging."""
     # Log the available inverter data for debugging
     # Access using device_name
-    if device_name in data.get("inverters", {}):
-        _LOGGER.debug("Available inverter data keys for %s: %s", device_name, list(data["inverters"][device_name].keys()))
-    else:
-        _LOGGER.debug("No data available for inverter %s", device_name)
-        return "Unknown"
+    # if device_name in data.get("inverters", {}):
+    #     # _LOGGER.debug("Available inverter data keys for %s: %s", device_name, list(data["inverters"][device_name].keys()))
+    # else:
+    #     _LOGGER.debug("No data available for inverter %s", device_name)
+    #     return "Unknown"
     
     # Get the raw grid code value using device_name
     grid_code = data["inverters"].get(device_name, {}).get("inverter_grid_code")
