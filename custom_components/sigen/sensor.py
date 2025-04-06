@@ -72,8 +72,6 @@ async def async_setup_entry(
 
 
     # Add inverter sensors
-    _LOGGER.debug("[CS][Setup] Adding inverter sensors from SS.INVERTER_SENSORS + SCS.INVERTER_SENSORS")
-
     for device_name, device_conn in coordinator.hub.inverter_connections.items():
         # Static Sensors:
         async_add_entities(generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySensor,
@@ -87,40 +85,34 @@ async def async_setup_entry(
                                             SCS.INVERTER_INTEGRATION_SENSORS, DEVICE_TYPE_INVERTER, hass))
         
         # PV strings
-        # _LOGGER.debug(f"inverter_ids: {coordinator.data['inverters'][device_name]}")
-        inverter_data = coordinator.data["inverters"][device_name]  # Updated to use inverter_name
-        
+        inverter_data = coordinator.data["inverters"][device_name]
         pv_string_count = inverter_data.get("inverter_pv_string_count", 0)
         
         if pv_string_count and isinstance(pv_string_count, (int, float)) and pv_string_count > 0:
-            # _LOGGER.debug("Adding %d PV string devices for inverter %s", pv_string_count, device_name)
-            
+           
             # Create sensors for each PV string
             for pv_idx in range(1, int(pv_string_count) + 1):
                 try:
+                    pv_string_name = f"{device_name} PV{pv_idx}"
+                    parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
+                    pv_string_id = f"{parent_inverter_id}_pv{pv_idx}"
 
-                    pv_string_name = f"{device_name} PV {pv_idx}"
-                    pv_string_id = f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}_pv{pv_idx}"
-                    _LOGGER.debug("Adding PV string %d with name %s and ID %s", pv_idx, pv_string_name, pv_string_id)
-                    
                     # Create device info
                     pv_device_info = DeviceInfo(
                         identifiers={(DOMAIN, pv_string_id)},
                         name=pv_string_name,
                         manufacturer="Sigenergy",
                         model="PV String",
-                        via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}"),
+                        via_device=(DOMAIN, parent_inverter_id),
                     )
                     
                     # Add sensors for this PV string first the static and then the calculated sensors
                     async_add_entities(generate_sigen_entity(plant_name, device_name, device_conn, coordinator, PVStringSensor,
                                         SS.PV_STRING_SENSORS, DEVICE_TYPE_INVERTER, hass=hass, device_info=pv_device_info, pv_string_idx=pv_idx))
                     
-                    ent = generate_sigen_entity(plant_name, device_name, device_conn, coordinator, PVStringSensor,
-                                        SCS.PV_STRING_SENSORS, DEVICE_TYPE_INVERTER, hass=hass, device_info=pv_device_info, pv_string_idx=pv_idx)
+                    async_add_entities(generate_sigen_entity(plant_name, device_name, device_conn, coordinator, PVStringSensor,
+                                        SCS.PV_STRING_SENSORS, DEVICE_TYPE_INVERTER, hass=hass, device_info=pv_device_info, pv_string_idx=pv_idx))
 
-                    _LOGGER.debug(f"Created PV Calculated sesnsors: {ent}")
-                    async_add_entities(ent)
                     
                 except Exception as ex:
                     _LOGGER.exception("Error creating device/sensors for PV string %d: %s", pv_idx, ex) # Use .exception to include traceback

@@ -62,12 +62,10 @@ def generate_sigen_entity(
                 description,
                 extra_params={"pv_idx": pv_string_idx, "device_name": device_name},
             )
-            pv_string_name = f"{device_name} PV {pv_string_idx}"
+            pv_string_name = f"{device_name} PV{pv_string_idx}"
 
-            # final_device_name = f"{device_name} {description.name}"
             sensor_name = f"{pv_string_name} {description.name}"
             sensor_id = pv_string_name
-            # _LOGGER.debug("Entity ID: %s", entity_id)
         else:
             sensor_name = f"{device_name} {description.name}"
             sensor_id = sensor_name
@@ -175,7 +173,7 @@ def generate_unique_entity_id(
 @staticmethod
 def generate_device_id(
     device_name: str,
-    device_type: str,
+    device_type: Optional[str] = None,
 ) -> str:
     unique_device_part = str(device_name).lower().replace(' ', '_') if device_name else device_type
     return unique_device_part
