@@ -67,7 +67,7 @@ def _get_grid_code_display(data, device_name): # Changed inverter_id to device_n
     grid_code = data["inverters"].get(device_name, {}).get("inverter_grid_code")
     
     # Debug log the value and type
-    _LOGGER.debug("Grid code value for %s: %s, type: %s", device_name, grid_code, type(grid_code))
+    # _LOGGER.debug("Grid code value for %s: %s, type: %s", device_name, grid_code, type(grid_code))
     
     # Handle None case
     if grid_code is None:
@@ -76,11 +76,11 @@ def _get_grid_code_display(data, device_name): # Changed inverter_id to device_n
     # Try to convert to int and look up in map
     try:
         grid_code_int = int(grid_code)
-        _LOGGER.debug("Converted grid code to int: %s", grid_code_int)
+        # _LOGGER.debug("Converted grid code to int: %s", grid_code_int)
         
         # Look up in map
         result = GRID_CODE_MAP.get(grid_code_int)
-        _LOGGER.debug("Grid code map lookup result: %s", result)
+        # _LOGGER.debug("Grid code map lookup result: %s", result)
         
         if result is not None:
             return result
