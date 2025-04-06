@@ -87,20 +87,20 @@ async def async_setup_entry(
                                             SCS.INVERTER_INTEGRATION_SENSORS, DEVICE_TYPE_INVERTER, hass))
         
         # PV strings
-        _LOGGER.debug(f"inverter_ids: {coordinator.data['inverters'][inverter_name]}")
-        inverter_data = coordinator.data["inverters"][inverter_name]  # Updated to use inverter_name
+        # _LOGGER.debug(f"inverter_ids: {coordinator.data['inverters'][device_name]}")
+        inverter_data = coordinator.data["inverters"][device_name]  # Updated to use inverter_name
         
         pv_string_count = inverter_data.get("inverter_pv_string_count", 0)
         
         if pv_string_count and isinstance(pv_string_count, (int, float)) and pv_string_count > 0:
-            _LOGGER.debug("Adding %d PV string devices for inverter %s", pv_string_count, inverter_name)
+            # _LOGGER.debug("Adding %d PV string devices for inverter %s", pv_string_count, device_name)
             
             # Create sensors for each PV string
             for pv_idx in range(1, int(pv_string_count) + 1):
                 try:
 
-                    pv_string_name = f"{inverter_name} PV {pv_idx}"
-                    pv_string_id = f"{coordinator.hub.config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}_pv{pv_idx}"
+                    pv_string_name = f"{device_name} PV {pv_idx}"
+                    pv_string_id = f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}_pv{pv_idx}"
                     _LOGGER.debug("Adding PV string %d with name %s and ID %s", pv_idx, pv_string_name, pv_string_id)
                     
                     # Create device info
@@ -109,37 +109,19 @@ async def async_setup_entry(
                         name=pv_string_name,
                         manufacturer="Sigenergy",
                         model="PV String",
-                        via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(inverter_name).lower().replace(' ', '_')}"),
+                        via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}"),
                     )
                     
-                    # Add sensors for this PV string
-                    for description in SS.PV_STRING_SENSORS + SCS.PV_STRING_SENSORS:
-                        _LOGGER.debug("Adding sensor %s for PV string %d", description.name, pv_string_name)
-                        # Create a copy of the description to add extra parameters
-                        if isinstance(description, SC.SigenergySensorEntityDescription):
-                            sensor_desc = SC.SigenergySensorEntityDescription.from_entity_description(
-                                description,
-                                extra_params={"pv_idx": pv_idx, "device_id": inverter_name},
-                            )
-                        else:
-                            sensor_desc = description
-                        
-                        sensor_name = f"{pv_string_name} {description.name}"
-                        entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-                        
-                        entities.append(
-                            PVStringSensor(
-                                coordinator=coordinator,
-                                description=sensor_desc,
-                                name=sensor_name,
-                                device_type=DEVICE_TYPE_INVERTER,  # Use inverter as device type for data access
-                                device_id=generate_device_id(inverter_name, DEVICE_TYPE_INVERTER),
-                                device_name=inverter_name,
-                                device_info=pv_device_info,
-                                pv_string_idx=pv_idx,
-                            )
-                        )
-                        _LOGGER.debug("Added sensor id %s for PV string id %s", sensor_desc.key, pv_string_id)
+                    # Add sensors for this PV string first the static and then the calculated sensors
+                    async_add_entities(generate_sigen_entity(plant_name, device_name, device_conn, coordinator, PVStringSensor,
+                                        SS.PV_STRING_SENSORS, DEVICE_TYPE_INVERTER, hass=hass, device_info=pv_device_info, pv_string_idx=pv_idx))
+                    
+                    ent = generate_sigen_entity(plant_name, device_name, device_conn, coordinator, PVStringSensor,
+                                        SCS.PV_STRING_SENSORS, DEVICE_TYPE_INVERTER, hass=hass, device_info=pv_device_info, pv_string_idx=pv_idx)
+
+                    _LOGGER.debug(f"Created PV Calculated sesnsors: {ent}")
+                    async_add_entities(ent)
+                    
                 except Exception as ex:
                     _LOGGER.exception("Error creating device/sensors for PV string %d: %s", pv_idx, ex) # Use .exception to include traceback
         
@@ -296,9 +278,9 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     sw_version=sw_version,
                     via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
                 )
-                _LOGGER.debug("Unique ID for %s: %s", name, self._attr_unique_id)
-                _LOGGER.debug("[Sensor Init] Inverter device info created: %s", self._attr_device_info)
-                _LOGGER.debug("[Sensor Init] Inverter data used for model/SN: %s", inverter_data)
+                # _LOGGER.debug("Unique ID for %s: %s", name, self._attr_unique_id)
+                # _LOGGER.debug("[Sensor Init] Inverter device info created: %s", self._attr_device_info)
+                # _LOGGER.debug("[Sensor Init] Inverter data used for model/SN: %s", inverter_data)
             elif device_type == DEVICE_TYPE_AC_CHARGER:
                 self._attr_device_info = DeviceInfo(
                     identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
@@ -324,26 +306,26 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the state of the sensor."""
-        _LOGGER.debug("[CS][native_value] Getting value for %s (key: %s)", self.entity_id, self.entity_description.key)
+        # _LOGGER.debug("[CS][native_value] Getting value for %s (key: %s)", self.entity_id, self.entity_description.key)
         # Special handling for calculated power sensors
-        _LOGGER.debug("[CS][native_value] Checking if %s needs special handling", self.entity_description.key)
+        # _LOGGER.debug("[CS][native_value] Checking if %s needs special handling", self.entity_description.key)
         if self.entity_description.key in ["plant_grid_import_power", "plant_grid_export_power", "plant_consumed_power"]:
             if self.coordinator.data is None or "plant" not in self.coordinator.data:
-                _LOGGER.debug("[CS][GridSensor] No coordinator data available for %s", self.entity_id)
+                _LOGGER.warning("[CS][GridSensor] No coordinator data available for %s", self.entity_id)
                 return None
                 
             # Call the value_fn directly with the coordinator data
             if hasattr(self.entity_description, "value_fn") and self.entity_description.value_fn is not None:
-                _LOGGER.debug("[CS][native_value] Found value_fn for %s: %s", self.entity_id, self.entity_description.value_fn)
+                # _LOGGER.debug("[CS][native_value] Found value_fn for %s: %s", self.entity_id, self.entity_description.value_fn)
                 try:
-                    _LOGGER.debug("[CS][native_value] Calling value_fn for %s", self.entity_id)
+                    # _LOGGER.debug("[CS][native_value] Calling value_fn for %s", self.entity_id)
             # Always pass coordinator data to the value_fn
-                    _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
+                    # _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     transformed_value = self.entity_description.value_fn(
                         None, self.coordinator.data, None
                     )
-                    _LOGGER.debug("[CS][GridSensor] Calculated value for %s: %s",
-                                 self.entity_id, transformed_value)
+                    # _LOGGER.debug("[CS][GridSensor] Calculated value for %s: %s",
+                    #              self.entity_id, transformed_value)
                     return transformed_value
                 except Exception as ex:
                     _LOGGER.error(
@@ -354,15 +336,16 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     return None
         
         # Standard handling for other sensors
-        if self.entity_description.key == "plant_consumed_power":
-            _LOGGER.debug("[CS][Plant Consumed] Native value called for plant_consumed_power sensor")
-            _LOGGER.debug("[CS][Plant Consumed] Coordinator data available: %s", bool(self.coordinator.data))
-            if self.coordinator.data and "plant" in self.coordinator.data:
-                _LOGGER.debug("[CS][Plant Consumed] Available plant data keys: %s", list(self.coordinator.data["plant"].keys()))
+        # if self.entity_description.key == "plant_consumed_power":
+        #     _LOGGER.debug("[CS][Plant Consumed] Native value called for plant_consumed_power sensor")
+        #     _LOGGER.debug("[CS][Plant Consumed] Coordinator data available: %s", bool(self.coordinator.data))
+        #     if self.coordinator.data and "plant" in self.coordinator.data:
+        #         _LOGGER.debug("[CS][Plant Consumed] Available plant data keys: %s", list(self.coordinator.data["plant"].keys()))
 
         if self.coordinator.data is None:
+            _LOGGER.error("[CS][native_value] No coordinator data available for %s", self.entity_id)
             return STATE_UNKNOWN
-            
+
         if self._device_type == DEVICE_TYPE_PLANT:
             # Use the key directly with plant_ prefix already included
             value = self.coordinator.data["plant"].get(self.entity_description.key)
@@ -401,8 +384,8 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     
                 # Use epoch_to_datetime for timestamp conversion
                 converted_timestamp = SC.epoch_to_datetime(value, self.coordinator.data)
-                _LOGGER.debug("Timestamp conversion for %s: %s -> %s",
-                            self.entity_id, value, converted_timestamp)
+                # _LOGGER.debug("Timestamp conversion for %s: %s -> %s",
+                #             self.entity_id, value, converted_timestamp)
                 return converted_timestamp
             except Exception as ex:
                 _LOGGER.error("Error converting timestamp for %s: %s", self.entity_id, ex)
@@ -415,10 +398,10 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 if hasattr(self.entity_description, "extra_fn_data") and self.entity_description.extra_fn_data:
                     # Pass extra parameters if available
                     extra_params = getattr(self.entity_description, "extra_params", None)
-                    _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
+                    # _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     transformed_value = self.entity_description.value_fn(value, self.coordinator.data, extra_params)
                 else:
-                    _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
+                    # _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     # Pass coordinator data and None for extra_params for consistency
                     transformed_value = self.entity_description.value_fn(value, self.coordinator.data, None)
                     
@@ -449,7 +432,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 RunningState.SHUTDOWN: "Shutdown",
             }.get(value, STATE_UNKNOWN)
         if self.entity_description.key == "inverter_running_state":
-            _LOGGER.debug("inverter_running_state value: %s", value)
+            # _LOGGER.debug("inverter_running_state value: %s", value)
             return {
                 RunningState.STANDBY: "Standby",
                 RunningState.RUNNING: "Running",
@@ -492,35 +475,24 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             return False
             
         if self._device_type == DEVICE_TYPE_PLANT:
-            _LOGGER.debug("Checking availability for plant %s", self._device_name)
-            _LOGGER.debug("Plant data: %s", self.coordinator.data["plant"])
+            # _LOGGER.debug("Checking availability for plant %s", self._device_name)
+            # _LOGGER.debug("Plant data: %s", self.coordinator.data["plant"])
             return self.coordinator.data is not None and "plant" in self.coordinator.data
         elif self._device_type == DEVICE_TYPE_INVERTER:
-            _LOGGER.debug("Checking availability for inverter '%s' (ID: '%s')", self._device_name, self._device_id)
+            # _LOGGER.debug("Checking availability for inverter '%s' (ID: '%s')", self._device_name, self._device_id)
             if not self.coordinator.data or "inverters" not in self.coordinator.data:
-                _LOGGER.debug("Inverter availability check: No coordinator data or 'inverters' key missing.")
+                _LOGGER.warning("Inverter availability check: No coordinator data or 'inverters' key missing.")
                 return False
             
             # Log the keys available in coordinator data for comparison
-            available_inverter_keys = list(self.coordinator.data["inverters"].keys())
-            _LOGGER.debug("Inverter availability check: Available inverter keys in coordinator data: %s", available_inverter_keys)
+            # available_inverter_keys = list(self.coordinator.data["inverters"].keys())
+            # _LOGGER.debug("Inverter availability check: Available inverter keys in coordinator data: %s", available_inverter_keys)
             
-            # Original check using modified device_id (KEEPING FOR COMPARISON LOGGING)
-            id_check_result = False
-            if self._device_id: # Check if device_id is not None
-                id_check_key = self._device_id.replace("_", " ").lower()
-                id_check_result = id_check_key in [name.lower() for name in available_inverter_keys]
-            else:
-                _LOGGER.debug("Inverter availability check: Skipping modified ID check as _device_id is None.")
-            _LOGGER.debug("Inverter availability check: Comparing modified ID '%s' against keys. Result: %s", id_check_key, id_check_result)
-
             # Recommended check using device_name
-            name_check_result = self._device_name in self.coordinator.data["inverters"]
-            _LOGGER.debug("Inverter availability check: Checking if device_name '%s' is directly in keys. Result: %s", self._device_name, name_check_result)
+            final_availability = self._device_name in self.coordinator.data["inverters"]
+            if not final_availability:
+                _LOGGER.debug("Inverter availability check: Device name '%s' not found in inverter keys.", self._device_name)
 
-            # Let's use the device_name check for now as it aligns with data access logic
-            final_availability = name_check_result
-            _LOGGER.debug("Inverter availability final result for '%s': %s", self._device_name, final_availability)
             return final_availability
         elif self._device_type == DEVICE_TYPE_AC_CHARGER:
             return (
@@ -534,6 +506,8 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 and "dc_chargers" in self.coordinator.data
                 and self._device_id in self.coordinator.data["dc_chargers"]
             )
+        else:
+            _LOGGER.warning("Unknown device type for availability check: %s", self._device_type)
             
         return False
 
@@ -551,6 +525,7 @@ class PVStringSensor(SigenergySensor):
         device_name: Optional[str] = "",
         device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
+        round_digits: Optional[int] = None,
     ) -> None:
         """Initialize the PV string sensor."""
         super().__init__(
@@ -562,6 +537,7 @@ class PVStringSensor(SigenergySensor):
             device_name=device_name,
             device_info=device_info,
             pv_string_idx=pv_string_idx,
+            round_digits=round_digits,
         )
 
     # Add this property to PVStringSensor to check its availability based on parent inverter
@@ -570,92 +546,69 @@ class PVStringSensor(SigenergySensor):
         """Return if entity is available based on parent inverter."""
         # Check coordinator status first
         if not self.coordinator.last_update_success:
-            _LOGGER.debug("PVStringSensor %s unavailable: Coordinator last update failed.", self.entity_id)
+            _LOGGER.warning("PVStringSensor %s unavailable: Coordinator last update failed.", self.entity_id)
             return False
         if not self.coordinator.data or "inverters" not in self.coordinator.data:
-            _LOGGER.debug("PVStringSensor %s unavailable: No coordinator data or 'inverters' key.", self.entity_id)
+            _LOGGER.warning("PVStringSensor %s unavailable: No coordinator data or 'inverters' key.", self.entity_id)
             return False
             
         # Check if the parent inverter data exists using _device_name
         parent_inverter_available = self._device_name in self.coordinator.data["inverters"]
-        _LOGGER.debug("PVStringSensor %s availability check: Parent inverter '%s' data exists: %s", self.entity_id, self._device_name, parent_inverter_available)
-        
-        # Additionally, check if the specific PV data key exists (optional but good)
-        # Example check for voltage key:
-        # expected_key = f"inverter_pv{self._pv_string_idx}_voltage"
-        # key_exists = expected_key in self.coordinator.data["inverters"].get(self._device_name, {})
-        # _LOGGER.debug("PVStringSensor %s availability check: Key '%s' exists: %s", self.entity_id, expected_key, key_exists)
-        
+        # _LOGGER.debug("PVStringSensor %s availability check: Parent inverter '%s' data exists: %s", self.entity_id, self._device_name, parent_inverter_available)
+                
         return parent_inverter_available # Base availability on parent inverter for now
 
-@property
-def native_value(self) -> Any:
-    """Return the state of the sensor."""
-    if self.coordinator.data is None:
-        _LOGGER.debug("No coordinator data available for %s", self.entity_id)
-        return STATE_UNKNOWN
-        
-    _LOGGER.debug("PVStringSensor %s native_value: Getting value for PV %d on inverter '%s'", self.entity_id, self._pv_string_idx, self._device_name)
-    try:
-        # Access inverter data using device_name (inverter_name)
-        inverter_data = self.coordinator.data["inverters"].get(self._device_name, {})
-        if not inverter_data:
-            _LOGGER.warning("PVStringSensor %s native_value: No inverter data found for '%s'", self.entity_id, self._device_name)
-            return STATE_UNKNOWN # Or None if preferred for numeric sensors
+    @property
+    def native_value(self) -> Any:
+        """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            _LOGGER.warning("No coordinator data available for %s", self.entity_id)
+            return STATE_UNKNOWN
             
-        _LOGGER.debug("PVStringSensor %s native_value: Inverter data keys for '%s': %s", self.entity_id, self._device_name, list(inverter_data.keys()))
-
-        value = None
-        # Handle different sensor types
-        # First check if we have a value_fn (for power and energy sensors)
-        if hasattr(self.entity_description, "value_fn") and self.entity_description.value_fn is not None:
-            _LOGGER.debug("PVStringSensor %s native_value: Using value_fn %s", self.entity_id, self.entity_description.value_fn.__name__)
-            try:
-                value = self.entity_description.value_fn(
-                    None, # value is not used directly by these functions
-                    self.coordinator.data,
-                    getattr(self.entity_description, "extra_params", {})
-                )
-                _LOGGER.debug("PVStringSensor %s native_value: value_fn returned: %s", self.entity_id, value)
-            except Exception as fn_ex:
-                 _LOGGER.error("PVStringSensor %s native_value: Error executing value_fn %s: %s", self.entity_id, self.entity_description.value_fn.__name__, fn_ex)
-                 value = None # Or STATE_UNKNOWN
-
-        # Then handle other standard sensors based on key
-        elif self.entity_description.key == "voltage":
-            data_key = f"inverter_pv{self._pv_string_idx}_voltage"
-            value = inverter_data.get(data_key)
-            _LOGGER.debug("PVStringSensor %s native_value: Accessing key '%s', value: %s", self.entity_id, data_key, value)
-        elif self.entity_description.key == "current":
-            data_key = f"inverter_pv{self._pv_string_idx}_current"
-            value = inverter_data.get(data_key)
-            _LOGGER.debug("PVStringSensor %s native_value: Accessing key '%s', value: %s", self.entity_id, data_key, value)
-        # Add elif for other PV string keys if necessary
-        else:
-            _LOGGER.warning("PVStringSensor %s native_value: Unknown PV string sensor key: %s", self.entity_id, self.entity_description.key)
-            return None # Or STATE_UNKNOWN
-
-        # Final check and return
-        if value is None:
-             _LOGGER.debug("PVStringSensor %s native_value: Final value is None, returning None", self.entity_id)
-             return None # Return None for numeric sensors if value is missing
-        
-        # Attempt to convert to float if it's numeric, otherwise return as is
+        # _LOGGER.debug("PVStringSensor %s native_value: Getting value for PV %d on inverter '%s'", self.entity_id, self._pv_string_idx, self._device_name)
         try:
-            # Check if it's already a number (int, float, Decimal)
-            if isinstance(value, (int, float, Decimal)):
-                 _LOGGER.debug("PVStringSensor %s native_value: Final value is %s (type: %s)", self.entity_id, value, type(value).__name__)
-                 return float(value) # Convert to float for HA consistency
-            else:
-                 _LOGGER.debug("PVStringSensor %s native_value: Final value is not numeric, returning as is: %s", self.entity_id, value)
-                 return value # Return non-numeric values directly
-        except (ValueError, TypeError) as conv_ex:
-            _LOGGER.warning("PVStringSensor %s native_value: Could not convert final value '%s' to float: %s", self.entity_id, value, conv_ex)
-            return STATE_UNKNOWN # Or None
+            # Access inverter data using device_name (inverter_name)
+            inverter_data = self.coordinator.data["inverters"].get(self._device_name, {})
+            if not inverter_data:
+                _LOGGER.warning("PVStringSensor %s native_value: No inverter data found for '%s'", self.entity_id, self._device_name)
+                return STATE_UNKNOWN # Or None if preferred for numeric sensors
+                
+            value = None
+            # First check if we have a value_fn (for calculated sensors)
+            if hasattr(self.entity_description, "value_fn") and self.entity_description.value_fn is not None:
+                try:
+                    value = self.entity_description.value_fn(
+                        None, # value is not used directly by these functions
+                        self.coordinator.data,
+                        getattr(self.entity_description, "extra_params", {})
+                    )
+                except Exception as fn_ex:
+                    _LOGGER.error("PVStringSensor %s native_value: Error executing value_fn %s: %s", self.entity_id, self.entity_description.value_fn.__name__, fn_ex)
+                    value = None # Or STATE_UNKNOWN
 
-    except KeyError as ke:
-        _LOGGER.error("PVStringSensor %s native_value: KeyError accessing data: %s", self.entity_id, ke)
-        return STATE_UNKNOWN # Or None
-    except Exception as ex:
-        _LOGGER.exception("PVStringSensor %s native_value: Unexpected error getting value: %s", self.entity_id, ex)
-        return STATE_UNKNOWN # Or None
+            else:
+                data_key = f"inverter_pv{self._pv_string_idx}_{self.entity_description.key}"
+                value = inverter_data.get(data_key)
+
+            # Final check and return
+            if value is None:
+                _LOGGER.warning("PVStringSensor %s native_value: Final value is None, returning None", self.entity_id)
+                return None # Return None for numeric sensors if value is missing
+            
+            # Attempt to convert to float if it's numeric, otherwise return as is
+            try:
+                # Check if it's already a number (int, float, Decimal)
+                if isinstance(value, (int, float, Decimal)):
+                    return float(value) # Convert to float for HA consistency
+                else:
+                    return value # Return non-numeric values directly
+            except (ValueError, TypeError) as conv_ex:
+                _LOGGER.warning("PVStringSensor %s native_value: Could not convert final value '%s' to float: %s", self.entity_id, value, conv_ex)
+                return STATE_UNKNOWN # Or None
+
+        except KeyError as ke:
+            _LOGGER.error("PVStringSensor %s native_value: KeyError accessing data: %s", self.entity_id, ke)
+            return STATE_UNKNOWN # Or None
+        except Exception as ex:
+            _LOGGER.exception("PVStringSensor %s native_value: Unexpected error getting value: %s", self.entity_id, ex)
+            return STATE_UNKNOWN # Or None

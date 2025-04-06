@@ -60,7 +60,7 @@ def generate_sigen_entity(
             _LOGGER.debug("PV String Index: %s for %s", pv_string_idx, description.key)
             description = SC.SigenergySensorEntityDescription.from_entity_description(
                 description,
-                extra_params={"pv_idx": pv_string_idx, "device_id": device_name},
+                extra_params={"pv_idx": pv_string_idx, "device_name": device_name},
             )
             pv_string_name = f"{device_name} PV {pv_string_idx}"
 
@@ -110,8 +110,6 @@ def generate_sigen_entity(
         
         if pv_string_idx:
             _LOGGER.debug("Creating entity for PV string index: %s with kwargs: %s", pv_string_idx, entity_kwargs)
-        # if device_type == DEVICE_TYPE_INVERTER:
-        #     _LOGGER.debug("Creating inverter entity: %s with kwargs: %s", description.key, entity_kwargs)
 
         try:
             new_entity = entity_class(**entity_kwargs)
