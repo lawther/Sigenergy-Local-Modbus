@@ -3,11 +3,17 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import Any, Optional
+from typing import Any, Optional, Callable, Dict
+from dataclasses import dataclass
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
-from .calculated_sensor import SigenergyCalculations as SC, SigenergyCalculatedSensors as SCS, SigenergyIntegrationSensor
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
 
 from .const import (CONF_SLAVE_ID, DOMAIN, DEVICE_TYPE_INVERTER, DEVICE_TYPE_PLANT)
 
@@ -56,14 +62,16 @@ def generate_sigen_entity(
     entities = []
     for description in entity_description:
 
+        # Generate PV specific entity names and IDs if applicable
         if pv_string_idx is not None:
-            _LOGGER.debug("PV String Index: %s for %s", pv_string_idx, description.key)
-            description = SC.SigenergySensorEntityDescription.from_entity_description(
-                description,
-                extra_params={"pv_idx": pv_string_idx, "device_name": device_name},
-            )
-            pv_string_name = f"{device_name} PV{pv_string_idx}"
+            # Add extra parameters for PV string index and device name to the description if needed
+            if hasattr(description, "value_fn") and description.value_fn is not None:
+                description = SigenergySensorEntityDescription.from_entity_description(
+                    description,
+                    extra_params={"pv_idx": pv_string_idx, "device_name": device_name},
+                )
 
+            pv_string_name = f"{device_name} PV{pv_string_idx}"
             sensor_name = f"{pv_string_name} {description.name}"
             sensor_id = pv_string_name
         else:
@@ -79,11 +87,6 @@ def generate_sigen_entity(
             "device_name": device_name,
         }
 
-        if device_info:
-            entity_kwargs["device_info"] = device_info
-        if pv_string_idx:
-            entity_kwargs["pv_string_idx"] = pv_string_idx
-        
         if hasattr(description, 'source_key') and description.source_key:
             source_entity_id  = get_source_entity_id(
                 device_type,
@@ -94,20 +97,16 @@ def generate_sigen_entity(
             )
             if source_entity_id:
                 entity_kwargs["source_entity_id"] = source_entity_id
-                _LOGGER.debug("Using source entity ID: %s", source_entity_id)
             else:
                 _LOGGER.warning("No source entity ID found for source key '%s' (device: %s). Skipping entity '%s'.", description.source_key, device_name, description.name)
                 continue # Skip this entity
 
 
-        if hasattr(description, 'round_digits') and description.round_digits is not None:
-            entity_kwargs["round_digits"] = description.round_digits
-            
-        if hasattr(description, 'max_sub_interval') and description.max_sub_interval is not None:
-            entity_kwargs["max_sub_interval"] = description.max_sub_interval
-        
+        if device_info:
+            entity_kwargs["device_info"] = device_info
+
         if pv_string_idx:
-            _LOGGER.debug("Creating entity for PV string index: %s with kwargs: %s", pv_string_idx, entity_kwargs)
+            entity_kwargs["pv_string_idx"] = pv_string_idx
 
         try:
             new_entity = entity_class(**entity_kwargs)
@@ -172,8 +171,66 @@ def generate_unique_entity_id(
 
 @staticmethod
 def generate_device_id(
-    device_name: str,
+    device_name: str | None,
     device_type: Optional[str] = None,
 ) -> str:
+    """Generate a unique device ID based on the device name and type."""
     unique_device_part = str(device_name).lower().replace(' ', '_') if device_name else device_type
-    return unique_device_part
+    return unique_device_part if unique_device_part else "unknown_device_id"
+
+@dataclass
+class SigenergySensorEntityDescription(SensorEntityDescription):
+    """Class describing Sigenergy sensor entities."""
+
+    entity_registry_enabled_default: bool = True
+    value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None
+    extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
+    extra_params: Optional[Dict[str, Any]] = None  # Additional parameters for value_fn
+    source_entity_id: Optional[str] = None
+    source_key: Optional[str] = None  # Key of the source entity to use for integration
+    max_sub_interval: Optional[timedelta] = None
+    round_digits: Optional[int] = None
+
+    @classmethod
+    def from_entity_description(cls, description, 
+                                    value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None,
+                                    extra_fn_data: Optional[bool] = False,
+                                    extra_params: Optional[Dict[str, Any]] = None):
+        """Create a SigenergySensorEntityDescription instance from a SensorEntityDescription."""
+        # Create a new instance with the base attributes
+        if isinstance(description, cls):
+            # If it's already our class, copy all attributes
+            result = cls(
+                key=description.key,
+                name=description.name,
+                device_class=description.device_class,
+                native_unit_of_measurement=description.native_unit_of_measurement,
+                state_class=description.state_class,
+                entity_registry_enabled_default=description.entity_registry_enabled_default,
+                value_fn=value_fn or description.value_fn,
+                extra_fn_data=extra_fn_data if extra_fn_data is not None else description.extra_fn_data,
+                extra_params=extra_params or description.extra_params
+            )
+        else:
+            # It's a regular SensorEntityDescription
+            result = cls(
+                key=description.key,
+                name=description.name,
+                device_class=getattr(description, "device_class", None),
+                native_unit_of_measurement=getattr(description, "native_unit_of_measurement", None),
+                state_class=getattr(description, "state_class", None),
+                entity_registry_enabled_default=getattr(description, "entity_registry_enabled_default", True),
+                value_fn=value_fn,
+                extra_fn_data=extra_fn_data,
+                extra_params=extra_params
+            )
+        
+        # Copy any other attributes that might exist
+        for attr_name in dir(description):
+            if not attr_name.startswith('_') and attr_name not in ['key', 'name', 'device_class', 
+                                                                    'native_unit_of_measurement', 'state_class', 
+                                                                    'entity_registry_enabled_default', 'value_fn',
+                                                                    'extra_fn_data', 'extra_params']:
+                setattr(result, attr_name, getattr(description, attr_name))
+        
+        return result

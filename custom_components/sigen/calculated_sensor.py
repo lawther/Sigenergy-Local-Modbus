@@ -36,6 +36,12 @@ from .const import (
     DOMAIN,
 )
 
+from .common import (
+    SigenergySensorEntityDescription,
+    generate_device_id,
+    generate_device_name,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -45,63 +51,6 @@ class SigenergyCalculations:
     # Class variable to store last power readings and timestamps for energy calculation
     _power_history = {}  # Format: {(device_id, pv_idx): {'last_timestamp': datetime, 'last_power': float, 'accumulated_energy': float}}
     
-    @dataclass
-    class SigenergySensorEntityDescription(SensorEntityDescription):
-        """Class describing Sigenergy sensor entities."""
-
-        entity_registry_enabled_default: bool = True
-        value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None
-        extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
-        extra_params: Optional[Dict[str, Any]] = None  # Additional parameters for value_fn
-        source_entity_id: Optional[str] = None
-        source_key: Optional[str] = None  # Key of the source entity to use for integration
-        max_sub_interval: Optional[timedelta] = None
-        round_digits: Optional[int] = None
-
-        @classmethod
-        def from_entity_description(cls, description, 
-                                     value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None,
-                                     extra_fn_data: Optional[bool] = False,
-                                     extra_params: Optional[Dict[str, Any]] = None):
-            """Create a SigenergySensorEntityDescription instance from a SensorEntityDescription."""
-            # Create a new instance with the base attributes
-            if isinstance(description, cls):
-                # If it's already our class, copy all attributes
-                result = cls(
-                    key=description.key,
-                    name=description.name,
-                    device_class=description.device_class,
-                    native_unit_of_measurement=description.native_unit_of_measurement,
-                    state_class=description.state_class,
-                    entity_registry_enabled_default=description.entity_registry_enabled_default,
-                    value_fn=value_fn or description.value_fn,
-                    extra_fn_data=extra_fn_data if extra_fn_data is not None else description.extra_fn_data,
-                    extra_params=extra_params or description.extra_params
-                )
-            else:
-                # It's a regular SensorEntityDescription
-                result = cls(
-                    key=description.key,
-                    name=description.name,
-                    device_class=getattr(description, "device_class", None),
-                    native_unit_of_measurement=getattr(description, "native_unit_of_measurement", None),
-                    state_class=getattr(description, "state_class", None),
-                    entity_registry_enabled_default=getattr(description, "entity_registry_enabled_default", True),
-                    value_fn=value_fn,
-                    extra_fn_data=extra_fn_data,
-                    extra_params=extra_params
-                )
-            
-            # Copy any other attributes that might exist
-            for attr_name in dir(description):
-                if not attr_name.startswith('_') and attr_name not in ['key', 'name', 'device_class', 
-                                                                     'native_unit_of_measurement', 'state_class', 
-                                                                     'entity_registry_enabled_default', 'value_fn',
-                                                                     'extra_fn_data', 'extra_params']:
-                    setattr(result, attr_name, getattr(description, attr_name))
-            
-            return result
-
     @staticmethod
     def minutes_to_gmt(minutes: Any) -> Optional[str]:
         """Convert minutes offset to GMT format."""
@@ -170,10 +119,8 @@ class SigenergyCalculations:
     @staticmethod
     def calculate_pv_power(_, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
         """Calculate PV string power with proper error handling."""
-        _LOGGER.debug("[CS][PV Power] Starting calculation with coordinator_data=%s, extra_params=%s",
-                    bool(coordinator_data), extra_params)
         if not coordinator_data or not extra_params:
-            _LOGGER.debug("Missing required data for PV power calculation")
+            _LOGGER.warning("Missing required data for PV power calculation")
             return None
             
         try:
@@ -182,32 +129,30 @@ class SigenergyCalculations:
             device_name = extra_params.get("device_name") 
             
             if not pv_idx or not device_name:
-                _LOGGER.debug("Missing PV string index or device name for power calculation")
+                _LOGGER.warning("Missing PV string index or device name for power calculation from extra_params: %s",
+                            extra_params)
                 return None
                 
             # Use device_name to look up inverter data
             inverter_data = coordinator_data.get("inverters", {}).get(device_name, {})
-            _LOGGER.debug("[CS][PV Power] Retrieved inverter data for device %s: %s",
-                        device_name, bool(inverter_data))
+
             if not inverter_data:
-                _LOGGER.debug("[CS][PV Power] No inverter data available for power calculation")
+                _LOGGER.warning("[CS][PV Power] No inverter data available for power calculation")
                 return None
                 
-            v_key = f"inverter_pv{pv_idx}_voltage"
-            c_key = f"inverter_pv{pv_idx}_current"
+            v_key = f"{generate_device_id(device_name)}_pv{pv_idx}_voltage"
+            c_key = f"{generate_device_id(device_name)}_pv{pv_idx}_current"
             
             pv_voltage = inverter_data.get(v_key)
             pv_current = inverter_data.get(c_key)
             
             # Validate inputs
-            _LOGGER.debug("[CS][PV Power] Raw values for PV%d - voltage: %s, current: %s",
-                        pv_idx, pv_voltage, pv_current)
             if pv_voltage is None or pv_current is None:
-                _LOGGER.debug("[CS][PV Power] Missing voltage or current data for PV string %d", pv_idx)
+                _LOGGER.warning("[CS][PV Power] Missing voltage or current data for PV string %d", pv_idx)
                 return None
                 
             if not isinstance(pv_voltage, (int, float)) or not isinstance(pv_current, (int, float)):
-                _LOGGER.debug("Invalid data types for PV string %d: voltage=%s, current=%s",
+                _LOGGER.warning("Invalid data types for PV string %d: voltage=%s, current=%s",
                             pv_idx, type(pv_voltage), type(pv_current))
                 return None
                 
@@ -221,10 +166,7 @@ class SigenergyCalculations:
                 _LOGGER.warning("[CS][PV Power] Error converting values to Decimal: V=%s, I=%s", 
                               pv_voltage, pv_current)
                 # Fallback to float calculation
-                power = pv_voltage * pv_current
-            
-            _LOGGER.debug("[CS][PV Power] Calculated raw power for PV%d: %s W (V=%s, I=%s)",
-                        pv_idx, power, pv_voltage, pv_current)
+                power = float(pv_voltage) * float(pv_current)
             
             # Apply some reasonable bounds
             MAX_REASONABLE_POWER = Decimal('20000')  # 20kW per string is very high already
@@ -402,8 +344,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         device_name: Optional[str] = "",
         device_info: Optional[DeviceInfo] = None,
         source_entity_id: Optional[str] = None,
-        round_digits: Optional[int] = None,
-        max_sub_interval: Optional[timedelta] = None,
+        # max_sub_interval: Optional[timedelta] = None,
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the integration sensor."""
@@ -416,9 +357,15 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         self._device_name = device_name # Store device name
         self._device_info_override = device_info
         self._source_entity_id = source_entity_id
-        self._round_digits = round_digits
         self._pv_string_idx = pv_string_idx
+        self._round_digits = None
         
+        if hasattr(description, 'round_digits') and description.round_digits is not None:
+            self._round_digits = description.round_digits
+
+        if hasattr(description, 'max_sub_interval') and description.max_sub_interval is not None:
+            self._max_sub_interval = description.max_sub_interval
+
         # Initialize state variables
         self._state: Decimal | None = None
         self._last_valid_state: Decimal | None = None
@@ -426,8 +373,8 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         # Time tracking variables
         self._max_sub_interval = (
             None  # disable time based integration
-            if max_sub_interval is None or max_sub_interval.total_seconds() == 0
-            else max_sub_interval
+            if self._max_sub_interval is None or self._max_sub_interval.total_seconds() == 0
+            else self._max_sub_interval
         )
         _LOGGER.debug("[Callback] Initializing integration sensor %s with max_sub_interval=%s",
                     name, self._max_sub_interval)
@@ -437,7 +384,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
 
         _LOGGER.debug("[CS][Integration] Created sensor %s with max_sub_interval: %s", 
-                      name, max_sub_interval)
+                      name, self._max_sub_interval)
         
         # Set device info
         if self._device_info_override:
@@ -826,7 +773,7 @@ class SigenergyCalculatedSensors:
     """Class for holding calculated sensor methods."""
 
     PV_STRING_SENSORS = [
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="power",
             name="Power",
             device_class=SensorDeviceClass.POWER,
@@ -841,7 +788,7 @@ class SigenergyCalculatedSensors:
 
     PLANT_SENSORS = [
         # System time and timezone
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_system_time",
             name="System Time",
             icon="mdi:clock",
@@ -851,7 +798,7 @@ class SigenergyCalculatedSensors:
             value_fn=lambda value, coord_data, _: SigenergyCalculations.epoch_to_datetime(value, coord_data),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_system_timezone",
             name="System Timezone",
             icon="mdi:earth",
@@ -860,7 +807,7 @@ class SigenergyCalculatedSensors:
             value_fn=lambda value, _, __: SigenergyCalculations.minutes_to_gmt(value),
         ),
         # EMS Work Mode sensor with value mapping
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_ems_work_mode",
             name="EMS Work Mode",
             icon="mdi:home-battery",
@@ -872,7 +819,7 @@ class SigenergyCalculatedSensors:
                 EMSWorkMode.REMOTE_EMS: "Remote EMS",
             }.get(value, "Unknown"),
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_grid_import_power",
             name="Grid Import Power",
             device_class=SensorDeviceClass.POWER,
@@ -884,7 +831,7 @@ class SigenergyCalculatedSensors:
             suggested_display_precision=2,
             round_digits=6,
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_grid_export_power",
             name="Grid Export Power",
             device_class=SensorDeviceClass.POWER,
@@ -896,7 +843,7 @@ class SigenergyCalculatedSensors:
             suggested_display_precision=2,
             round_digits=6,
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_consumed_power",
             name="Consumed Power",
             device_class=SensorDeviceClass.POWER,
@@ -911,7 +858,7 @@ class SigenergyCalculatedSensors:
     ]
 
     INVERTER_SENSORS = [
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="inverter_startup_time",
             name="Startup Time",
             device_class=SensorDeviceClass.TIMESTAMP,
@@ -920,7 +867,7 @@ class SigenergyCalculatedSensors:
             value_fn=lambda value, coord_data, _: SigenergyCalculations.epoch_to_datetime(value, coord_data),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="inverter_shutdown_time",
             name="Shutdown Time",
             device_class=SensorDeviceClass.TIMESTAMP,
@@ -937,7 +884,7 @@ class SigenergyCalculatedSensors:
 
     # Add the plant integration sensors list
     PLANT_INTEGRATION_SENSORS = [
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_accumulated_pv_energy",
             name="Accumulated PV Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -948,7 +895,7 @@ class SigenergyCalculatedSensors:
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_accumulated_grid_export_energy",
             name="Accumulated Grid Export Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -959,7 +906,7 @@ class SigenergyCalculatedSensors:
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_accumulated_grid_import_energy",
             name="Accumulated Grid Import Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -970,7 +917,7 @@ class SigenergyCalculatedSensors:
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_daily_grid_export_energy",
             name="Daily Grid Export Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -981,7 +928,7 @@ class SigenergyCalculatedSensors:
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_daily_grid_import_energy",
             name="Daily Grid Import Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -992,7 +939,7 @@ class SigenergyCalculatedSensors:
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_daily_pv_energy",
             name="Daily PV Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -1003,7 +950,7 @@ class SigenergyCalculatedSensors:
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_accumulated_consumed_energy",
             name="Accumulated Consumed Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -1014,7 +961,7 @@ class SigenergyCalculatedSensors:
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
         ),
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="plant_daily_consumed_energy",
             name="Daily Consumed Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -1029,7 +976,7 @@ class SigenergyCalculatedSensors:
     
     # Add the inverter integration sensors list
     INVERTER_INTEGRATION_SENSORS = [
-        SigenergyCalculations.SigenergySensorEntityDescription(
+        SigenergySensorEntityDescription(
             key="inverter_accumulated_pv_energy",
             name="Accumulated PV Energy",
             device_class=SensorDeviceClass.ENERGY,

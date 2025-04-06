@@ -4,7 +4,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Callable
 from decimal import Decimal, InvalidOperation
 
 from homeassistant.components.sensor import (
@@ -187,7 +187,7 @@ async def async_setup_entry(
 class SigenergySensor(CoordinatorEntity, SensorEntity):
     """Representation of a Sigenergy sensor."""
 
-    entity_description: SC.SigenergySensorEntityDescription
+    entity_description: SigenergySensorEntityDescription
 
     def __init__(
         self,
@@ -199,7 +199,6 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
         device_name: Optional[str] = "",
         device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
-        round_digits: Optional[int] = None,
     ) -> None:
         """Initialize the sensor."""
         try:
@@ -212,7 +211,11 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             self._device_name = device_name # Store device name
             self._pv_string_idx = pv_string_idx
             self._device_info_override = device_info
-            self._round_digits = round_digits
+            self._round_digits = None
+
+            if hasattr(description, 'round_digits') and description.round_digits is not None:
+                self._round_digits = description.round_digits
+
 
             _LOGGER.debug("Initializing SigenergySensor: %s", name)
             _LOGGER.debug("Device type: %s, Device ID: %s, Device name: %s", device_type, device_id, device_name)
@@ -221,7 +224,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             _LOGGER.debug("Sensor unit of measurement: %s", description.native_unit_of_measurement)
             _LOGGER.debug("Sensor state class: %s", description.state_class)
             _LOGGER.debug("Sensor device class: %s", description.device_class)
-            _LOGGER.debug("Sensor round digits: %s", round_digits)
+            _LOGGER.debug("Sensor round digits: %s", self._round_digits)
             
 
             # Get the device number if any as a string for use in names
@@ -510,16 +513,15 @@ class PVStringSensor(SigenergySensor):
     def __init__(
         self,
         coordinator: SigenergyDataUpdateCoordinator,
-        description: SensorEntityDescription,
+        description: SigenergySensorEntityDescription,
         name: str,
         device_type: str,
         device_id: Optional[str] = None,
         device_name: Optional[str] = "",
         device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
-        round_digits: Optional[int] = None,
     ) -> None:
-        """Initialize the PV string sensor."""
+
         super().__init__(
             coordinator=coordinator,
             description=description,
@@ -529,8 +531,9 @@ class PVStringSensor(SigenergySensor):
             device_name=device_name,
             device_info=device_info,
             pv_string_idx=pv_string_idx,
-            round_digits=round_digits,
         )
+
+
 
     # Add this property to PVStringSensor to check its availability based on parent inverter
     @property
@@ -604,3 +607,5 @@ class PVStringSensor(SigenergySensor):
         except Exception as ex:
             _LOGGER.exception("PVStringSensor %s native_value: Unexpected error getting value: %s", self.entity_id, ex)
             return STATE_UNKNOWN # Or None
+        
+
