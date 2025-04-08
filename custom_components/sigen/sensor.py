@@ -243,7 +243,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 self._attr_device_info = self._device_info_override
                 return
                 
-            # Otherwise, use default device info logic
+            # Pland device info
             if device_type == DEVICE_TYPE_PLANT:
                 self._attr_device_info = DeviceInfo(
                     identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
@@ -251,6 +251,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     manufacturer="Sigenergy",
                     model="Energy Storage System",
                 )
+            # Inverter Device info
             elif device_type == DEVICE_TYPE_INVERTER:
                 _LOGGER.debug("[Sensor Init] Setting up INVERTER device info for name: '%s', ID: '%s'", device_name, self._device_id)
                 # Get model and serial number if available
@@ -273,9 +274,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     sw_version=sw_version,
                     via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
                 )
-                # _LOGGER.debug("Unique ID for %s: %s", name, self._attr_unique_id)
-                # _LOGGER.debug("[Sensor Init] Inverter device info created: %s", self._attr_device_info)
-                # _LOGGER.debug("[Sensor Init] Inverter data used for model/SN: %s", inverter_data)
+            # AC Charger device info
             elif device_type == DEVICE_TYPE_AC_CHARGER:
                 self._attr_device_info = DeviceInfo(
                     identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
@@ -284,6 +283,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     model="AC Charger",
                     via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
                 )
+            # DC Charger device info
             elif device_type == DEVICE_TYPE_DC_CHARGER:
                 self._attr_device_info = DeviceInfo(
                     identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
