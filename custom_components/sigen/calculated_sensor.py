@@ -140,8 +140,8 @@ class SigenergyCalculations:
                 _LOGGER.warning("[CS][PV Power] No inverter data available for power calculation")
                 return None
                 
-            v_key = f"{generate_device_id(device_name)}_pv{pv_idx}_voltage"
-            c_key = f"{generate_device_id(device_name)}_pv{pv_idx}_current"
+            v_key = f"inverter_pv{pv_idx}_voltage"
+            c_key = f"inverter_pv{pv_idx}_current"
             
             pv_voltage = inverter_data.get(v_key)
             pv_current = inverter_data.get(c_key)
@@ -681,7 +681,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
     
     def _check_source_entity(self) -> None:
         """Check if the source entity exists and log potential alternatives."""
-        source_entity = self.hass.states.get(self._source_entity_id)
+        source_entity = self.hass.states.get(self._source_entity_id) if self._source_entity_id else None # Check for None
         # _LOGGER.debug("[CS][Diagnostic] Source entity check for %s:", self.entity_id)
         # _LOGGER.debug("  - Expected source: %s", self._source_entity_id)
         # _LOGGER.debug("  - Source exists: %s", source_entity is not None)

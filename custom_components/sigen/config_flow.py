@@ -313,7 +313,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             # Get the inverter name based on number of existing inverters
             inverter_no = len(inverter_connections.items()) # Use the count from connections
             _LOGGER.debug(f"Length of inverter_connections:{inverter_no}")
-            inverter_name = f"Inverter{'' if inverter_no == 0 else f'{inverter_no + 1}'}"
+            inverter_name = f"Inverter{'' if inverter_no == 0 else f' {inverter_no + 1}'}"
             _LOGGER.debug("InverterName generated: %s", inverter_name)
             
             # Create or update the inverter connections dictionary
