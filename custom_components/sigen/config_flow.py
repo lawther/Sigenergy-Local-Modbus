@@ -10,7 +10,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.config_entries import ConfigFlowResult
 
 from .const import (
     CONF_AC_CHARGER_SLAVE_ID,
@@ -146,7 +146,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the initial step when adding a new device."""
         # Load existing plants
         await self._async_load_plants()
@@ -161,7 +161,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         
     async def async_step_device_type(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the device type selection when adding a new device."""
         if user_input is None:
             return self.async_show_form(
@@ -182,7 +182,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     
     async def async_step_plant_config(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the plant configuration step when adding a new plant device."""
         errors = {}
         
@@ -244,7 +244,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     
     async def async_step_select_plant(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the plant selection step when adding a new child device."""
         if not self._plants:
             # No plants available, abort with error
@@ -287,9 +287,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         
         # Should never reach here
         return self.async_abort(reason="unknown_device_type")
+
     async def async_step_inverter_config(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the inverter configuration step when adding a new inverter device."""
         errors = {}
         
@@ -300,59 +301,50 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 data_schema=schema,
             )
         
-        # Validate the slave ID
-        slave_id = user_input.get(CONF_SLAVE_ID)
-        if slave_id is None or not (1 <= slave_id <= 246):
-            errors[CONF_SLAVE_ID] = "each_id_must_be_between_1_and_246"
-            return self.async_show_form(
-                step_id=STEP_INVERTER_CONFIG,
-                data_schema=STEP_INVERTER_CONFIG_SCHEMA,
-                errors=errors,
-            )
-            
         # Check for duplicate IDs
         plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
         if plant_entry:
+            _LOGGER.debug("Selected plant entry ID: %s", self._selected_plant_entry_id)
+            _LOGGER.debug("Plant entry data: %s", plant_entry.data)
             # Check against existing inverter slave IDs in the connections dictionary
             inverter_connections = plant_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
-            existing_ids = [conn.get(CONF_SLAVE_ID) for conn in inverter_connections.values()]
-            if slave_id in existing_ids and not _LOGGER.isEnabledFor(logging.DEBUG):
-                errors[CONF_SLAVE_ID] = "duplicate_ids_found"
-                return self.async_show_form(
-                    step_id=STEP_INVERTER_CONFIG,
-                    data_schema=STEP_INVERTER_CONFIG_SCHEMA,
-                    errors=errors,
-                )
+            _LOGGER.debug("Existing inverter connections: %s", inverter_connections)
             
             # Get the inverter name based on number of existing inverters
-            inverter_no = len(existing_ids) # Use the count from connections
-            inverter_name = f"Inverter{'' if inverter_no == 0 else f' {inverter_no + 1} '}"
+            inverter_no = len(inverter_connections.items()) # Use the count from connections
+            _LOGGER.debug(f"Length of inverter_connections:{inverter_no}")
+            inverter_name = f"Inverter{'' if inverter_no == 0 else f'{inverter_no + 1}'}"
+            _LOGGER.debug("InverterName generated: %s", inverter_name)
             
             # Create or update the inverter connections dictionary
             new_data = dict(plant_entry.data)
-            inverter_connections = new_data.get(CONF_INVERTER_CONNECTIONS, {})
             inverter_connections[inverter_name] = {
                 CONF_HOST: user_input[CONF_HOST],
                 CONF_PORT: user_input[CONF_PORT],
-                CONF_SLAVE_ID: slave_id
+                CONF_SLAVE_ID: user_input[CONF_SLAVE_ID]
             }
+            _LOGGER.debug("Updated inverter connections: %s", inverter_connections)
             
             # Update the plant's configuration with the new inverter
-            # CONF_INVERTER_SLAVE_ID list is no longer updated separately
             new_data[CONF_INVERTER_CONNECTIONS] = inverter_connections
+            _LOGGER.debug("New data for plant entry: %s", new_data)
             
+            # Update the plant's configuration with the new inverter
             self.hass.config_entries.async_update_entry(
                 plant_entry,
                 data=new_data
             )
+            self.hass.config_entries._async_schedule_save()
+            # Reload the entry to ensure changes take effect
+            await self.hass.config_entries.async_reload(plant_entry.entry_id)
             
             return self.async_abort(reason="device_added")
-            
+        
         return self.async_abort(reason="parent_plant_not_found")
     
     async def async_step_ac_charger_config(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the AC charger configuration step when adding a new AC charger device."""
         errors = {}
         
@@ -420,7 +412,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     
     async def async_step_select_inverter(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle the inverter selection step when adding a new DC charger device."""
         if not self._inverters:
             # No inverters available, abort with error
@@ -891,7 +883,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
     
     async def async_step_ac_charger_config(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle reconfiguration of an existing AC charger device."""
         errors = {}
         
