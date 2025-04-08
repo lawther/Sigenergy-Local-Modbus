@@ -13,7 +13,6 @@ from homeassistant.core import callback
 from homeassistant.config_entries import ConfigFlowResult
 
 from .const import (
-    CONF_AC_CHARGER_SLAVE_ID,
     CONF_AC_CHARGER_CONNECTIONS,
     CONF_DC_CHARGER_CONNECTIONS,
     CONF_DEVICE_TYPE,
@@ -302,6 +301,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             )
         
         # Check for duplicate IDs
+        assert self._selected_plant_entry_id is not None # Ensure ID is set before use
         plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
         if plant_entry:
             _LOGGER.debug("Selected plant entry ID: %s", self._selected_plant_entry_id)
@@ -365,14 +365,18 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             )
             
         # Check for duplicate IDs and conflicts with inverters
+        assert self._selected_plant_entry_id is not None # Ensure ID is set before use
         plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
         if plant_entry:
-            plant_ac_chargers = plant_entry.data.get(CONF_AC_CHARGER_SLAVE_ID, [])
             # Get inverter slave IDs from the connections dictionary
             inverter_connections = plant_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
             plant_inverter_ids = [conn.get(CONF_SLAVE_ID) for conn in inverter_connections.values()]
             
-            if slave_id in plant_ac_chargers:
+            # Get existing AC charger slave IDs from the connections dictionary
+            ac_charger_connections = plant_entry.data.get(CONF_AC_CHARGER_CONNECTIONS, {})
+            plant_ac_charger_ids = [conn.get(CONF_SLAVE_ID) for conn in ac_charger_connections.values()]
+
+            if slave_id in plant_ac_charger_ids:
                 errors[CONF_SLAVE_ID] = "duplicate_ids_found"
             elif slave_id in plant_inverter_ids:
                 errors[CONF_SLAVE_ID] = "ac_charger_conflicts_inverter"
@@ -385,7 +389,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 )
             
             # Get the AC charger name based on number of existing AC chargers
-            ac_charger_no = len(plant_ac_chargers)
+            ac_charger_no = len(ac_charger_connections) # Use connections count
             ac_charger_name = f"AC Charger{' ' if ac_charger_no == 0 else f' {ac_charger_no + 1} '}"
             
             # Create or update the AC charger connections dictionary
@@ -398,7 +402,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             }
             
             # Update the plant's configuration with the new AC charger
-            new_data[CONF_AC_CHARGER_SLAVE_ID] = plant_ac_chargers + [slave_id]
             new_data[CONF_AC_CHARGER_CONNECTIONS] = ac_charger_connections
             
             self.hass.config_entries.async_update_entry(
@@ -430,6 +433,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             )
         
         # Get the plant data
+        assert self._selected_plant_entry_id is not None # Ensure ID is set before use
         plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
         if not plant_entry:
             return self.async_abort(reason="parent_plant_not_found")
@@ -919,10 +923,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             
             # Remove from AC charger slave IDs
             ac_charger_slave_id = ac_charger_details.get(CONF_SLAVE_ID)
-            ac_charger_slave_ids = new_data.get(CONF_AC_CHARGER_SLAVE_ID, [])
-            if ac_charger_slave_id in ac_charger_slave_ids:
-                ac_charger_slave_ids.remove(ac_charger_slave_id)
-            new_data[CONF_AC_CHARGER_SLAVE_ID] = ac_charger_slave_ids
             
             # Update the configuration entry
             self.hass.config_entries.async_update_entry(
@@ -985,13 +985,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         
         # Update the AC charger slave IDs if changed
         old_slave_id = ac_charger_details.get(CONF_SLAVE_ID)
-        if old_slave_id != slave_id:
-            ac_charger_slave_ids = new_data.get(CONF_AC_CHARGER_SLAVE_ID, [])
-            if old_slave_id in ac_charger_slave_ids:
-                ac_charger_slave_ids.remove(old_slave_id)
-            ac_charger_slave_ids.append(slave_id)
-            new_data[CONF_AC_CHARGER_SLAVE_ID] = ac_charger_slave_ids
-        
         self.hass.config_entries.async_update_entry(
             self.config_entry, data=new_data
         )

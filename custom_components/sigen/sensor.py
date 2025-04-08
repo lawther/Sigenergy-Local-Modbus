@@ -119,25 +119,29 @@ async def async_setup_entry(
         
 
     # Add AC charger sensors
-    ac_charger_no = 0
-    for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
-        _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
+    # Iterate through the AC charger connection details dictionary
+    for ac_charger_name, ac_details in coordinator.hub.ac_charger_connections.items():
+        slave_id = ac_details.get(CONF_SLAVE_ID)
+        if slave_id is None:
+            _LOGGER.warning("Missing slave ID for AC charger '%s' in configuration, skipping sensor setup.", ac_charger_name)
+            continue # Skip this charger if slave_id is missing
+
+        _LOGGER.debug("Adding sensors for AC charger '%s' (ID: %s)", ac_charger_name, slave_id)
         for description in SS.AC_CHARGER_SENSORS + SCS.AC_CHARGER_SENSORS:
+            # Use the ac_charger_name directly from the dictionary key
             sensor_name = f"{ac_charger_name} {description.name}"
-            entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-            
+            # entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}" # entity_id is usually handled by HA core based on unique_id
+
             entities.append(
                 SigenergySensor(
                     coordinator=coordinator,
                     description=description,
                     name=sensor_name,
                     device_type=DEVICE_TYPE_AC_CHARGER,
-                    device_id=str(ac_charger_id), # Convert to string
-                    device_name=ac_charger_name,
+                    device_id=str(slave_id), # Use the retrieved slave_id
+                    device_name=ac_charger_name, # Use the name from the dictionary key
                 )
             )
-        ac_charger_no += 1
 
     # Add DC charger sensors
     dc_charger_no = 0 # Keep counter for potential future naming needs, though name comes from dict key now

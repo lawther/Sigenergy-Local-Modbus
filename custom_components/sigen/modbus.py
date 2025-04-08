@@ -19,7 +19,6 @@ from pymodbus.client.mixin import ModbusClientMixin
 
 from .const import ModbusRegisterDefinition
 from .const import (
-    CONF_AC_CHARGER_SLAVE_ID,
     CONF_DC_CHARGER_CONNECTIONS,
     CONF_INVERTER_COUNT,
     CONF_INVERTER_SLAVE_ID,
@@ -112,9 +111,6 @@ class SigenergyModbusHub:
 
 
         # Other slave IDs and their connection details
-        self.ac_charger_slave_ids = config_entry.data.get(
-            CONF_AC_CHARGER_SLAVE_ID, list(range(self.inverter_count + 1, self.inverter_count + self.ac_charger_count + 1))
-        )
 
         # Read-only mode setting
         self.read_only = config_entry.data.get(CONF_READ_ONLY, DEFAULT_READ_ONLY)

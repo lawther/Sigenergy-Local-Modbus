@@ -54,8 +54,12 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Fetch AC charger data for each AC charger
                 ac_charger_data = {}
-                for ac_charger_id in self.hub.ac_charger_slave_ids:
-                    ac_charger_data[ac_charger_id] = await self.hub.async_read_ac_charger_data(ac_charger_id)
+                for details in self.hub.ac_charger_connections.values():
+                    slave_id = details.get(CONF_SLAVE_ID)
+                    if slave_id is not None:
+                        ac_charger_data[slave_id] = await self.hub.async_read_ac_charger_data(slave_id)
+                    # else: # Optional: Log warning if needed, but not requested
+                    #     _LOGGER.warning("Missing slave ID for an AC charger in configuration")
 
                 # Fetch DC charger data for each DC charger
                 dc_charger_data = {}
