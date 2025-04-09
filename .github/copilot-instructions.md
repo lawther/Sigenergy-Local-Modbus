@@ -1,0 +1,36 @@
+- This is a Home Assistant custom integration for Sigenergy ESS, written in Python.
+- Use Home Assistant's async APIs, entity model, and config flow best practices.
+- Prioritize non-blocking async code, avoid synchronous I/O in coroutines.
+- Follow Home Assistant naming conventions for entities, sensors, and services.
+- When adding examples, prefer Home Assistant YAML snippets or Python code compatible with HA.
+- Use tabs for indentation and double quotes in JSON or YAML.
+- When discussing Modbus, assume TCP protocol with slave IDs 1-246.
+- The integration supports multiple plants, inverters, AC chargers, and DC chargers dynamically.
+- Avoid suggesting MQTT or REST polling; use Modbus TCP and HA DataUpdateCoordinator.
+- Use voluptuous schemas for config validation.
+- Keep responses concise, under 1000 characters.
+- Follow the minimum integration structure: define a `DOMAIN` constant and an `async_setup` method that returns True if initialization succeeds. See: https://developers.home-assistant.io/docs/creating_component_index/#the-minimum
+- Prefer using the integration scaffold script (`python3 -m script.scaffold integration`) to generate new components. See: https://developers.home-assistant.io/docs/creating_component_index/#creating-your-first-integration
+- Include a manifest.json with at least `domain` and `name` keys, and `version` if it's a custom integration. See: https://developers.home-assistant.io/docs/creating_integration_manifest
+- For file structure and best practices, refer to: https://developers.home-assistant.io/docs/creating_integration_file_structure
+- For config flows, translations, and tests, scaffolded examples are recommended. See: https://github.com/home-assistant/example-custom-config
+- Follow the official integration folder structure: `custom_components/<domain>/`
+	- Include `manifest.json`, `__init__.py`, `config_flow.py`, `diagnostics.py`, `system_health.py`, `services.yaml`, platform files (`sensor.py`, `switch.py`, etc.), `coordinator.py` if using DataUpdateCoordinator.
+- Tests go in `tests/components/<domain>/` with `__init__.py`, `conftest.py`, `test_*.py`.
+- `manifest.json` **must** have `domain`, `name`, `version` (custom only), `codeowners`, optional `dependencies`, `after_dependencies`, `requirements`, `iot_class`, `quality_scale`, `ssdp`, `zeroconf`, `bluetooth`, `usb`, `dhcp`.
+- Add `"config_flow": true` in manifest if supporting UI config.
+- Config flows subclass `ConfigFlow`, define async steps, handle reauth, migration, subentries.
+- Diagnostics redact sensitive info with `async_redact_data`.
+- System health info via `async_register` in `system_health.py`.
+- YAML configs use voluptuous `CONFIG_SCHEMA` and `PLATFORM_SCHEMA`.
+- Define service schemas in `services.yaml`, register entity services with `async_register_entity_service`.
+- Use platforms (`sensor.py`, `switch.py`, etc.), avoid monolithic files.
+- For multiple platforms, forward config entries or use discovery helpers.
+- Fetch data asynchronously, preferably via `DataUpdateCoordinator`.
+- On setup failures, raise `ConfigEntryNotReady` or `PlatformNotReady` to retry.
+- Fire events with `hass.bus.async_fire("<domain>_event", {...})`, include `device_id`.
+- Listen for events using helpers like `async_track_state_change`, `async_track_template_result`, or `hass.bus.async_listen`.
+- Support network discovery via SSDP, Zeroconf, DHCP, USB, Bluetooth, declare in manifest and use helpers.
+- Never expose sensitive data in diagnostics or logs.
+- Prefer async/await, avoid blocking calls.
+- Use the integration scaffold script to generate new components.
