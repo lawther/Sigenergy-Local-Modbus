@@ -40,7 +40,7 @@
       },
       "inverter_config": {
         "title": "Configure Sigenergy Inverter",
-        "description": "Set up an additional Sigenergy Inverter.",
+        "description": "Set up an additional Sigenergy Inverter that is connected to the same plant.",
         "data": {
           "host": "Host (IP address of this inverter)",
           "port": "Port (default is 502)",

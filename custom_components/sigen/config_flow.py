@@ -792,12 +792,12 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # Check if user wants to remove the device
         if user_input.get(CONF_REMOVE_DEVICE, False):
             # Validate that the inverter can be removed
-            # Check if the inverter's slave ID is used by any DC charger connection
+            # Check if the inverter's HOST is used by any DC charger connection
             dc_charger_connections = self._data.get(CONF_DC_CHARGER_CONNECTIONS, {})
-            dc_charger_slave_ids = [details.get(CONF_SLAVE_ID) for details in dc_charger_connections.values() if details.get(CONF_SLAVE_ID) is not None]
-            inverter_slave_id = inverter_details.get(CONF_SLAVE_ID)
+            dc_charger_hosts = [details.get(CONF_HOST) for details in dc_charger_connections.values() if details.get(CONF_HOST) is not None]
+            inverter_host = inverter_details.get(CONF_HOST)
             
-            if inverter_slave_id in dc_charger_slave_ids:
+            if inverter_host in dc_charger_hosts:
                 errors[CONF_REMOVE_DEVICE] = "cannot_remove_parent"
                 
                 # Re-create schema with error
@@ -823,16 +823,15 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 del new_inverter_connections[inverter_name]
             new_data[CONF_INVERTER_CONNECTIONS] = new_inverter_connections
             
-            # Remove from inverter slave IDs
-            inverter_slave_ids = new_data.get(CONF_INVERTER_SLAVE_ID, [])
-            if inverter_slave_id in inverter_slave_ids:
-                inverter_slave_ids.remove(inverter_slave_id)
-            new_data[CONF_INVERTER_SLAVE_ID] = inverter_slave_ids
-            
             # Update the configuration entry
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
             )
+
+            self.hass.config_entries._async_schedule_save()
+
+            # Reload the entry to ensure changes take effect
+            await self.hass.config_entries.async_@reload(self.config_entry.entry_id)
             
             return self.async_create_entry(title="", data={})
         
