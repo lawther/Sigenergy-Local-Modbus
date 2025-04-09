@@ -294,10 +294,9 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
         
         if user_input is None:
-            schema = STEP_INVERTER_CONFIG_SCHEMA
             return self.async_show_form(
                 step_id=STEP_INVERTER_CONFIG,
-                data_schema=schema,
+                data_schema=STEP_INVERTER_CONFIG_SCHEMA,
             )
         
         # Check for duplicate IDs
@@ -316,13 +315,26 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             inverter_name = f"Inverter{'' if inverter_no == 0 else f' {inverter_no + 1}'}"
             _LOGGER.debug("InverterName generated: %s", inverter_name)
             
-            # Create or update the inverter connections dictionary
-            new_data = dict(plant_entry.data)
-            inverter_connections[inverter_name] = {
+            # Create the new connection
+            new_inverter_connection = {
                 CONF_HOST: user_input[CONF_HOST],
                 CONF_PORT: user_input[CONF_PORT],
                 CONF_SLAVE_ID: user_input[CONF_SLAVE_ID]
             }
+
+            # Check if the new connection details are already added, but only if not debuging
+            if new_inverter_connection in inverter_connections.values() and not _LOGGER.isEnabledFor(logging.DEBUG):
+                errors[CONF_HOST] = "duplicate_ids_found"
+
+                return self.async_show_form(
+                    step_id=STEP_INVERTER_CONFIG,
+                    data_schema=STEP_INVERTER_CONFIG_SCHEMA,
+                    errors=errors,
+                )
+
+            # Create or update the inverter connections dictionary
+            new_data = dict(plant_entry.data)
+            inverter_connections[inverter_name] = new_inverter_connection
             _LOGGER.debug("Updated inverter connections: %s", inverter_connections)
             
             # Update the plant's configuration with the new inverter
@@ -354,6 +366,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 data_schema=STEP_AC_CHARGER_CONFIG_SCHEMA,
             )
         
+        
         # Validate the slave ID
         slave_id = user_input.get(CONF_SLAVE_ID)
         if slave_id is None or not (1 <= slave_id <= 246):
@@ -370,11 +383,9 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         if plant_entry:
             # Get inverter slave IDs from the connections dictionary
             inverter_connections = plant_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
-            plant_inverter_ids = [conn.get(CONF_SLAVE_ID) for conn in inverter_connections.values()]
             
-            # Get existing AC charger slave IDs from the connections dictionary
+            # Get existing AC charger connections dictionary
             ac_charger_connections = plant_entry.data.get(CONF_AC_CHARGER_CONNECTIONS, {})
-            plant_ac_charger_ids = [conn.get(CONF_SLAVE_ID) for conn in ac_charger_connections.values()]
 
             if slave_id in plant_ac_charger_ids:
                 errors[CONF_SLAVE_ID] = "duplicate_ids_found"

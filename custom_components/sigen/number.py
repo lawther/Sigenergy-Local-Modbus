@@ -61,6 +61,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_active_power_fixed_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_active_power_fixed_target", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_reactive_power_fixed_target",
@@ -73,6 +74,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_reactive_power_fixed_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_reactive_power_fixed_target", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_active_power_percentage_target",
@@ -85,6 +87,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_active_power_percentage_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_active_power_percentage_target", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_qs_ratio_target",
@@ -97,6 +100,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_qs_ratio_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_qs_ratio_target", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_power_factor_target",
@@ -108,6 +112,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_power_factor_target", 0) / 1000,
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_power_factor_target", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_ess_max_charging_limit",
@@ -180,6 +185,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_export_limitation", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pcs_maximum_export_limitation", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_pcs_maximum_import_limitation",
@@ -192,6 +198,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_import_limitation", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pcs_maximum_import_limitation", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_active_power_fixed_target",
@@ -205,6 +212,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_a_active_power_fixed_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_active_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_active_power_fixed_target",
@@ -218,6 +226,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_b_active_power_fixed_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_active_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_active_power_fixed_target",
@@ -231,6 +240,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_c_active_power_fixed_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_active_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_reactive_power_fixed_target",
@@ -244,6 +254,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_a_reactive_power_fixed_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_reactive_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_reactive_power_fixed_target",
@@ -257,6 +268,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_b_reactive_power_fixed_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_reactive_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_reactive_power_fixed_target",
@@ -270,6 +282,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_c_reactive_power_fixed_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_reactive_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_active_power_percentage_target",
@@ -283,6 +296,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_a_active_power_percentage_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_active_power_percentage_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_active_power_percentage_target",
@@ -296,6 +310,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_b_active_power_percentage_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_active_power_percentage_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_active_power_percentage_target",
@@ -309,6 +324,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_c_active_power_percentage_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_active_power_percentage_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_qs_ratio_target",
@@ -322,6 +338,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_a_qs_ratio_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_qs_ratio_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_qs_ratio_target",
@@ -335,6 +352,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_b_qs_ratio_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_qs_ratio_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_qs_ratio_target",
@@ -348,6 +366,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_phase_c_qs_ratio_target", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_qs_ratio_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
 ]
 
@@ -364,6 +383,7 @@ INVERTER_NUMBERS = [
         # Use identifier (device_name for inverters)
         value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_active_power_fixed_adjustment", 0),
         set_value_fn=lambda hub, identifier, value: hub.async_write_inverter_parameter(identifier, "inverter_active_power_fixed_adjustment", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_reactive_power_fixed_adjustment",
@@ -377,6 +397,7 @@ INVERTER_NUMBERS = [
         # Use identifier (device_name for inverters)
         value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_reactive_power_fixed_adjustment", 0),
         set_value_fn=lambda hub, identifier, value: hub.async_write_inverter_parameter(identifier, "inverter_reactive_power_fixed_adjustment", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_active_power_percentage_adjustment",
@@ -390,6 +411,7 @@ INVERTER_NUMBERS = [
         # Use identifier (device_name for inverters)
         value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_active_power_percentage_adjustment", 0),
         set_value_fn=lambda hub, identifier, value: hub.async_write_inverter_parameter(identifier, "inverter_active_power_percentage_adjustment", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_reactive_power_qs_adjustment",
@@ -403,6 +425,7 @@ INVERTER_NUMBERS = [
         # Use identifier (device_name for inverters)
         value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_reactive_power_qs_adjustment", 0),
         set_value_fn=lambda hub, identifier, value: hub.async_write_inverter_parameter(identifier, "inverter_reactive_power_qs_adjustment", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_power_factor_adjustment",
@@ -415,6 +438,7 @@ INVERTER_NUMBERS = [
         # Use identifier (device_name for inverters)
         value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_power_factor_adjustment", 0) / 1000,
         set_value_fn=lambda hub, identifier, value: hub.async_write_inverter_parameter(identifier, "inverter_power_factor_adjustment", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
 ]
 AC_CHARGER_NUMBERS = [

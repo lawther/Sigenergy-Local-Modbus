@@ -158,6 +158,8 @@ INVERTER_SELECTS = [
             "inverter_grid_code",
             COUNTRY_TO_CODE_MAP.get(option, 0)  # Default to 0 if country not found
         ),
+        entity_registry_enabled_default=False,
+
     ),
 ]
 
