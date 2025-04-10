@@ -1,2 +1,3 @@
 *.pyc
 Reference/**
+custom_components/sigen/homeassistant/**

@@ -5,8 +5,9 @@ import asyncio
 import logging
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry  # pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -18,19 +19,11 @@ from pymodbus.client.mixin import ModbusClientMixin
 
 from .const import ModbusRegisterDefinition
 from .const import (
-    CONF_AC_CHARGER_COUNT,
-    CONF_AC_CHARGER_SLAVE_ID,
-    CONF_DC_CHARGER_COUNT,
     CONF_DC_CHARGER_CONNECTIONS,
-    CONF_INVERTER_COUNT,
-    CONF_INVERTER_SLAVE_ID,
     CONF_INVERTER_CONNECTIONS,
     CONF_AC_CHARGER_CONNECTIONS,
     CONF_PLANT_ID,
     CONF_SLAVE_ID,
-    DEFAULT_AC_CHARGER_COUNT,
-    DEFAULT_DC_CHARGER_COUNT,
-    DEFAULT_INVERTER_COUNT,
     DEFAULT_PLANT_SLAVE_ID,
     DataType,
     PLANT_RUNNING_INFO_REGISTERS,
@@ -47,6 +40,14 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+@dataclass
+class ModbusConnectionConfig:
+    """Configuration for a Modbus connection."""
+    name: str
+    host: str
+    port: int
+    slave_id: int
 
 
 @contextmanager
@@ -69,13 +70,10 @@ class SigenergyModbusError(HomeAssistantError):
 
 class SigenergyModbusHub:
     """Modbus hub for Sigenergy ESS."""
-    """Modbus hub for Sigenergy ESS."""
 
     def __init__(
         self,
         hass: HomeAssistant,
-        host: str,
-        port: int,
         config_entry: ConfigEntry,
     ) -> None:
         """Initialize the Modbus hub."""
@@ -88,28 +86,28 @@ class SigenergyModbusHub:
         self._locks: Dict[Tuple[str, int], asyncio.Lock] = {}
         self._connected: Dict[Tuple[str, int], bool] = {}
         
-        # Store default connection for plant
-        self._plant_host = host
-        self._plant_port = port
-        
-        # Get slave IDs from config
+        # Store connection for plant
+        self._plant_host = config_entry.data[CONF_HOST]
+        self._plant_port = config_entry.data[CONF_PORT]
         self.plant_id = config_entry.data.get(CONF_PLANT_ID, DEFAULT_PLANT_SLAVE_ID)
-        self.inverter_count = config_entry.data.get(CONF_INVERTER_COUNT, DEFAULT_INVERTER_COUNT)
-        self.ac_charger_count = config_entry.data.get(CONF_AC_CHARGER_COUNT, DEFAULT_AC_CHARGER_COUNT)
-        self.dc_charger_count = config_entry.data.get(CONF_DC_CHARGER_COUNT, DEFAULT_DC_CHARGER_COUNT)
-        
-        # Get specific slave IDs and their connection details
-        self.inverter_slave_ids = config_entry.data.get(
-            CONF_INVERTER_SLAVE_ID, list(range(1, self.inverter_count + 1))
-        )
+
+        # Get inverter connections
         self.inverter_connections = config_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
-        
-        # Other slave IDs and their connection details
-        self.ac_charger_slave_ids = config_entry.data.get(
-            CONF_AC_CHARGER_SLAVE_ID, list(range(self.inverter_count + 1, self.inverter_count + self.ac_charger_count + 1))
-        )
+        _LOGGER.debug("Inverter connections: %s", self.inverter_connections)
+        self.inverter_count = len(self.inverter_connections)
+
+        # Get AC Charger connections
         self.ac_charger_connections = config_entry.data.get(CONF_AC_CHARGER_CONNECTIONS, {})
+        _LOGGER.debug("AC Charger connections: %s", self.ac_charger_connections)
+        self.ac_charger_count = len(self.ac_charger_connections)
+
+        # Get DC Charger connections
         self.dc_charger_connections = config_entry.data.get(CONF_DC_CHARGER_CONNECTIONS, {})
+        _LOGGER.debug("DC Charger connections: %s", self.dc_charger_connections)
+        self.dc_charger_count = len(self.dc_charger_connections)
+
+
+        # Other slave IDs and their connection details
 
         # Read-only mode setting
         self.read_only = config_entry.data.get(CONF_READ_ONLY, DEFAULT_READ_ONLY)
@@ -125,33 +123,33 @@ class SigenergyModbusHub:
         # For the plant, use the plant's connection details
         if slave_id == self.plant_id:
             return (self._plant_host, self._plant_port)
-            
+
         # For inverters, look up their connection details
         for name, details in self.inverter_connections.items():
             if details.get(CONF_SLAVE_ID) == slave_id:
                 return (details[CONF_HOST], details[CONF_PORT])
-        
+
         # For AC chargers, look up their connection details
         for name, details in self.ac_charger_connections.items():
             if details.get(CONF_SLAVE_ID) == slave_id:
                 return (details[CONF_HOST], details[CONF_PORT])
-                
+
         # For DC chargers, look up their connection details
         for name, details in self.dc_charger_connections.items():
             if details.get(CONF_SLAVE_ID) == slave_id:
                 return (details[CONF_HOST], details[CONF_PORT])
-                
+
         # If no specific connection found, use the plant's connection details as default
         return (self._plant_host, self._plant_port)
 
     async def _get_client(self, slave_id: int) -> AsyncModbusTcpClient:
         """Get or create a Modbus client for the given slave ID."""
         key = self._get_connection_key(slave_id)
-        
+
         if key not in self._clients or not self._connected.get(key, False):
             if key not in self._locks:
                 self._locks[key] = asyncio.Lock()
-                
+
             async with self._locks[key]:
                 if key not in self._clients or not self._connected.get(key, False):
                     host, port = key
@@ -161,14 +159,14 @@ class SigenergyModbusHub:
                         timeout=10,
                         retries=3
                     )
-                    
+
                     connected = await self._clients[key].connect()
                     if not connected:
                         raise SigenergyModbusError(f"Failed to connect to {host}:{port}")
-                    
+
                     self._connected[key] = True
                     _LOGGER.info("Connected to Sigenergy system at %s:%s", host, port)
-        
+
         return self._clients[key]
     async def async_connect(self, slave_id: Optional[int] = None) -> None:
         """Connect to the Modbus device.
@@ -178,10 +176,10 @@ class SigenergyModbusHub:
         """
         # Cast to help type checker and ensure we always have an int
         actual_slave_id: int = self.plant_id if slave_id is None else slave_id
-            
+
         key = self._get_connection_key(actual_slave_id)
         await self._get_client(actual_slave_id)
-        
+
         if not self._connected.get(key, False):
             host, port = key
             raise SigenergyModbusError(
@@ -534,7 +532,9 @@ class SigenergyModbusHub:
             )
         elif data_type == DataType.STRING:
             # return value  # No gain for strings
-            return ModbusClientMixin.convert_from_registers(registers, data_type=ModbusClientMixin.DATATYPE.STRING)
+            return ModbusClientMixin.convert_from_registers(
+                registers,
+                data_type=ModbusClientMixin.DATATYPE.STRING)  # type: ignore[no-untyped-call]
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
 
@@ -542,7 +542,7 @@ class SigenergyModbusHub:
         if isinstance(value, (int, float)) and gain != 1:
             value = value / gain
 
-        return value
+        return value  # type: ignore[no-untyped-return]
 
     def _encode_value(
         self, 
@@ -567,17 +567,17 @@ class SigenergyModbusHub:
         _LOGGER.debug("Encoding value %s with data_type %s", value, data_type)
         
         if data_type == DataType.U16:
-            builder.add_16bit_uint(value)
+            builder.add_16bit_uint(int(value))
         elif data_type == DataType.S16:
-            builder.add_16bit_int(value)
+            builder.add_16bit_int(int(value))
         elif data_type == DataType.U32:
-            builder.add_32bit_uint(value)
+            builder.add_32bit_uint(int(value))
         elif data_type == DataType.S32:
-            builder.add_32bit_int(value)
+            builder.add_32bit_int(int(value))
         elif data_type == DataType.U64:
-            builder.add_64bit_uint(value)
+            builder.add_64bit_uint(int(value))
         elif data_type == DataType.STRING:
-            builder.add_string(value)
+            builder.add_string(str(value))
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
         
@@ -649,37 +649,48 @@ class SigenergyModbusHub:
         
         return data
 
-    async def async_read_inverter_data(self, inverter_id: int) -> Dict[str, Any]:
+    async def async_read_inverter_data(self, inverter_name: str) -> Dict[str, Any]:
         """Read all supported inverter data."""
         data = {}
 
+        # Look up inverter details by name
+        if inverter_name not in self.inverter_connections:
+            _LOGGER.error("Unknown inverter name provided for reading data: %s", inverter_name)
+            return {} # Return empty dict if inverter name is not found
+        inverter_info = self.inverter_connections[inverter_name]
+        slave_id = inverter_info.get(CONF_SLAVE_ID)
+
         # Probe registers if not done yet for this inverter
-        if inverter_id not in self.inverter_registers_probed:
+        if inverter_name not in self.inverter_registers_probed:
             try:
-                await self.async_probe_registers(inverter_id, INVERTER_RUNNING_INFO_REGISTERS)
+                await self.async_probe_registers(slave_id, INVERTER_RUNNING_INFO_REGISTERS)
                 # Also probe parameter registers that can be read
-                await self.async_probe_registers(inverter_id, {
+                await self.async_probe_registers(slave_id, {
                     name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
                     if reg.register_type != RegisterType.WRITE_ONLY
                 })
-                self.inverter_registers_probed.add(inverter_id)
+                self.inverter_registers_probed.add(inverter_name)
             except Exception as ex:
-                _LOGGER.error("Failed to probe inverter %d registers: %s", inverter_id, ex)
+                _LOGGER.error("Failed to probe inverter '%s' (Slave ID: %d) registers: %s", inverter_name, slave_id, ex)
                 # Continue with reading, some registers might still work
 
         # Read registers from both running info and parameter registers
         all_registers = {
             **INVERTER_RUNNING_INFO_REGISTERS,
             **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
-               if reg.register_type != RegisterType.WRITE_ONLY}
+            if reg.register_type != RegisterType.WRITE_ONLY},
+            **DC_CHARGER_PARAMETER_REGISTERS,
+            **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
+            if reg.register_type != RegisterType.WRITE_ONLY},
         }
 
         # Read only supported registers
         for register_name, register_def in all_registers.items():
+            # _LOGGER.debug("[modbus] read_inverter_data for register_name: %s", register_name)
             if register_def.is_supported is not False:  # Read if supported or unknown
                 try:
                     registers = await self.async_read_registers(
-                        slave_id=inverter_id,
+                        slave_id=slave_id,
                         address=register_def.address,
                         count=register_def.count,
                         register_type=register_def.register_type,
@@ -689,9 +700,6 @@ class SigenergyModbusHub:
                         data[register_name] = None
                         if register_def.is_supported is None:
                             register_def.is_supported = False
-                            if register_name.startswith("pv") and register_name.endswith("_voltage"):
-                                _LOGGER.debug("PV voltage register %s is not supported for inverter %d",
-                                           register_name, inverter_id)
                         continue
 
                     value = self._decode_value(
@@ -701,14 +709,14 @@ class SigenergyModbusHub:
                     )
 
                     data[register_name] = value
-                    # _LOGGER.debug("Read register %s = %s from inverter %d", register_name, value, inverter_id)
+                    _LOGGER.debug("Read register %s = %s from inverter '%s'", register_name, value, inverter_name)
 
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
                         register_def.is_supported = True
 
                 except Exception as ex:
-                    _LOGGER.error("Error reading inverter %d register %s: %s", inverter_id, register_name, ex)
+                    _LOGGER.error("Error reading inverter '%s' register %s: %s", inverter_name, register_name, ex)
                     data[register_name] = None
                     # If this is the first time we fail to read this register, mark it as unsupported
                     if register_def.is_supported is None:
@@ -773,75 +781,6 @@ class SigenergyModbusHub:
 
                 except Exception as ex:
                     _LOGGER.error("Error reading AC charger %d register %s: %s", ac_charger_id, register_name, ex)
-                    data[register_name] = None
-                    # If this is the first time we fail to read this register, mark it as unsupported
-                    if register_def.is_supported is None:
-                        register_def.is_supported = False
-
-        return data
-
-    async def async_read_dc_charger_data(self, dc_charger_id: int) -> Dict[str, Any]:
-        """Read all supported DC charger data."""
-        data = {}
-
-        # Probe registers if not done yet for this DC charger
-        if dc_charger_id not in self.dc_charger_registers_probed:
-            try:
-                await self.async_probe_registers(dc_charger_id, DC_CHARGER_RUNNING_INFO_REGISTERS)
-                # Also probe parameter registers that can be read
-                await self.async_probe_registers(dc_charger_id, {
-                    name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
-                    if reg.register_type != RegisterType.WRITE_ONLY
-                })
-                self.dc_charger_registers_probed.add(dc_charger_id)
-            except Exception as ex:
-                _LOGGER.error("Failed to probe DC charger %d registers: %s", dc_charger_id, ex)
-                # Continue with reading, some registers might still work
-
-        # Read registers from both running info and parameter registers
-        all_registers = {
-            **DC_CHARGER_RUNNING_INFO_REGISTERS,
-            **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
-               if reg.register_type != RegisterType.WRITE_ONLY}
-        }
-
-        # Read only supported registers
-        for register_name, register_def in all_registers.items():
-            if register_def.is_supported is not False:  # Read if supported or unknown
-                try:
-                    registers = await self.async_read_registers(
-                        slave_id=dc_charger_id,
-                        address=register_def.address,
-                        count=register_def.count,
-                        register_type=register_def.register_type,
-                    )
-
-                    if registers is None:
-                        data[register_name] = None
-                        if register_def.is_supported is None:
-                            register_def.is_supported = False
-                        # Add detailed logging for failed read
-                        _LOGGER.debug("DC Charger %d: Failed to read register %s (Addr: %d). Result: %s",
-                                      dc_charger_id, register_name, register_def.address, registers)
-                        continue
-    
-                    value = self._decode_value(
-                        registers=registers,
-                        data_type=register_def.data_type,
-                        gain=register_def.gain,
-                    )
-    
-                    data[register_name] = value
-                    # Add detailed logging for successful read
-                    _LOGGER.debug("DC Charger %d: Read register %s (Addr: %d) = %s",
-                                  dc_charger_id, register_name, register_def.address, value)
-    
-                    # If we successfully read a register that wasn't probed, mark it as supported
-                    if register_def.is_supported is None:
-                        register_def.is_supported = True
-
-                except Exception as ex:
-                    _LOGGER.error("Error reading DC charger %d register %s: %s", dc_charger_id, register_name, ex)
                     data[register_name] = None
                     # If this is the first time we fail to read this register, mark it as unsupported
                     if register_def.is_supported is None:
@@ -968,7 +907,7 @@ class SigenergyModbusHub:
                         _LOGGER.debug("Error with approach %d: %s", i+1, result)
                         last_error = result
                         
-                except Exception as ex:
+                except Exception as ex:  # pylint: disable=broad-exception-caught
                     _LOGGER.debug("Exception with approach %d: %s", i+1, ex)
                     last_error = ex
             
@@ -1005,7 +944,7 @@ class SigenergyModbusHub:
 
     async def async_write_inverter_parameter(
         self, 
-        inverter_id: int, 
+        inverter_name: str,
         register_name: str, 
         value: Union[int, float, str]
     ) -> None:
@@ -1013,6 +952,14 @@ class SigenergyModbusHub:
         # Check if read-only mode is enabled
         if self.read_only:
             raise SigenergyModbusError("Cannot write parameter while in read-only mode")
+            
+        # Look up inverter details by name
+        if inverter_name not in self.inverter_connections:
+            raise SigenergyModbusError(f"Unknown inverter name provided for writing parameter: {inverter_name}")
+        inverter_info = self.inverter_connections[inverter_name]
+        slave_id = inverter_info.get(CONF_SLAVE_ID)
+        if slave_id is None:
+            raise SigenergyModbusError(f"Slave ID not configured for inverter: {inverter_name}")
             
         if register_name not in INVERTER_PARAMETER_REGISTERS:
             raise SigenergyModbusError(f"Unknown inverter parameter: {register_name}")
@@ -1027,14 +974,14 @@ class SigenergyModbusHub:
         
         if len(encoded_values) == 1:
             await self.async_write_register(
-                slave_id=inverter_id,
+                slave_id=slave_id,
                 address=register_def.address,
                 value=encoded_values[0],
                 register_type=register_def.register_type,
             )
         else:
             await self.async_write_registers(
-                slave_id=inverter_id,
+                slave_id=slave_id,
                 address=register_def.address,
                 values=encoded_values,
                 register_type=register_def.register_type,

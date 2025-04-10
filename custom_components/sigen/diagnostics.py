@@ -27,10 +27,6 @@ async def async_get_config_entry_diagnostics(
             "host": "redacted",
             "port": hub.port,
             "plant_id": hub.plant_id,
-            "inverter_count": hub.inverter_count,
-            "ac_charger_count": hub.ac_charger_count,
-            "inverter_slave_ids": hub.inverter_slave_ids,
-            "ac_charger_slave_ids": hub.ac_charger_slave_ids,
             "connected": hub.connected,
         },
     }

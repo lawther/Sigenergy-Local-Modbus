@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import asyncio
+from typing import Coroutine
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -29,6 +31,7 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
+from .common import(generate_device_name, generate_sigen_entity, generate_unique_entity_id)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,9 +41,11 @@ class SigenergyNumberEntityDescription(NumberEntityDescription):
     """Class describing Sigenergy number entities."""
 
     # Provide default lambdas instead of None to satisfy type checker
-    value_fn: Callable[[Dict[str, Any], Optional[int]], float] = lambda data, id: 0.0
-    set_value_fn: Callable[[Any, Optional[int], float], None] = lambda hub, id, value: None
-    available_fn: Callable[[Dict[str, Any], Optional[int]], bool] = lambda data, _: True
+    # The second argument 'identifier' will be device_name for inverters, device_id otherwise
+    value_fn: Callable[[Dict[str, Any], Optional[Any]], float] = lambda data, identifier: 0.0
+    # Make set_value_fn async and update type hint
+    set_value_fn: Callable[[Any, Optional[Any], float], Coroutine[Any, Any, None]] = lambda hub, identifier, value: asyncio.sleep(0) # Placeholder async lambda
+    available_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, _: True
     entity_registry_enabled_default: bool = True
 
 
@@ -55,7 +60,8 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_active_power_fixed_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_active_power_fixed_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_active_power_fixed_target", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_reactive_power_fixed_target",
@@ -67,7 +73,8 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_reactive_power_fixed_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_reactive_power_fixed_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_reactive_power_fixed_target", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_active_power_percentage_target",
@@ -79,7 +86,8 @@ PLANT_NUMBERS = [
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_active_power_percentage_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_active_power_percentage_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_active_power_percentage_target", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_qs_ratio_target",
@@ -91,7 +99,8 @@ PLANT_NUMBERS = [
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_qs_ratio_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_qs_ratio_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_qs_ratio_target", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_power_factor_target",
@@ -102,7 +111,8 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_power_factor_target", 0) / 1000,
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_power_factor_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_power_factor_target", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_ess_max_charging_limit",
@@ -114,7 +124,7 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_ess_max_charging_limit", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_ess_max_charging_limit", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_ess_max_charging_limit", value), # Already returns awaitable
     ),
     SigenergyNumberEntityDescription(
         key="plant_ess_max_discharging_limit",
@@ -126,7 +136,7 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_ess_max_discharging_limit", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_ess_max_discharging_limit", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_ess_max_discharging_limit", value), # Already returns awaitable
     ),
     SigenergyNumberEntityDescription(
         key="plant_pv_max_power_limit",
@@ -138,7 +148,7 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_pv_max_power_limit", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pv_max_power_limit", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pv_max_power_limit", value), # Already returns awaitable
     ),
     SigenergyNumberEntityDescription(
         key="plant_grid_point_maximum_export_limitation",
@@ -150,7 +160,7 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_grid_point_maximum_export_limitation", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_grid_point_maximum_export_limitation", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_grid_point_maximum_export_limitation", value), # Already returns awaitable
     ),
     SigenergyNumberEntityDescription(
         key="plant_grid_maximum_import_limitation",
@@ -162,7 +172,7 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_grid_maximum_import_limitation", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_grid_maximum_import_limitation", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_grid_maximum_import_limitation", value), # Already returns awaitable
     ),
     SigenergyNumberEntityDescription(
         key="plant_pcs_maximum_export_limitation",
@@ -174,7 +184,8 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_export_limitation", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pcs_maximum_export_limitation", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pcs_maximum_export_limitation", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_pcs_maximum_import_limitation",
@@ -186,7 +197,8 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_import_limitation", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pcs_maximum_import_limitation", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_pcs_maximum_import_limitation", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_active_power_fixed_target",
@@ -198,8 +210,9 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_a_active_power_fixed_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_active_power_fixed_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_active_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_active_power_fixed_target",
@@ -211,8 +224,9 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_b_active_power_fixed_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_active_power_fixed_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_active_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_active_power_fixed_target",
@@ -224,8 +238,9 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_c_active_power_fixed_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_active_power_fixed_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_active_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_reactive_power_fixed_target",
@@ -237,8 +252,9 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_a_reactive_power_fixed_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_reactive_power_fixed_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_reactive_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_reactive_power_fixed_target",
@@ -250,8 +266,9 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_b_reactive_power_fixed_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_reactive_power_fixed_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_reactive_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_reactive_power_fixed_target",
@@ -263,8 +280,9 @@ PLANT_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_c_reactive_power_fixed_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_reactive_power_fixed_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_reactive_power_fixed_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_active_power_percentage_target",
@@ -276,8 +294,9 @@ PLANT_NUMBERS = [
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_a_active_power_percentage_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_active_power_percentage_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_active_power_percentage_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_active_power_percentage_target",
@@ -289,8 +308,9 @@ PLANT_NUMBERS = [
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_b_active_power_percentage_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_active_power_percentage_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_active_power_percentage_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_active_power_percentage_target",
@@ -302,8 +322,9 @@ PLANT_NUMBERS = [
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_c_active_power_percentage_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_active_power_percentage_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_active_power_percentage_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_qs_ratio_target",
@@ -315,8 +336,9 @@ PLANT_NUMBERS = [
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_a_qs_ratio_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_qs_ratio_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_a_qs_ratio_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_qs_ratio_target",
@@ -328,8 +350,9 @@ PLANT_NUMBERS = [
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_b_qs_ratio_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_qs_ratio_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_b_qs_ratio_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_qs_ratio_target",
@@ -341,8 +364,9 @@ PLANT_NUMBERS = [
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_phase_c_qs_ratio_target", 0),
-        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_qs_ratio_target", value),
+        set_value_fn=lambda hub, _, value: hub.async_write_plant_parameter("plant_phase_c_qs_ratio_target", value), # Already returns awaitable
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
 ]
 
@@ -356,8 +380,10 @@ INVERTER_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_active_power_fixed_adjustment", 0),
-        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "inverter_active_power_fixed_adjustment", value),
+        # Use identifier (device_name for inverters)
+        value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_active_power_fixed_adjustment", 0),
+        set_value_fn=lambda hub, identifier, value: hub.async_write_inverter_parameter(identifier, "inverter_active_power_fixed_adjustment", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_reactive_power_fixed_adjustment",
@@ -368,8 +394,10 @@ INVERTER_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_reactive_power_fixed_adjustment", 0),
-        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "inverter_reactive_power_fixed_adjustment", value),
+        # Use identifier (device_name for inverters)
+        value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_reactive_power_fixed_adjustment", 0),
+        set_value_fn=lambda hub, identifier, value: hub.async_write_inverter_parameter(identifier, "inverter_reactive_power_fixed_adjustment", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_active_power_percentage_adjustment",
@@ -380,8 +408,10 @@ INVERTER_NUMBERS = [
         native_max_value=100,
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_active_power_percentage_adjustment", 0),
-        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "inverter_active_power_percentage_adjustment", value),
+        # Use identifier (device_name for inverters)
+        value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_active_power_percentage_adjustment", 0),
+        set_value_fn=lambda hub, identifier, value: hub.async_write_inverter_parameter(identifier, "inverter_active_power_percentage_adjustment", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_reactive_power_qs_adjustment",
@@ -392,8 +422,10 @@ INVERTER_NUMBERS = [
         native_max_value=60,
         native_step=0.01,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_reactive_power_qs_adjustment", 0),
-        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "inverter_reactive_power_qs_adjustment", value),
+        # Use identifier (device_name for inverters)
+        value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_reactive_power_qs_adjustment", 0),
+        set_value_fn=lambda hub, identifier, value: hub.async_write_inverter_parameter(identifier, "inverter_reactive_power_qs_adjustment", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_power_factor_adjustment",
@@ -403,8 +435,10 @@ INVERTER_NUMBERS = [
         native_max_value=1,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, inverter_id: data["inverters"].get(inverter_id, {}).get("inverter_power_factor_adjustment", 0) / 1000,
-        set_value_fn=lambda hub, inverter_id, value: hub.async_write_inverter_parameter(inverter_id, "inverter_power_factor_adjustment", value),
+        # Use identifier (device_name for inverters)
+        value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_power_factor_adjustment", 0) / 1000,
+        set_value_fn=lambda hub, identifier, value: hub.async_write_inverter_parameter(identifier, "inverter_power_factor_adjustment", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
 ]
 AC_CHARGER_NUMBERS = [
@@ -417,13 +451,13 @@ AC_CHARGER_NUMBERS = [
         native_max_value=32,  # This will be adjusted dynamically based on rated current
         native_step=1,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, ac_charger_id: data["ac_chargers"].get(ac_charger_id, {}).get("ac_charger_output_current", 0),
-        set_value_fn=lambda hub, ac_charger_id, value: hub.async_write_ac_charger_parameter(ac_charger_id, "ac_charger_output_current", value),
+        # identifier here is ac_charger_id
+        value_fn=lambda data, identifier: data["ac_chargers"].get(identifier, {}).get("ac_charger_output_current", 0),
+        set_value_fn=lambda hub, identifier, value: hub.async_write_ac_charger_parameter(identifier, "ac_charger_output_current", value), # Already returns awaitable
     ),
 ]
 
 DC_CHARGER_NUMBERS = []
-
 
 
 async def async_setup_entry(
@@ -432,86 +466,29 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Sigenergy number platform."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    hub = hass.data[DOMAIN][config_entry.entry_id]["hub"]
-    entities = []
-
-    # Add plant numbers
+    coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     plant_name = config_entry.data[CONF_NAME]
-    for description in PLANT_NUMBERS:
-        entities.append(
-            SigenergyNumber(
-                coordinator=coordinator,
-                hub=hub,
-                description=description,
-                name=f"{plant_name} {description.name}",
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-            )
-        )
+    _LOGGER.debug(f"Starting to add {SigenergyNumber}")
+    # Add plant numbers
+    entities : list[SigenergyNumber] = generate_sigen_entity(plant_name, None, None, coordinator, SigenergyNumber,
+                                           PLANT_NUMBERS, DEVICE_TYPE_PLANT)
 
     # Add inverter numbers
-    inverter_no = 1
-    for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
-        for description in INVERTER_NUMBERS:
-            entities.append(
-                SigenergyNumber(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{plant_name} Inverter {inverter_id} {description.name}",
-                    device_type=DEVICE_TYPE_INVERTER,
-                    device_id=inverter_id,
-                    device_name=inverter_name,
-                )
-            )
-        inverter_no += 1
+    for device_name, device_conn in coordinator.hub.inverter_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergyNumber,
+                                           INVERTER_NUMBERS, DEVICE_TYPE_INVERTER)
 
     # Add AC charger numbers
-    ac_charger_no = 0
-    for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
-        for description in AC_CHARGER_NUMBERS:
-            entities.append(
-                SigenergyNumber(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{ac_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_AC_CHARGER,
-                    device_id=ac_charger_id,
-                    device_name=ac_charger_name,
-                )
-            )
-        ac_charger_no += 1
+    for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergyNumber,
+                                           AC_CHARGER_NUMBERS, DEVICE_TYPE_AC_CHARGER)
 
     # Add DC charger numbers
-    dc_charger_no = 0
-    # Iterate through the connection details dictionary
-    for dc_charger_name, connection_details in coordinator.hub.dc_charger_connections.items():
-        # Extract the slave ID from the details
-        dc_charger_id = connection_details.get(CONF_SLAVE_ID)
-        if dc_charger_id is None:
-            _LOGGER.warning("Missing slave ID for DC charger '%s' in configuration, skipping number setup", dc_charger_name)
-            continue
-
-        _LOGGER.debug("Adding numbers for DC charger %s (ID: %s)", dc_charger_name, dc_charger_id)
-        for description in DC_CHARGER_NUMBERS:
-            entities.append(
-                SigenergyNumber(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{dc_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_DC_CHARGER,
-                    device_id=dc_charger_id,
-                    device_name=dc_charger_name,
-                )
-            )
-        dc_charger_no += 1
-
+    for device_name, device_conn in coordinator.hub.dc_charger_connections.items():
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergyNumber,
+                                           DC_CHARGER_NUMBERS, DEVICE_TYPE_DC_CHARGER)
+        
+    _LOGGER.debug(f"Class to add {SigenergyNumber}")
     async_add_entities(entities)
 
 
@@ -523,20 +500,22 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
     def __init__(
         self,
         coordinator: SigenergyDataUpdateCoordinator,
-        hub: Any,
         description: SigenergyNumberEntityDescription,
         name: str,
         device_type: str,
         device_id: Optional[int],
         device_name: Optional[str] = "",
+        pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the number."""
         super().__init__(coordinator)
         self.entity_description = description
-        self.hub = hub
+        self.hub = coordinator.hub
         self._attr_name = name
         self._device_type = device_type
-        self._device_id = device_id
+        self._device_id = device_id # Keep slave ID if needed elsewhere
+        self._device_name = device_name # Store device name
+        self._pv_string_idx = pv_string_idx
         
         # Get the device number if any as a string for use in names
         device_number_str = ""
@@ -545,23 +524,16 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
             if parts and parts[-1].isdigit():
                 device_number_str = f" {parts[-1]}"
 
-        # Set unique ID
-        if device_type == DEVICE_TYPE_PLANT:
-            # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}"
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
-        else:
-            # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_id}_{description.key}"
-            # Used for testing in development to allow multiple sensors with the same unique ID
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
+        # Set unique ID (already uses device_name)
+        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator, description.key, pv_string_idx)
         
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
-                name=device_name,
+                name=device_name, # Should be plant_name
                 manufacturer="Sigenergy",
                 model="Energy Storage System",
-                # via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
         elif device_type == DEVICE_TYPE_INVERTER:
             # Get model and serial number if available
@@ -569,7 +541,8 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
             serial_number = None
             sw_version = None
             if coordinator.data and "inverters" in coordinator.data:
-                inverter_data = coordinator.data["inverters"].get(device_id, {})
+                # Use device_name (inverter_name) to fetch data
+                inverter_data = coordinator.data["inverters"].get(device_name, {})
                 model = inverter_data.get("inverter_model_type")
                 serial_number = inverter_data.get("inverter_serial_number")
                 sw_version = inverter_data.get("inverter_machine_firmware_version")
@@ -605,9 +578,18 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
     def native_value(self) -> float:
         """Return the value of the number."""
         if self.coordinator.data is None:
-            return 0
+            return 0.0 # Return float default
             
-        return self.entity_description.value_fn(self.coordinator.data, self._device_id)
+        # Pass device_name for inverters, device_id otherwise
+        identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+        try:
+            value = self.entity_description.value_fn(self.coordinator.data, identifier)
+            # Ensure the value is a float
+            return float(value) if value is not None else 0.0
+        except (TypeError, ValueError, KeyError) as e:
+            _LOGGER.error(f"Error getting native value for {self.entity_id} (identifier: {identifier}): {e}")
+            return 0.0
+
 
     @property
     def available(self) -> bool:
@@ -615,61 +597,64 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
         if not self.coordinator.last_update_success:
             return False
             
+        # Determine the correct identifier and data key based on device type
         if self._device_type == DEVICE_TYPE_PLANT:
-            if not (self.coordinator.data is not None and "plant" in self.coordinator.data):
-                return False
-                
-            # Check if the entity has a specific availability function
-            if hasattr(self.entity_description, "available_fn"):
-                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
-                
-            return True
+            data_key = "plant"
+            identifier = None # Plant entities don't use a specific identifier in the data dict
+            device_data = self.coordinator.data.get(data_key, {}) if self.coordinator.data else {}
+            base_available = self.coordinator.data is not None and data_key in self.coordinator.data
         elif self._device_type == DEVICE_TYPE_INVERTER:
-            if not (
+            data_key = "inverters"
+            identifier = self._device_name # Use name for inverters
+            device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
+            base_available = (
                 self.coordinator.data is not None
-                and "inverters" in self.coordinator.data
-                and self._device_id in self.coordinator.data["inverters"]
-            ):
-                return False
-                
-            # Check if the entity has a specific availability function
-            if hasattr(self.entity_description, "available_fn"):
-                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
-                
-            return True
+                and data_key in self.coordinator.data
+                and identifier in self.coordinator.data[data_key]
+            )
         elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            if not (
+            data_key = "ac_chargers"
+            identifier = self._device_id # Use ID for AC chargers
+            device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
+            base_available = (
                 self.coordinator.data is not None
-                and "ac_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["ac_chargers"]
-            ):
-                return False
-                
-            # Check if the entity has a specific availability function
-            if hasattr(self.entity_description, "available_fn"):
-                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
-                
-            return True
+                and data_key in self.coordinator.data
+                and identifier in self.coordinator.data[data_key]
+            )
         elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-            if not (
+            data_key = "dc_chargers"
+            identifier = self._device_id # Use ID for DC chargers (assuming based on pattern)
+            device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
+            base_available = (
                 self.coordinator.data is not None
-                and "dc_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["dc_chargers"]
-            ):
-                return False
-                
-            # Check if the entity has a specific availability function
-            if hasattr(self.entity_description, "available_fn"):
-                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
-                
-            return True
-            
-        return False
+                and data_key in self.coordinator.data
+                and identifier in self.coordinator.data[data_key]
+            )
+        else:
+            return False # Unknown device type
+
+        if not base_available:
+            return False
+
+        # Check specific availability function if defined
+        if hasattr(self.entity_description, "available_fn"):
+            try:
+                # Pass the main coordinator data and the specific identifier
+                return self.entity_description.available_fn(self.coordinator.data, identifier)
+            except Exception as e:
+                _LOGGER.error(f"Error in available_fn for {self.entity_id}: {e}")
+                return False # Treat errors in availability check as unavailable
+
+        return True # Default to available if base checks pass and no specific function
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the value of the number."""
         try:
-            await self.entity_description.set_value_fn(self.hub, self._device_id, value)
+            # Pass device_name for inverters, device_id otherwise
+            identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+            await self.entity_description.set_value_fn(self.hub, identifier, value)
             await self.coordinator.async_request_refresh()
         except SigenergyModbusError as error:
             _LOGGER.error("Failed to set value %s for %s: %s", value, self.name, error)
+        except Exception as e:
+             _LOGGER.error(f"Unexpected error setting value for {self.entity_id}: {e}")

@@ -25,11 +25,10 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Sigenergy ESS from a config entry."""
     _LOGGER.debug("async_setup_entry: Starting setup for entry: %s", entry.title)
-    host = entry.data[CONF_HOST]
-    port = entry.data[CONF_PORT]
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    _LOGGER.debug("async_setup_entry: Scan interval set to %s seconds", scan_interval)
 
-    hub = SigenergyModbusHub(hass, host, port, entry)
+    hub = SigenergyModbusHub(hass, entry)
     _LOGGER.debug("async_setup_entry: SigenergyModbusHub created: %s", hub)
 
     try:
@@ -37,14 +36,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hub.async_connect()
         _LOGGER.debug("async_setup_entry: Modbus hub connected successfully")
     except Exception as ex:
-        _LOGGER.error("async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s", host, port, ex)
+        _LOGGER.error("async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s", entry.data[CONF_HOST], entry.data[CONF_PORT], ex)
         raise ConfigEntryNotReady(f"Error connecting to Sigenergy system: {ex}") from ex
 
     coordinator = SigenergyDataUpdateCoordinator(
         hass,
         _LOGGER,
         hub=hub,
-        name=f"{DOMAIN}_{host}",
+        name=f"{DOMAIN}_{entry.data[CONF_HOST]}",
         update_interval=timedelta(seconds=scan_interval),
     )
     _LOGGER.debug("async_setup_entry: SigenergyDataUpdateCoordinator created: %s", coordinator)
