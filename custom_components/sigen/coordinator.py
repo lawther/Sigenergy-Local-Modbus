@@ -57,28 +57,12 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     slave_id = details.get(CONF_SLAVE_ID)
                     if slave_id is not None:
                         ac_charger_data[slave_id] = await self.hub.async_read_ac_charger_data(slave_id)
-                    # else: # Optional: Log warning if needed, but not requested
-                    #     _LOGGER.warning("Missing slave ID for an AC charger in configuration")
 
-                # Fetch DC charger data for each DC charger
-                dc_charger_data = {}
-                # Iterate through the connection details dictionary
-                for charger_name, connection_details in self.hub.dc_charger_connections.items():
-                    # Extract the slave ID from the details
-                    dc_charger_id = connection_details.get(CONF_SLAVE_ID)
-                    if dc_charger_id is not None:
-                        _LOGGER.debug("Fetching data for DC charger %s (ID: %s)", charger_name, dc_charger_id)
-                        dc_charger_data[dc_charger_id] = await self.hub.async_read_dc_charger_data(dc_charger_id)
-                    else:
-                        _LOGGER.warning("Missing slave ID for DC charger '%s' in configuration", charger_name)
-                
                 # Combine all data
-                # _LOGGER.debug("[CS][Coordinator] Plant data keys: %s", list(plant_data.keys()) if plant_data else None)
                 data = {
                     "plant": plant_data,
                     "inverters": inverter_data,
                     "ac_chargers": ac_charger_data,
-                    "dc_chargers": dc_charger_data,
                 }
 
                 # Log the final DC charger data structure

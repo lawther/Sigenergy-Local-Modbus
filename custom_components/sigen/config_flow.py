@@ -963,8 +963,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_dc_charger_config(self, user_input: dict[str, Any] | None = None):
         """Handle reconfiguration of an existing DC charger device."""
-        errors = {}
-        
         # Get the DC charger details
         _LOGGER.debug(f"self._selected_device: {self._selected_device}")
 
@@ -1010,7 +1008,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
             # Wipe all old entities and devices
             _LOGGER.debug("Inverter config updated (removed), removing existing devices/entities before reload.")
-            await self._async_remove_devices_and_entities(inverter_name)
+            await self._async_remove_devices_and_entities(f"{inverter_name} DC Charger")
 
             # Save configuration to file
             self.hass.config_entries._async_schedule_save()

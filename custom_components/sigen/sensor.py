@@ -26,7 +26,8 @@ from homeassistant.helpers.update_coordinator import (   # pylint: disable=no-na
 )
 
 from .const import (
-    CONF_SLAVE_ID,  # Added CONF_SLAVE_ID
+    CONF_SLAVE_ID,
+    CONF_INVERTER_HAS_DCCHARGER,
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
@@ -208,6 +209,64 @@ async def async_setup_entry(
                         "Error creating device/sensors for PV string %d: %s", pv_idx, ex
                     )  # Use .exception to include traceback
 
+        # Add DC charger sensors
+        if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
+            dc_charger_name = f"{device_name} DC Charger"
+
+            _LOGGER.debug(
+                "Adding sensors for DC charger: %s", dc_charger_name
+            )
+
+            dc_name = f"{device_name} DC Charger"
+            parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
+            dc_id = f"{parent_inverter_id}_dc_charger"
+            _LOGGER.debug("[sensor] Adding DC Charger with dc_name: %s, parent_inverter_id: %s, dc_id: %s",
+                          dc_name, parent_inverter_id, dc_id)
+
+            # Create device info
+            dc_device_info = DeviceInfo(
+                identifiers={(DOMAIN, dc_id)},
+                name=dc_name,
+                manufacturer="Sigenergy",
+                model="DC Charger",
+                via_device=(DOMAIN, parent_inverter_id),
+            )
+
+
+            # Static Sensors:
+            async_add_entities(
+                generate_sigen_entity(
+                    plant_name,
+                    device_name,
+                    device_conn,
+                    coordinator,
+                    SigenergySensor,
+                    SS.DC_CHARGER_SENSORS,
+                    # DEVICE_TYPE_INVERTER,
+                    DEVICE_TYPE_DC_CHARGER,
+                    device_info=dc_device_info
+                )
+            )
+            # Calculated Sensors:
+
+
+            # for description in SS.DC_CHARGER_SENSORS + SCS.DC_CHARGER_SENSORS:
+            #     sensor_name = f"{dc_charger_name} {description.name}"
+            #     entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
+
+            #     entities.append(
+            #         SigenergySensor(
+            #             coordinator=coordinator,
+            #             description=description,
+            #             name=sensor_name,
+            #             device_type=DEVICE_TYPE_DC_CHARGER,
+            #             device_id=dc_charger_id,
+            #             device_name=dc_charger_name,
+            #         )
+            #     )
+            # dc_charger_no += 1
+
+
     # Add AC charger sensors
     # Iterate through the AC charger connection details dictionary
     for ac_charger_name, ac_details in coordinator.hub.ac_charger_connections.items():
@@ -237,55 +296,6 @@ async def async_setup_entry(
                     device_name=ac_charger_name,  # Use the name from the dictionary key
                 )
             )
-
-    # Add DC charger sensors
-    dc_charger_no = 0  # Keep counter for potential future naming needs, though name comes from dict key now
-    # Iterate through the connection details dictionary
-    for (
-        dc_charger_name,
-        connection_details,
-    ) in coordinator.hub.dc_charger_connections.items():
-        # Extract the slave ID from the details
-        dc_charger_id = connection_details.get(CONF_SLAVE_ID)
-        if dc_charger_id is None:
-            _LOGGER.warning(
-                "Missing slave ID for DC charger '%s' in configuration, skipping sensor setup",
-                dc_charger_name,
-            )
-            continue
-
-        # Check if coordinator actually has data for this DC charger ID
-        if (
-            not coordinator.data
-            or "dc_chargers" not in coordinator.data
-            or dc_charger_id not in coordinator.data
-            or not coordinator.data["dc_chargers"][dc_charger_id]
-        ):
-            _LOGGER.warning(
-                "No data found for DC charger %s (ID: %s) after coordinator refresh, skipping sensor setup.",
-                dc_charger_name,
-                dc_charger_id,
-            )
-            continue
-
-        _LOGGER.debug(
-            "Adding sensors for DC charger %s (ID: %s)", dc_charger_name, dc_charger_id
-        )
-        for description in SS.DC_CHARGER_SENSORS + SCS.DC_CHARGER_SENSORS:
-            sensor_name = f"{dc_charger_name} {description.name}"
-            entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-
-            entities.append(
-                SigenergySensor(
-                    coordinator=coordinator,
-                    description=description,
-                    name=sensor_name,
-                    device_type=DEVICE_TYPE_DC_CHARGER,
-                    device_id=dc_charger_id,
-                    device_name=dc_charger_name,  # Use name from dict key
-                )
-            )
-        dc_charger_no += 1
 
     _LOGGER.debug("[Setup Entry] Final entity list count before add: %d", len(entities))
     # Log first 5 entities to see if they look valid
@@ -468,9 +478,6 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the state of the sensor."""
-        # _LOGGER.debug("[CS][native_value] Getting value for %s (key: %s)", self.entity_id, self.entity_description.key)
-        # Special handling for calculated power sensors
-        # _LOGGER.debug("[CS][native_value] Checking if %s needs special handling", self.entity_description.key)
         if self.entity_description.key in [
             "plant_grid_import_power",
             "plant_grid_export_power",
@@ -488,16 +495,11 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 hasattr(self.entity_description, "value_fn")
                 and self.entity_description.value_fn is not None
             ):
-                # _LOGGER.debug("[CS][native_value] Found value_fn for %s: %s", self.entity_id, self.entity_description.value_fn)
                 try:
-                    # _LOGGER.debug("[CS][native_value] Calling value_fn for %s", self.entity_id)
                     # Always pass coordinator data to the value_fn
-                    # _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     transformed_value = self.entity_description.value_fn(
                         None, self.coordinator.data, None
                     )
-                    # _LOGGER.debug("[CS][GridSensor] Calculated value for %s: %s",
-                    #              self.entity_id, transformed_value)
                     return transformed_value
                 except Exception as ex:
                     _LOGGER.error(
@@ -506,13 +508,6 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                         ex,
                     )
                     return None
-
-        # Standard handling for other sensors
-        # if self.entity_description.key == "plant_consumed_power":
-        #     _LOGGER.debug("[CS][Plant Consumed] Native value called for plant_consumed_power sensor")
-        #     _LOGGER.debug("[CS][Plant Consumed] Coordinator data available: %s", bool(self.coordinator.data))
-        #     if self.coordinator.data and "plant" in self.coordinator.data:
-        #         _LOGGER.debug("[CS][Plant Consumed] Available plant data keys: %s", list(self.coordinator.data["plant"].keys()))
 
         if self.coordinator.data is None:
             _LOGGER.error(
@@ -536,13 +531,6 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             # Use the key directly with ac_charger_ prefix already included
             value = (
                 self.coordinator.data["ac_chargers"]
-                .get(self._device_id, {})
-                .get(self.entity_description.key)
-            )
-        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-            # Use the key directly with dc_charger_ prefix already included
-            value = (
-                self.coordinator.data["dc_chargers"]
                 .get(self._device_id, {})
                 .get(self.entity_description.key)
             )
@@ -708,12 +696,6 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 self.coordinator.data is not None
                 and "ac_chargers" in self.coordinator.data
                 and self._device_id in self.coordinator.data["ac_chargers"]
-            )
-        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-            return (
-                self.coordinator.data is not None
-                and "dc_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["dc_chargers"]
             )
         else:
             _LOGGER.warning(

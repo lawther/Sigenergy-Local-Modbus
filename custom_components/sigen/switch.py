@@ -264,13 +264,6 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
                 and "ac_chargers" in self.coordinator.data
                 and self._device_id in self.coordinator.data["ac_chargers"] # AC Chargers still use ID
             )
-        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-             # TODO: Review DC Charger availability logic based on coordinator data structure
-            return (
-                self.coordinator.data is not None
-                and "dc_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["dc_chargers"] # DC Chargers likely still use ID
-            )
 
         return False
 

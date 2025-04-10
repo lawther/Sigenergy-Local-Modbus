@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 
-from .const import (DOMAIN)
+from .const import (DOMAIN, DEVICE_TYPE_INVERTER, DEVICE_TYPE_DC_CHARGER)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -71,6 +71,10 @@ def generate_sigen_entity(
             pv_string_name = f"{device_name} PV{pv_string_idx}"
             sensor_name = f"{pv_string_name} {description.name}"
             sensor_id = pv_string_name
+        elif device_type == DEVICE_TYPE_DC_CHARGER:
+            sensor_id = f"{device_name} DC Charger"
+            sensor_name = sensor_id
+            device_type = DEVICE_TYPE_INVERTER
         else:
             sensor_name = f"{device_name} {description.name}"
             sensor_id = sensor_name
@@ -95,8 +99,13 @@ def generate_sigen_entity(
             if source_entity_id:
                 entity_kwargs["source_entity_id"] = source_entity_id
             else:
-                _LOGGER.warning("No source entity ID found for source key '%s' (device: %s). Skipping entity '%s'.", description.source_key, device_name, description.name)
-                continue # Skip this entity
+                _LOGGER.warning(
+                    "No source entity ID found for source key '%s' (device: %s). Skipping entity '%s'.",
+                    description.source_key,
+                    device_name,
+                    description.name,
+                )
+                continue  # Skip this entity
 
 
         if device_info:
@@ -108,12 +117,17 @@ def generate_sigen_entity(
         try:
             new_entity = entity_class(**entity_kwargs)
             entities.append(new_entity)
-            _LOGGER.debug("Created entity: %s", new_entity)
 
-        except Exception as ex:
-            _LOGGER.exception("Error creating entity '%s' for device '%s': %s", description.name, device_name, ex) # Use .exception
-            _LOGGER.debug("Entity creation failed with description: %s", description)
-            _LOGGER.debug("Entity creation failed with kwargs: %s", entity_kwargs)
+        except Exception as ex: # pylint: disable=broad-exception-caught
+            _LOGGER.exception(
+                "Error creating entity '%s' for device '%s': %s",
+                 description.name, device_name, ex) # Use .exception
+            _LOGGER.debug(
+                "Entity creation failed with description: %s",
+                 description)
+            _LOGGER.debug(
+                "Entity creation failed with kwargs: %s",
+                 entity_kwargs)
     return entities
 
 @staticmethod
@@ -143,7 +157,7 @@ def get_source_entity_id(device_type, device_name, source_key, coordinator, hass
             _LOGGER.debug("Found entity ID: %s", entity_id)
 
         return entity_id
-    except Exception as ex:
+    except Exception as ex: # pylint: disable=broad-exception-caught
         _LOGGER.warning("Error looking for entity with config entry ID: %s", ex)
 
 @staticmethod
@@ -198,16 +212,20 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
         if isinstance(description, cls):
             # If it's already our class, copy all attributes
             result = cls(
-                key=description.key,
-                name=description.name,
-                device_class=description.device_class,
-                native_unit_of_measurement=description.native_unit_of_measurement,
-                state_class=description.state_class,
-                entity_registry_enabled_default=description.entity_registry_enabled_default,
-                value_fn=value_fn or description.value_fn,
-                extra_fn_data=extra_fn_data if extra_fn_data is not None else description.extra_fn_data,
-                extra_params=extra_params or description.extra_params
-            )
+				key=description.key,
+				name=description.name,
+				device_class=description.device_class,
+				native_unit_of_measurement=description.native_unit_of_measurement,
+				state_class=description.state_class,
+				entity_registry_enabled_default=description.entity_registry_enabled_default,
+				value_fn=value_fn or description.value_fn,
+				extra_fn_data=extra_fn_data if extra_fn_data is not None else description.extra_fn_data,
+				extra_params=extra_params or description.extra_params,
+				source_entity_id=getattr(description, "source_entity_id", None),
+				source_key=getattr(description, "source_key", None),
+				max_sub_interval=getattr(description, "max_sub_interval", None),
+				round_digits=getattr(description, "round_digits", None),
+			)
         else:
             # It's a regular SensorEntityDescription
             result = cls(
@@ -219,15 +237,10 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
                 entity_registry_enabled_default=getattr(description, "entity_registry_enabled_default", True),
                 value_fn=value_fn,
                 extra_fn_data=extra_fn_data,
-                extra_params=extra_params
+                extra_params=extra_params,
+                source_entity_id=None,
+                source_key=None,
+                max_sub_interval=None,
+                round_digits=None,
             )
-        
-        # Copy any other attributes that might exist
-        for attr_name in dir(description):
-            if not attr_name.startswith('_') and attr_name not in ['key', 'name', 'device_class', 
-                                                                    'native_unit_of_measurement', 'state_class', 
-                                                                    'entity_registry_enabled_default', 'value_fn',
-                                                                    'extra_fn_data', 'extra_params']:
-                setattr(result, attr_name, getattr(description, attr_name))
-        
         return result
