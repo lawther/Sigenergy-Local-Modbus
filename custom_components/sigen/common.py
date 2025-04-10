@@ -9,13 +9,10 @@ from homeassistant.helpers.entity_registry import async_get as async_get_entity_
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.sensor import (
-    SensorDeviceClass,
-    SensorEntity,
     SensorEntityDescription,
-    SensorStateClass,
 )
 
-from .const import (CONF_SLAVE_ID, DOMAIN, DEVICE_TYPE_INVERTER, DEVICE_TYPE_PLANT)
+from .const import (DOMAIN)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -178,7 +175,7 @@ def generate_device_id(
     unique_device_part = str(device_name).lower().replace(' ', '_') if device_name else device_type
     return unique_device_part if unique_device_part else "unknown_device_id"
 
-@dataclass
+@dataclass(frozen=True)
 class SigenergySensorEntityDescription(SensorEntityDescription):
     """Class describing Sigenergy sensor entities."""
 
