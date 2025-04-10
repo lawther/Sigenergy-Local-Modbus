@@ -49,16 +49,16 @@ PLANT_SWITCHES = [
         name="Plant Power",
         icon="mdi:power",
         is_on_fn=lambda data, _: data["plant"].get("plant_running_state") == 1, # Sync
-        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_start_stop", 1), # Already returns awaitable
-        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_start_stop", 0), # Already returns awaitable
+        turn_on_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_start_stop", 1), # Already returns awaitable
+        turn_off_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_start_stop", 0), # Already returns awaitable
     ),
     SigenergySwitchEntityDescription(
         key="plant_remote_ems_enable",
         name="Remote EMS (Controled by Home Assistant)",
         icon="mdi:home-assistant",
         is_on_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
-        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_remote_ems_enable", 1), # Already returns awaitable
-        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_remote_ems_enable", 0), # Already returns awaitable
+        turn_on_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_remote_ems_enable", 1), # Already returns awaitable
+        turn_off_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_remote_ems_enable", 0), # Already returns awaitable
     ),
     SigenergySwitchEntityDescription(
         key="plant_independent_phase_power_control_enable",
@@ -66,8 +66,8 @@ PLANT_SWITCHES = [
         icon="mdi:tune",
         entity_category=EntityCategory.CONFIG,
         is_on_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1, # Sync
-        turn_on_fn=lambda hub, _: hub.async_write_plant_parameter("plant_independent_phase_power_control_enable", 1), # Already returns awaitable
-        turn_off_fn=lambda hub, _: hub.async_write_plant_parameter("plant_independent_phase_power_control_enable", 0), # Already returns awaitable
+        turn_on_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_independent_phase_power_control_enable", 1), # Already returns awaitable
+        turn_off_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_independent_phase_power_control_enable", 0), # Already returns awaitable
     ),
 ]
 
@@ -78,8 +78,8 @@ INVERTER_SWITCHES = [
         icon="mdi:power",
         # Use device_name (inverter_name) instead of device_id (now passed as the second arg 'identifier')
         is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_running_state") == 1,
-        turn_on_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "inverter_start_stop", 1), # Already returns awaitable
-        turn_off_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "inverter_start_stop", 0), # Already returns awaitable
+        turn_on_fn=lambda hub, identifier: hub.async_write_parameter("inverter", identifier, "inverter_start_stop", 1), # Already returns awaitable
+        turn_off_fn=lambda hub, identifier: hub.async_write_parameter("inverter", identifier, "inverter_start_stop", 0), # Already returns awaitable
     ),
     SigenergySwitchEntityDescription(
         key="inverter_remote_ems_dispatch_enable",
@@ -88,8 +88,8 @@ INVERTER_SWITCHES = [
         entity_category=EntityCategory.CONFIG,
         # Use device_name (inverter_name) instead of device_id (now passed as the second arg 'identifier')
         is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_remote_ems_dispatch_enable") == 1,
-        turn_on_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "inverter_remote_ems_dispatch_enable", 1), # Already returns awaitable
-        turn_off_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "inverter_remote_ems_dispatch_enable", 0), # Already returns awaitable
+        turn_on_fn=lambda hub, identifier: hub.async_write_parameter("inverter", identifier, "inverter_remote_ems_dispatch_enable", 1), # Already returns awaitable
+        turn_off_fn=lambda hub, identifier: hub.async_write_parameter("inverter", identifier, "inverter_remote_ems_dispatch_enable", 0), # Already returns awaitable
     ),
 ]
 AC_CHARGER_SWITCHES = [
@@ -99,8 +99,8 @@ AC_CHARGER_SWITCHES = [
         icon="mdi:ev-station",
         # identifier here will be ac_charger_name
         is_on_fn=lambda data, identifier: data["ac_chargers"].get(identifier, {}).get("ac_charger_system_state") > 0,
-        turn_on_fn=lambda hub, identifier: hub.async_write_ac_charger_parameter(identifier, "ac_charger_start_stop", 0), # Already returns awaitable
-        turn_off_fn=lambda hub, identifier: hub.async_write_ac_charger_parameter(identifier, "ac_charger_start_stop", 1), # Already returns awaitable
+        turn_on_fn=lambda hub, identifier: hub.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0), # Already returns awaitable
+        turn_off_fn=lambda hub, identifier: hub.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1), # Already returns awaitable
     ),
 ]
 
@@ -112,8 +112,8 @@ DC_CHARGER_SWITCHES = [
         # consider changing is_on_fn to check for dc_charger_output_power > 0 if the below doesn't work
         # identifier here is dc_charger_id (but it's accessing inverter data?) - This seems wrong, needs review based on coordinator data structure
         is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_start_stop") == 0, # TODO: Review this logic - should likely use dc_charger data
-        turn_on_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "dc_charger_start_stop", 0), # TODO: Review this logic - Already returns awaitable
-        turn_off_fn=lambda hub, identifier: hub.async_write_inverter_parameter(identifier, "dc_charger_start_stop", 1), # TODO: Review this logic - Already returns awaitable
+        turn_on_fn=lambda hub, identifier: hub.async_write_parameter("inverter", identifier, "dc_charger_start_stop", 0), # TODO: Review this logic - Assuming DC charger controlled via inverter. Already returns awaitable
+        turn_off_fn=lambda hub, identifier: hub.async_write_parameter("inverter", identifier, "dc_charger_start_stop", 1), # TODO: Review this logic - Assuming DC charger controlled via inverter. Already returns awaitable
     ),
 ]
 

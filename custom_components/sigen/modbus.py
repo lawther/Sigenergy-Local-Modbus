@@ -786,251 +786,224 @@ class SigenergyModbusHub:
 
         return data
 
-    async def async_write_plant_parameter(
-        self, 
-        register_name: str, 
+    async def async_write_parameter(
+        self,
+        device_type: str,
+        device_identifier: Optional[str],
+        register_name: str,
         value: Union[int, float, str]
     ) -> None:
-        """Write a plant parameter."""
-        # Check if read-only mode is enabled
+        """Write a parameter to a specified device (plant, inverter, or AC charger).
+
+        Args:
+            device_type: The type of device ('plant', 'inverter', 'ac_charger').
+            device_identifier: The name of the inverter or AC charger, or None for the plant.
+            register_name: The name of the parameter register to write.
+            value: The value to write to the register.
+
+        Raises:
+            SigenergyModbusError: If writing is disabled (read-only mode), the device/parameter
+                                  is unknown, slave ID is missing, or a Modbus error occurs.
+            ValueError: If device_type is invalid or device_identifier is missing when required.
+        """
         if self.read_only:
             raise SigenergyModbusError("Cannot write parameter while in read-only mode")
-            
-        if register_name not in PLANT_PARAMETER_REGISTERS:
-            raise SigenergyModbusError(f"Unknown plant parameter: {register_name}")
-        
-        register_def = PLANT_PARAMETER_REGISTERS[register_name]
-        
-        _LOGGER.debug(
-            "Writing plant parameter %s with value %s to address %s (type: %s, data_type: %s, gain: %s)",
-            register_name, value, register_def.address, register_def.register_type,
-            register_def.data_type, register_def.gain
-        )
-        
-        # Special handling for plant_remote_ems_enable register
-        if register_name == "plant_remote_ems_enable":
-            _LOGGER.debug("Special handling for plant_remote_ems_enable register")
-            
-            # Try multiple approaches for this specific register
-            approaches = [
-                # Try with direct addressing
-                {"function": "write_registers", "address": register_def.address, "values": [int(value)]},
-                {"function": "write_register", "address": register_def.address, "value": int(value)},
-                # Then try with offset addressing first (40029 -> 28)
-                {"function": "write_registers", "address": register_def.address - 40001, "values": [int(value)]},
-                {"function": "write_register", "address": register_def.address - 40001, "value": int(value)},
-            ]
-            
-            last_error = None
-            for i, approach in enumerate(approaches):
-                try:
-                    _LOGGER.debug(
-                        "Attempt %d for plant_remote_ems_enable: Using %s with address %s and value %s",
-                        i+1, approach["function"], approach["address"],
-                        approach.get("value", approach.get("values"))
-                    )
-                    
-                    key = (self._plant_host, self._plant_port)
-                    async with self._locks[key]:
-                        client = self._clients[key]  # type: ignore
-                        if approach["function"] == "write_registers":
-                            result = await client.write_registers(
-                                address=approach["address"],
-                                values=approach["values"],
-                                slave=self.plant_id
-                            )  # type: ignore
-                        else:  # write_register
-                            result = await client.write_register(
-                                address=approach["address"],
-                                value=approach["value"],
-                                slave=self.plant_id
-                            )
-                            
-                        if not hasattr(result, 'isError') or not result.isError():
-                            _LOGGER.debug("Success with approach %d for plant_remote_ems_enable", i+1)
-                            return  # Success, exit early
-                        
-                        _LOGGER.debug("Error with approach %d: %s", i+1, result)
-                        last_error = result
-                        
-                except Exception as ex:
-                    _LOGGER.debug("Exception with approach %d: %s", i+1, ex)
-                    last_error = ex
-            
-            # If we've tried all approaches and still have an error
-            if isinstance(last_error, Exception):
-                raise SigenergyModbusError(f"Error writing plant_remote_ems_enable: {last_error}")
-            else:
-                raise SigenergyModbusError(f"Error writing plant_remote_ems_enable: {last_error}")
-        
-        # Special handling for U32 registers that need 2 registers to be written
-        elif register_def.data_type == DataType.U32 or register_def.data_type == DataType.S32:
-            _LOGGER.debug("Special handling for U32/S32 register %s", register_name)
-            
-            encoded_values = self._encode_value(
-                value=value,
-                data_type=register_def.data_type,
-                gain=register_def.gain,
-            )
-            
-            _LOGGER.debug("Encoded values for %s: %s", register_name, encoded_values)
-            
-            # Try multiple addressing approaches for U32/S32 registers
-            approaches = [
-                # Try with different addressing schemes
-                {"address": register_def.address},          # Direct addressing (e.g., 40036)
-                {"address": register_def.address - 40001},  # Modbus standard offset (e.g., 40036 -> 35)
-                {"address": register_def.address - 40000},  # Alternative offset (e.g., 40036 -> 36)
-                {"address": register_def.address % 10000},  # Another common convention (e.g., 40036 -> 36)
-            ]
-            
-            last_error = None
-            for i, approach in enumerate(approaches):
-                try:
-                    _LOGGER.debug(
-                        "Attempt %d for %s: Using address %s with values %s",
-                        i+1, register_name, approach["address"], encoded_values
-                    )
-                    
-                    key = (self._plant_host, self._plant_port)
-                    async with self._locks[key]:
-                        client = self._clients[key]  # type: ignore
-                        result = await client.write_registers(
-                            address=approach["address"],
-                            values=encoded_values,
-                            slave=self.plant_id
-                        )
-                            
-                        if not result.isError():
-                            _LOGGER.debug("Success with approach %d for %s at address %s", 
-                                        i+1, register_name, approach["address"])
-                            return  # Success, exit early
-                        
-                        _LOGGER.debug("Error with approach %d: %s", i+1, result)
-                        last_error = result
-                        
-                except Exception as ex:  # pylint: disable=broad-exception-caught
-                    _LOGGER.debug("Exception with approach %d: %s", i+1, ex)
-                    last_error = ex
-            
-            # If we've tried all approaches and still have an error
-            if isinstance(last_error, Exception):
-                raise SigenergyModbusError(f"Error writing {register_name}: {last_error}")
-            else:
-                raise SigenergyModbusError(f"Error writing {register_name}: {last_error}")
-        
-        # Normal handling for other registers
+
+        slave_id: Optional[int] = None
+        parameter_registers: Dict[str, ModbusRegisterDefinition] = {}
+        connection_dict: Optional[Dict] = None # To store inverter_connections or ac_charger_connections
+
+        # Determine slave ID and parameter dictionary based on device type
+        if device_type == "plant":
+            slave_id = self.plant_id
+            parameter_registers = PLANT_PARAMETER_REGISTERS
+        elif device_type == "inverter":
+            if not device_identifier:
+                raise ValueError("device_identifier is required for device_type 'inverter'")
+            connection_dict = self.inverter_connections
+            parameter_registers = INVERTER_PARAMETER_REGISTERS
+        elif device_type == "ac_charger":
+            if not device_identifier:
+                raise ValueError("device_identifier is required for device_type 'ac_charger'")
+            connection_dict = self.ac_charger_connections
+            parameter_registers = AC_CHARGER_PARAMETER_REGISTERS
         else:
-            encoded_values = self._encode_value(
-                value=value,
-                data_type=register_def.data_type,
-                gain=register_def.gain,
-            )
-            
-            _LOGGER.debug("Encoded values for %s: %s", register_name, encoded_values)
-            
+            raise ValueError(f"Unknown device_type: {device_type}")
+
+        # Get slave_id for inverter/ac_charger from connection details
+        if connection_dict is not None and device_identifier:
+            if device_identifier not in connection_dict:
+                raise SigenergyModbusError(f"Unknown {device_type} name: {device_identifier}")
+            device_info = connection_dict[device_identifier]
+            slave_id = device_info.get(CONF_SLAVE_ID)
+            if slave_id is None:
+                raise SigenergyModbusError(f"Slave ID not configured for {device_type}: {device_identifier}")
+
+        # Safety check: Ensure slave_id was determined
+        if slave_id is None:
+             raise SigenergyModbusError(f"Could not determine slave ID for {device_type} '{device_identifier}'")
+
+        # Get register definition
+        if register_name not in parameter_registers:
+            raise SigenergyModbusError(f"Unknown {device_type} parameter: {register_name}")
+        register_def = parameter_registers[register_name]
+
+        _LOGGER.debug(
+            "Writing %s parameter '%s' (device: %s) with value %s to address %s (type: %s, data_type: %s, gain: %s, slave: %d)",
+            device_type, register_name, device_identifier or 'plant', value, register_def.address,
+            register_def.register_type, register_def.data_type, register_def.gain, slave_id
+        )
+
+        # === Plant-Specific Handling ===
+        # Certain plant registers require special handling due to Modbus quirks
+        if device_type == "plant":
+            key = self._get_connection_key(slave_id) # Get connection key for client/lock
+
+            # Special handling for plant_remote_ems_enable register
+            if register_name == "plant_remote_ems_enable":
+                _LOGGER.debug("Special handling for plant_remote_ems_enable register")
+                approaches = [
+                    {"function": "write_registers", "address": register_def.address, "values": [int(value)]},
+                    {"function": "write_register", "address": register_def.address, "value": int(value)},
+                    {"function": "write_registers", "address": register_def.address - 40001, "values": [int(value)]},
+                    {"function": "write_register", "address": register_def.address - 40001, "value": int(value)},
+                ]
+                last_error = None
+                success = False
+                try:
+                    client = await self._get_client(slave_id) # Ensure client is ready
+                    async with self._locks[key]:
+                        for i, approach in enumerate(approaches):
+                            try:
+                                _LOGGER.debug(
+                                    "Attempt %d for plant_remote_ems_enable: Using %s with address %s and value %s",
+                                    i+1, approach["function"], approach["address"],
+                                    approach.get("value", approach.get("values"))
+                                )
+                                if approach["function"] == "write_registers":
+                                    result = await client.write_registers(
+                                        address=approach["address"], values=approach["values"], slave=slave_id
+                                    )
+                                else: # write_register
+                                    result = await client.write_register(
+                                        address=approach["address"], value=approach["value"], slave=slave_id
+                                    )
+
+                                if not hasattr(result, 'isError') or not result.isError():
+                                    _LOGGER.debug("Success with approach %d for plant_remote_ems_enable", i+1)
+                                    success = True
+                                    break # Success, exit loop
+
+                                _LOGGER.debug("Error with approach %d: %s", i+1, result)
+                                last_error = result
+                            except Exception as ex_inner: # Catch errors within the loop
+                                _LOGGER.debug("Exception with approach %d: %s", i+1, ex_inner)
+                                last_error = ex_inner
+                                # Continue to next approach
+
+                    if success:
+                        return # Exit method after successful special handling
+
+                    # If loop finished without success
+                    if isinstance(last_error, Exception):
+                        raise SigenergyModbusError(f"Error writing plant_remote_ems_enable after multiple attempts: {last_error}") from last_error
+                    else:
+                        raise SigenergyModbusError(f"Error writing plant_remote_ems_enable after multiple attempts: {last_error}")
+
+                except (ConnectionException, ModbusException, SigenergyModbusError) as ex_outer:
+                    self._connected[key] = False # Mark connection as potentially broken
+                    raise ex_outer # Re-raise known Modbus/Connection errors
+                except Exception as ex_outer: # Catch unexpected errors during client/lock handling
+                    self._connected[key] = False
+                    raise SigenergyModbusError(f"Unexpected error writing plant_remote_ems_enable: {ex_outer}") from ex_outer
+
+
+            # Special handling for U32/S32 registers
+            elif register_def.data_type in [DataType.U32, DataType.S32]:
+                _LOGGER.debug("Special handling for U32/S32 register %s", register_name)
+                encoded_values = self._encode_value(value=value, data_type=register_def.data_type, gain=register_def.gain)
+                _LOGGER.debug("Encoded values for %s: %s", register_name, encoded_values)
+                approaches = [
+                    {"address": register_def.address},
+                    {"address": register_def.address - 40001},
+                    {"address": register_def.address - 40000},
+                    {"address": register_def.address % 10000},
+                ]
+                last_error = None
+                success = False
+                try:
+                    client = await self._get_client(slave_id) # Ensure client is ready
+                    async with self._locks[key]:
+                        for i, approach in enumerate(approaches):
+                            # Skip invalid addresses
+                            if approach["address"] < 0:
+                                _LOGGER.debug("Skipping attempt %d for %s: Invalid address %s", i+1, register_name, approach["address"])
+                                continue
+                            try:
+                                _LOGGER.debug(
+                                    "Attempt %d for %s: Using address %s with values %s",
+                                    i+1, register_name, approach["address"], encoded_values
+                                )
+                                result = await client.write_registers(
+                                    address=approach["address"], values=encoded_values, slave=slave_id
+                                )
+
+                                if not result.isError():
+                                    _LOGGER.debug("Success with approach %d for %s at address %s",
+                                                i+1, register_name, approach["address"])
+                                    success = True
+                                    break # Success, exit loop
+
+                                _LOGGER.debug("Error with approach %d: %s", i+1, result)
+                                last_error = result
+                            except Exception as ex_inner: # Catch errors within the loop
+                                _LOGGER.debug("Exception with approach %d: %s", i+1, ex_inner)
+                                last_error = ex_inner
+                                # Continue to next approach
+
+                    if success:
+                        return # Exit method after successful special handling
+
+                    # If loop finished without success
+                    if isinstance(last_error, Exception):
+                         raise SigenergyModbusError(f"Error writing {register_name} after multiple attempts: {last_error}") from last_error
+                    else:
+                         raise SigenergyModbusError(f"Error writing {register_name} after multiple attempts: {last_error}")
+
+                except (ConnectionException, ModbusException, SigenergyModbusError) as ex_outer:
+                    self._connected[key] = False # Mark connection as potentially broken
+                    raise ex_outer # Re-raise known Modbus/Connection errors
+                except Exception as ex_outer: # Catch unexpected errors during client/lock handling
+                    self._connected[key] = False
+                    raise SigenergyModbusError(f"Unexpected error writing {register_name}: {ex_outer}") from ex_outer
+
+        # === General Write Logic ===
+        # (Executes if device_type is not 'plant' or if it's a plant register without special handling)
+        encoded_values = self._encode_value(
+            value=value,
+            data_type=register_def.data_type,
+            gain=register_def.gain,
+        )
+        _LOGGER.debug("Encoded values for %s '%s': %s", device_type, register_name, encoded_values)
+
+        # Use the existing high-level write methods which handle locks/clients internally
+        try:
             if len(encoded_values) == 1:
                 await self.async_write_register(
-                    slave_id=self.plant_id,
+                    slave_id=slave_id,
                     address=register_def.address,
                     value=encoded_values[0],
                     register_type=register_def.register_type,
                 )
             else:
                 await self.async_write_registers(
-                    slave_id=self.plant_id,
+                    slave_id=slave_id,
                     address=register_def.address,
                     values=encoded_values,
                     register_type=register_def.register_type,
                 )
+        except SigenergyModbusError as ex:
+            _LOGGER.error("Failed to write %s parameter '%s' (device: %s): %s",
+                          device_type, register_name, device_identifier or 'plant', ex)
+            raise # Re-raise the specific error
 
-    async def async_write_inverter_parameter(
-        self, 
-        inverter_name: str,
-        register_name: str, 
-        value: Union[int, float, str]
-    ) -> None:
-        """Write an inverter parameter."""
-        # Check if read-only mode is enabled
-        if self.read_only:
-            raise SigenergyModbusError("Cannot write parameter while in read-only mode")
-            
-        # Look up inverter details by name
-        if inverter_name not in self.inverter_connections:
-            raise SigenergyModbusError(f"Unknown inverter name provided for writing parameter: {inverter_name}")
-        inverter_info = self.inverter_connections[inverter_name]
-        slave_id = inverter_info.get(CONF_SLAVE_ID)
-        if slave_id is None:
-            raise SigenergyModbusError(f"Slave ID not configured for inverter: {inverter_name}")
-            
-        if register_name not in INVERTER_PARAMETER_REGISTERS:
-            raise SigenergyModbusError(f"Unknown inverter parameter: {register_name}")
-        
-        register_def = INVERTER_PARAMETER_REGISTERS[register_name]
-        
-        encoded_values = self._encode_value(
-            value=value,
-            data_type=register_def.data_type,
-            gain=register_def.gain,
-        )
-        
-        if len(encoded_values) == 1:
-            await self.async_write_register(
-                slave_id=slave_id,
-                address=register_def.address,
-                value=encoded_values[0],
-                register_type=register_def.register_type,
-            )
-        else:
-            await self.async_write_registers(
-                slave_id=slave_id,
-                address=register_def.address,
-                values=encoded_values,
-                register_type=register_def.register_type,
-            )
-
-    async def async_write_ac_charger_parameter(
-        self,
-        ac_charger_name: str, # Changed from ac_charger_id: int
-        register_name: str,
-        value: Union[int, float, str]
-    ) -> None:
-        """Write an AC charger parameter using its name."""
-        # Check if read-only mode is enabled
-        if self.read_only:
-            raise SigenergyModbusError("Cannot write parameter while in read-only mode")
-
-        # Look up AC charger details by name
-        if ac_charger_name not in self.ac_charger_connections:
-            raise SigenergyModbusError(f"Unknown AC charger name provided for writing parameter: {ac_charger_name}")
-        ac_charger_info = self.ac_charger_connections[ac_charger_name]
-        slave_id = ac_charger_info.get(CONF_SLAVE_ID)
-        if slave_id is None:
-            raise SigenergyModbusError(f"Slave ID not configured for AC charger: {ac_charger_name}")
-
-        if register_name not in AC_CHARGER_PARAMETER_REGISTERS:
-            raise SigenergyModbusError(f"Unknown AC charger parameter: {register_name}")
-
-        register_def = AC_CHARGER_PARAMETER_REGISTERS[register_name]
-
-        encoded_values = self._encode_value(
-            value=value,
-            data_type=register_def.data_type,
-            gain=register_def.gain,
-        )
-
-        if len(encoded_values) == 1:
-            await self.async_write_register(
-                slave_id=slave_id, # Use looked-up slave_id
-                address=register_def.address,
-                value=encoded_values[0],
-                register_type=register_def.register_type,
-            )
-        else:
-            await self.async_write_registers(
-                slave_id=slave_id, # Use looked-up slave_id
-                address=register_def.address,
-                values=encoded_values,
-                register_type=register_def.register_type,
-            )
-    

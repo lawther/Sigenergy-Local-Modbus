@@ -92,7 +92,7 @@ def _get_grid_code_display(data, device_name): # Changed inverter_id to device_n
 
 
 
-@dataclass
+@dataclass(frozen=True)
 class SigenergySelectEntityDescription(SelectEntityDescription):
     """Class describing Sigenergy select entities."""
 
@@ -127,8 +127,8 @@ PLANT_SELECTS = [
             RemoteEMSControlMode.COMMAND_DISCHARGING_PV_FIRST: "Command Discharging (PV First)",
             RemoteEMSControlMode.COMMAND_DISCHARGING_ESS_FIRST: "Command Discharging (ESS First)",
         }.get(data["plant"].get("plant_remote_ems_control_mode"), "Unknown"),
-        select_option_fn=lambda hub, _, option: hub.async_write_plant_parameter( # Already returns awaitable
-            "plant_remote_ems_control_mode",
+        select_option_fn=lambda hub, _, option: hub.async_write_parameter( # Already returns awaitable
+            "plant", None, "plant_remote_ems_control_mode",
             {
                 "PCS Remote Control": RemoteEMSControlMode.PCS_REMOTE_CONTROL,
                 "Standby": RemoteEMSControlMode.STANDBY,
@@ -153,9 +153,8 @@ INVERTER_SELECTS = [
         # Use identifier (device_name for inverters)
         current_option_fn=lambda data, identifier: _get_grid_code_display(data, identifier),
         # Use identifier (device_name for inverters)
-        select_option_fn=lambda hub, identifier, option: hub.async_write_inverter_parameter( # Already returns awaitable
-            identifier,
-            "inverter_grid_code",
+        select_option_fn=lambda hub, identifier, option: hub.async_write_parameter( # Already returns awaitable
+            "inverter", identifier, "inverter_grid_code",
             COUNTRY_TO_CODE_MAP.get(option, 0)  # Default to 0 if country not found
         ),
         entity_registry_enabled_default=False,
