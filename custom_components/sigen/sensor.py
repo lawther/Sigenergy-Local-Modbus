@@ -13,17 +13,15 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry # pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import (
     CONF_NAME,
-    UnitOfEnergy,
     STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity # pylint: disable=no-name-in-module, syntax-error
 
 from .const import (
     CONF_SLAVE_ID, # Added CONF_SLAVE_ID
@@ -35,7 +33,7 @@ from .const import (
     RunningState,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
-from .calculated_sensor import SigenergyCalculations as SC, SigenergyCalculatedSensors as SCS, SigenergyIntegrationSensor
+from .calculated_sensor import SigenergyCalculations as SC,SigenergyCalculatedSensors as SCS, SigenergyIntegrationSensor
 from .static_sensor import StaticSensors as SS
 from .common import *
 
@@ -196,7 +194,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
     def __init__(
         self,
         coordinator: SigenergyDataUpdateCoordinator,
-        description: SensorEntityDescription,
+        description: SensorEntityDescription | SigenergySensorEntityDescription,
         name: str,
         device_type: str,
         device_id: Optional[str] = None,
@@ -217,8 +215,8 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             self._device_info_override = device_info
             self._round_digits = None
 
-            if hasattr(description, 'round_digits') and description.round_digits is not None:
-                self._round_digits = description.round_digits
+            if hasattr(description, 'round_digits') and description.round_digits is not None: # type: ignore
+                self._round_digits = description.round_digits # type: ignore
 
 
             _LOGGER.debug("Initializing SigenergySensor: %s", name)
