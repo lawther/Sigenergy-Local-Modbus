@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry  # pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -20,13 +20,10 @@ from pymodbus.client.mixin import ModbusClientMixin
 from .const import ModbusRegisterDefinition
 from .const import (
     CONF_DC_CHARGER_CONNECTIONS,
-    CONF_INVERTER_COUNT,
-    CONF_INVERTER_SLAVE_ID,
     CONF_INVERTER_CONNECTIONS,
     CONF_AC_CHARGER_CONNECTIONS,
     CONF_PLANT_ID,
     CONF_SLAVE_ID,
-    DEFAULT_INVERTER_COUNT,
     DEFAULT_PLANT_SLAVE_ID,
     DataType,
     PLANT_RUNNING_INFO_REGISTERS,
@@ -535,7 +532,8 @@ class SigenergyModbusHub:
             )
         elif data_type == DataType.STRING:
             # return value  # No gain for strings
-            return ModbusClientMixin.convert_from_registers(registers, data_type=ModbusClientMixin.DATATYPE.STRING)
+            return ModbusClientMixin.convert_from_registers(
+                registers, data_type=ModbusClientMixin.DATATYPE.STRING)  # type: ignore[no-untyped-call]
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
 
@@ -543,7 +541,7 @@ class SigenergyModbusHub:
         if isinstance(value, (int, float)) and gain != 1:
             value = value / gain
 
-        return value
+        return value  # type: ignore[no-untyped-return]
 
     def _encode_value(
         self, 
@@ -568,17 +566,17 @@ class SigenergyModbusHub:
         _LOGGER.debug("Encoding value %s with data_type %s", value, data_type)
         
         if data_type == DataType.U16:
-            builder.add_16bit_uint(value)
+            builder.add_16bit_uint(int(value))
         elif data_type == DataType.S16:
-            builder.add_16bit_int(value)
+            builder.add_16bit_int(int(value))
         elif data_type == DataType.U32:
-            builder.add_32bit_uint(value)
+            builder.add_32bit_uint(int(value))
         elif data_type == DataType.S32:
-            builder.add_32bit_int(value)
+            builder.add_32bit_int(int(value))
         elif data_type == DataType.U64:
-            builder.add_64bit_uint(value)
+            builder.add_64bit_uint(int(value))
         elif data_type == DataType.STRING:
-            builder.add_string(value)
+            builder.add_string(str(value))
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
         
