@@ -142,11 +142,6 @@ async def async_setup_entry(
         entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySwitch,
                                            AC_CHARGER_SWITCHES, DEVICE_TYPE_AC_CHARGER)
 
-    # Add DC charger Switches
-    for device_name, device_conn in coordinator.hub.dc_charger_connections.items():
-        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySwitch,
-                                           DC_CHARGER_SWITCHES, DEVICE_TYPE_DC_CHARGER)
-        
     _LOGGER.debug(f"Class to add {SigenergySwitch}")
     async_add_entities(entities)
     return

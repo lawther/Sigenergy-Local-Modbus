@@ -49,6 +49,7 @@ from .const import (
     DEFAULT_READ_ONLY,
     CONF_INVERTER_HAS_DCCHARGER,
     DEFAULT_INVERTER_HAS_DCCHARGER,
+    CONF_PLANT_CONNECTION
 )
 
 # Define constants that might not be in the .const module
@@ -217,9 +218,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Store plant configuration
         self._data.update(user_input)
         
-        # Always use the default plant ID (247)
-        self._data[CONF_PLANT_ID] = DEFAULT_PLANT_SLAVE_ID
-
         # Process and validate inverter ID
         try:
             inverter_id = int(user_input[CONF_INVERTER_SLAVE_ID])
@@ -234,6 +232,13 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 data_schema=STEP_PLANT_CONFIG_SCHEMA,
                 errors=errors
             )
+        
+        # Create the plant connection dictionary
+        self._data[CONF_PLANT_CONNECTION] = {
+            CONF_HOST: self._data[CONF_HOST],
+            CONF_PORT: self._data[CONF_PORT],
+            CONF_SLAVE_ID: DEFAULT_PLANT_SLAVE_ID,
+        }
 
         # Create the inverter connections dictionary for the implicit first inverter
         inverter_name = "Inverter"
@@ -245,7 +250,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 CONF_INVERTER_HAS_DCCHARGER: DEFAULT_INVERTER_HAS_DCCHARGER
             }
         }
-        
+
         # Store the plant name generated based on the number of installed plants
         plant_no = get_highest_device_number(list(self._plants.keys()))
 

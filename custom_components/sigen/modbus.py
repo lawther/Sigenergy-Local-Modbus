@@ -101,12 +101,6 @@ class SigenergyModbusHub:
         _LOGGER.debug("AC Charger connections: %s", self.ac_charger_connections)
         self.ac_charger_count = len(self.ac_charger_connections)
 
-        # Get DC Charger connections
-        self.dc_charger_connections = config_entry.data.get(CONF_DC_CHARGER_CONNECTIONS, {})
-        _LOGGER.debug("DC Charger connections: %s", self.dc_charger_connections)
-        self.dc_charger_count = len(self.dc_charger_connections)
-
-
         # Other slave IDs and their connection details
 
         # Read-only mode setting
@@ -131,11 +125,6 @@ class SigenergyModbusHub:
 
         # For AC chargers, look up their connection details
         for name, details in self.ac_charger_connections.items():
-            if details.get(CONF_SLAVE_ID) == slave_id:
-                return (details[CONF_HOST], details[CONF_PORT])
-
-        # For DC chargers, look up their connection details
-        for name, details in self.dc_charger_connections.items():
             if details.get(CONF_SLAVE_ID) == slave_id:
                 return (details[CONF_HOST], details[CONF_PORT])
 
@@ -592,6 +581,7 @@ class SigenergyModbusHub:
         # Probe registers if not done yet
         if not self.plant_registers_probed:
             try:
+                self.ac_charger_connections
                 await self.async_probe_registers(self.plant_id, PLANT_RUNNING_INFO_REGISTERS)
                 # Also probe parameter registers that can be read
                 await self.async_probe_registers(self.plant_id, {
@@ -679,7 +669,7 @@ class SigenergyModbusHub:
             **INVERTER_RUNNING_INFO_REGISTERS,
             **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
             if reg.register_type != RegisterType.WRITE_ONLY},
-            **DC_CHARGER_PARAMETER_REGISTERS,
+            **DC_CHARGER_RUNNING_INFO_REGISTERS,
             **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
             if reg.register_type != RegisterType.WRITE_ONLY},
         }
@@ -1036,39 +1026,4 @@ class SigenergyModbusHub:
                 register_type=register_def.register_type,
             )
             
-    async def async_write_dc_charger_parameter(
-        self,
-        dc_charger_id: int,
-        register_name: str,
-        value: Union[int, float, str]
-    ) -> None:
-        """Write a DC charger parameter."""
-        # Check if read-only mode is enabled
-        if self.read_only:
-            raise SigenergyModbusError("Cannot write parameter while in read-only mode")
-            
-        if register_name not in DC_CHARGER_PARAMETER_REGISTERS:
-            raise SigenergyModbusError(f"Unknown DC charger parameter: {register_name}")
-        
-        register_def = DC_CHARGER_PARAMETER_REGISTERS[register_name]
-        
-        encoded_values = self._encode_value(
-            value=value,
-            data_type=register_def.data_type,
-            gain=register_def.gain,
-        )
-        
-        if len(encoded_values) == 1:
-            await self.async_write_register(
-                slave_id=dc_charger_id,
-                address=register_def.address,
-                value=encoded_values[0],
-                register_type=register_def.register_type,
-            )
-        else:
-            await self.async_write_registers(
-                slave_id=dc_charger_id,
-                address=register_def.address,
-                values=encoded_values,
-                register_type=register_def.register_type,
-            )
+    
