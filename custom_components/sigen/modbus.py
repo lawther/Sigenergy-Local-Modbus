@@ -123,33 +123,33 @@ class SigenergyModbusHub:
         # For the plant, use the plant's connection details
         if slave_id == self.plant_id:
             return (self._plant_host, self._plant_port)
-            
+
         # For inverters, look up their connection details
         for name, details in self.inverter_connections.items():
             if details.get(CONF_SLAVE_ID) == slave_id:
                 return (details[CONF_HOST], details[CONF_PORT])
-        
+
         # For AC chargers, look up their connection details
         for name, details in self.ac_charger_connections.items():
             if details.get(CONF_SLAVE_ID) == slave_id:
                 return (details[CONF_HOST], details[CONF_PORT])
-                
+
         # For DC chargers, look up their connection details
         for name, details in self.dc_charger_connections.items():
             if details.get(CONF_SLAVE_ID) == slave_id:
                 return (details[CONF_HOST], details[CONF_PORT])
-                
+
         # If no specific connection found, use the plant's connection details as default
         return (self._plant_host, self._plant_port)
 
     async def _get_client(self, slave_id: int) -> AsyncModbusTcpClient:
         """Get or create a Modbus client for the given slave ID."""
         key = self._get_connection_key(slave_id)
-        
+
         if key not in self._clients or not self._connected.get(key, False):
             if key not in self._locks:
                 self._locks[key] = asyncio.Lock()
-                
+
             async with self._locks[key]:
                 if key not in self._clients or not self._connected.get(key, False):
                     host, port = key
@@ -159,14 +159,14 @@ class SigenergyModbusHub:
                         timeout=10,
                         retries=3
                     )
-                    
+
                     connected = await self._clients[key].connect()
                     if not connected:
                         raise SigenergyModbusError(f"Failed to connect to {host}:{port}")
-                    
+
                     self._connected[key] = True
                     _LOGGER.info("Connected to Sigenergy system at %s:%s", host, port)
-        
+
         return self._clients[key]
     async def async_connect(self, slave_id: Optional[int] = None) -> None:
         """Connect to the Modbus device.
@@ -176,10 +176,10 @@ class SigenergyModbusHub:
         """
         # Cast to help type checker and ensure we always have an int
         actual_slave_id: int = self.plant_id if slave_id is None else slave_id
-            
+
         key = self._get_connection_key(actual_slave_id)
         await self._get_client(actual_slave_id)
-        
+
         if not self._connected.get(key, False):
             host, port = key
             raise SigenergyModbusError(
@@ -533,7 +533,8 @@ class SigenergyModbusHub:
         elif data_type == DataType.STRING:
             # return value  # No gain for strings
             return ModbusClientMixin.convert_from_registers(
-                registers, data_type=ModbusClientMixin.DATATYPE.STRING)  # type: ignore[no-untyped-call]
+                registers,
+                data_type=ModbusClientMixin.DATATYPE.STRING)  # type: ignore[no-untyped-call]
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
 
@@ -977,7 +978,7 @@ class SigenergyModbusHub:
                         _LOGGER.debug("Error with approach %d: %s", i+1, result)
                         last_error = result
                         
-                except Exception as ex:
+                except Exception as ex:  # pylint: disable=broad-exception-caught
                     _LOGGER.debug("Exception with approach %d: %s", i+1, ex)
                     last_error = ex
             
