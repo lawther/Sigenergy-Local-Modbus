@@ -858,9 +858,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
         # Wipe all old entities and devices
         _LOGGER.debug("Inverter config updated (removed), removing existing devices/entities before reload.")
-        entity_registry: EntityRegistry = async_get_entity_registry(self.hass)
-        device_registry: DeviceRegistry = async_get_device_registry(self.hass)
-        await self._async_remove_devices_and_entities(device_registry, entity_registry, inverter_name)
+        await self._async_remove_devices_and_entities(inverter_name)
 
         # Save configuration to file
         self.hass.config_entries._async_schedule_save()
@@ -953,9 +951,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
         # Wipe all old entities and devices
-        entity_registry: EntityRegistry = async_get_entity_registry(self.hass)
-        device_registry: DeviceRegistry = async_get_device_registry(self.hass)
-        await self._async_remove_devices_and_entities(device_registry, entity_registry, ac_charger_name)
+        await self._async_remove_devices_and_entities(ac_charger_name)
 
         # Save configuration to file
         self.hass.config_entries._async_schedule_save()
@@ -1014,9 +1010,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
             # Wipe all old entities and devices
             _LOGGER.debug("Inverter config updated (removed), removing existing devices/entities before reload.")
-            entity_registry: EntityRegistry = async_get_entity_registry(self.hass)
-            device_registry: DeviceRegistry = async_get_device_registry(self.hass)
-            await self._async_remove_devices_and_entities(device_registry, entity_registry, inverter_name)
+            await self._async_remove_devices_and_entities(inverter_name)
 
             # Save configuration to file
             self.hass.config_entries._async_schedule_save()
@@ -1032,17 +1026,16 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_create_entry(title="", data={}) # Existing return for non-removal
 
     async def _async_remove_devices_and_entities(self,
-        device_registry: DeviceRegistry,
-        entity_registry: EntityRegistry,
         device_name: str | None = None
-
     ) -> None:
         """Remove all devices and entities associated with this config entry."""
+        device_registry = async_get_device_registry(self.hass)
+        entity_registry = async_get_entity_registry(self.hass)
+
         _LOGGER.info(
             "Removing all devices and entities for config entry %s prior to reload",
             self.config_entry.entry_id
         )
-        # Use the imported helper function to find devices associated with the config entry
         devices_in_config = async_entries_for_config_entry(
             device_registry, self.config_entry.entry_id
         )
@@ -1054,10 +1047,8 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         _LOGGER.debug("Found total of %d devices.", len(devices_in_config))
 
         for device_entry in devices_in_config:
-            # If not the specified device, continue
             if device_name and device_entry.name and not device_entry.name.startswith(device_name):
-                continue    
-            # Find entities associated with the device
+                continue
             entity_entries = async_entries_for_device(
                 entity_registry, device_entry.id, include_disabled_entities=True
             )
@@ -1068,14 +1059,12 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 device_entry.name_by_user or "",
                 device_entry.name or ""
             )
-            # Remove entities first
             for entity_entry in entity_entries:
                 _LOGGER.debug("Removing entity: %s", entity_entry.entity_id)
                 entity_registry.async_remove(entity_entry.entity_id)
-            
-            # Then remove the device
+
             _LOGGER.debug("Removing device: %s", device_entry.id)
             device_registry.async_remove_device(device_entry.id)
-        
+
         _LOGGER.info("Finished removing devices and entities for config entry %s.", self.config_entry.entry_id)
 
