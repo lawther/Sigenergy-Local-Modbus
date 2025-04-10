@@ -990,40 +990,47 @@ class SigenergyModbusHub:
             )
 
     async def async_write_ac_charger_parameter(
-        self, 
-        ac_charger_id: int, 
-        register_name: str, 
+        self,
+        ac_charger_name: str, # Changed from ac_charger_id: int
+        register_name: str,
         value: Union[int, float, str]
     ) -> None:
-        """Write an AC charger parameter."""
+        """Write an AC charger parameter using its name."""
         # Check if read-only mode is enabled
         if self.read_only:
             raise SigenergyModbusError("Cannot write parameter while in read-only mode")
-            
+
+        # Look up AC charger details by name
+        if ac_charger_name not in self.ac_charger_connections:
+            raise SigenergyModbusError(f"Unknown AC charger name provided for writing parameter: {ac_charger_name}")
+        ac_charger_info = self.ac_charger_connections[ac_charger_name]
+        slave_id = ac_charger_info.get(CONF_SLAVE_ID)
+        if slave_id is None:
+            raise SigenergyModbusError(f"Slave ID not configured for AC charger: {ac_charger_name}")
+
         if register_name not in AC_CHARGER_PARAMETER_REGISTERS:
             raise SigenergyModbusError(f"Unknown AC charger parameter: {register_name}")
-        
+
         register_def = AC_CHARGER_PARAMETER_REGISTERS[register_name]
-        
+
         encoded_values = self._encode_value(
             value=value,
             data_type=register_def.data_type,
             gain=register_def.gain,
         )
-        
+
         if len(encoded_values) == 1:
             await self.async_write_register(
-                slave_id=ac_charger_id,
+                slave_id=slave_id, # Use looked-up slave_id
                 address=register_def.address,
                 value=encoded_values[0],
                 register_type=register_def.register_type,
             )
         else:
             await self.async_write_registers(
-                slave_id=ac_charger_id,
+                slave_id=slave_id, # Use looked-up slave_id
                 address=register_def.address,
                 values=encoded_values,
                 register_type=register_def.register_type,
             )
-            
     

@@ -36,7 +36,7 @@ from .common import(generate_device_name, generate_sigen_entity, generate_unique
 _LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class SigenergyNumberEntityDescription(NumberEntityDescription):
     """Class describing Sigenergy number entities."""
 
@@ -451,7 +451,7 @@ AC_CHARGER_NUMBERS = [
         native_max_value=32,  # This will be adjusted dynamically based on rated current
         native_step=1,
         entity_category=EntityCategory.CONFIG,
-        # identifier here is ac_charger_id
+        # identifier here will be ac_charger_name
         value_fn=lambda data, identifier: data["ac_chargers"].get(identifier, {}).get("ac_charger_output_current", 0),
         set_value_fn=lambda hub, identifier, value: hub.async_write_ac_charger_parameter(identifier, "ac_charger_output_current", value), # Already returns awaitable
     ),
@@ -646,7 +646,7 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
         """Set the value of the number."""
         try:
             # Pass device_name for inverters, device_id otherwise
-            identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+            identifier = self._device_name # Use device_name for both Inverter and AC Charger now
             await self.entity_description.set_value_fn(self.hub, identifier, value)
             await self.coordinator.async_request_refresh()
         except SigenergyModbusError as error:

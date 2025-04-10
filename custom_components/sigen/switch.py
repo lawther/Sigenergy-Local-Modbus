@@ -29,7 +29,7 @@ from .modbus import SigenergyModbusError
 _LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class SigenergySwitchEntityDescription(SwitchEntityDescription):
     """Class describing Sigenergy switch entities."""
 
@@ -97,7 +97,7 @@ AC_CHARGER_SWITCHES = [
         key="ac_charger_start_stop",
         name="AC Charger Power",
         icon="mdi:ev-station",
-        # identifier here is ac_charger_id
+        # identifier here will be ac_charger_name
         is_on_fn=lambda data, identifier: data["ac_chargers"].get(identifier, {}).get("ac_charger_system_state") > 0,
         turn_on_fn=lambda hub, identifier: hub.async_write_ac_charger_parameter(identifier, "ac_charger_start_stop", 0), # Already returns awaitable
         turn_off_fn=lambda hub, identifier: hub.async_write_ac_charger_parameter(identifier, "ac_charger_start_stop", 1), # Already returns awaitable
@@ -266,7 +266,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         """Turn the switch on."""
         try:
             # Pass device_name for inverters, device_id otherwise
-            identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+            identifier = self._device_name # Use device_name for both Inverter and AC Charger now
             await self.entity_description.turn_on_fn(self.hub, identifier)
             await self.coordinator.async_request_refresh()
         except SigenergyModbusError as error:
@@ -276,7 +276,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         """Turn the switch off."""
         try:
             # Pass device_name for inverters, device_id otherwise
-            identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+            identifier = self._device_name # Use device_name for both Inverter and AC Charger now
             await self.entity_description.turn_off_fn(self.hub, identifier)
             await self.coordinator.async_request_refresh()
         except SigenergyModbusError as error:
