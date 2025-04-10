@@ -724,22 +724,30 @@ class SigenergyModbusHub:
 
         return data
 
-    async def async_read_ac_charger_data(self, ac_charger_id: int) -> Dict[str, Any]:
+    async def async_read_ac_charger_data(self, ac_charger_name: str) -> Dict[str, Any]:
         """Read all supported AC charger data."""
         data = {}
 
+        # Look up AC charger details by name
+        if ac_charger_name not in self.ac_charger_connections:
+            _LOGGER.error("Unknown AC charger name provided for reading data: %s", ac_charger_name)
+            return {}  # Return empty dict if AC charger name is not found
+
+        ac_charger_info = self.ac_charger_connections[ac_charger_name]
+        slave_id = ac_charger_info.get(CONF_SLAVE_ID)
+
         # Probe registers if not done yet for this AC charger
-        if ac_charger_id not in self.ac_charger_registers_probed:
+        if ac_charger_name not in self.ac_charger_registers_probed:
             try:
-                await self.async_probe_registers(ac_charger_id, AC_CHARGER_RUNNING_INFO_REGISTERS)
+                await self.async_probe_registers(slave_id, AC_CHARGER_RUNNING_INFO_REGISTERS)
                 # Also probe parameter registers that can be read
-                await self.async_probe_registers(ac_charger_id, {
+                await self.async_probe_registers(slave_id, {
                     name: reg for name, reg in AC_CHARGER_PARAMETER_REGISTERS.items()
                     if reg.register_type != RegisterType.WRITE_ONLY
                 })
-                self.ac_charger_registers_probed.add(ac_charger_id)
+                self.ac_charger_registers_probed.add(ac_charger_name)
             except Exception as ex:
-                _LOGGER.error("Failed to probe AC charger %d registers: %s", ac_charger_id, ex)
+                _LOGGER.error("Failed to probe AC charger '%s' (Slave ID: %s) registers: %s", ac_charger_name, slave_id, ex)
                 # Continue with reading, some registers might still work
 
         # Read registers from both running info and parameter registers
@@ -754,7 +762,7 @@ class SigenergyModbusHub:
             if register_def.is_supported is not False:  # Read if supported or unknown
                 try:
                     registers = await self.async_read_registers(
-                        slave_id=ac_charger_id,
+                        slave_id=slave_id,
                         address=register_def.address,
                         count=register_def.count,
                         register_type=register_def.register_type,
@@ -773,14 +781,14 @@ class SigenergyModbusHub:
                     )
 
                     data[register_name] = value
-                    # _LOGGER.debug("Read register %s = %s from AC charger %d", register_name, value, ac_charger_id)
+                    # _LOGGER.debug("Read register %s = %s from AC charger '%s'", register_name, value, ac_charger_name)
 
                     # If we successfully read a register that wasn't probed, mark it as supported
                     if register_def.is_supported is None:
                         register_def.is_supported = True
 
                 except Exception as ex:
-                    _LOGGER.error("Error reading AC charger %d register %s: %s", ac_charger_id, register_name, ex)
+                    _LOGGER.error("Error reading AC charger '%s' register %s: %s", ac_charger_name, register_name, ex)
                     data[register_name] = None
                     # If this is the first time we fail to read this register, mark it as unsupported
                     if register_def.is_supported is None:
@@ -832,15 +840,17 @@ class SigenergyModbusHub:
                         approach.get("value", approach.get("values"))
                     )
                     
-                    async with self.lock:
+                    key = (self._plant_host, self._plant_port)
+                    async with self._locks[key]:
+                        client = self._clients[key]  # type: ignore
                         if approach["function"] == "write_registers":
-                            result = await self.client.write_registers(
+                            result = await client.write_registers(
                                 address=approach["address"],
                                 values=approach["values"],
                                 slave=self.plant_id
-                            )
+                            )  # type: ignore
                         else:  # write_register
-                            result = await self.client.write_register(
+                            result = await client.write_register(
                                 address=approach["address"],
                                 value=approach["value"],
                                 slave=self.plant_id
@@ -892,8 +902,10 @@ class SigenergyModbusHub:
                         i+1, register_name, approach["address"], encoded_values
                     )
                     
-                    async with self.lock:
-                        result = await self.client.write_registers(
+                    key = (self._plant_host, self._plant_port)
+                    async with self._locks[key]:
+                        client = self._clients[key]  # type: ignore
+                        result = await client.write_registers(
                             address=approach["address"],
                             values=encoded_values,
                             slave=self.plant_id
