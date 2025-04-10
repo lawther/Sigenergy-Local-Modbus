@@ -2,16 +2,15 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import async_timeout
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=no-name-in-module, syntax-error
 
-from .const import DOMAIN, CONF_SLAVE_ID # Import CONF_SLAVE_ID
+from .const import CONF_SLAVE_ID
 from .modbus import SigenergyModbusHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,7 +49,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 inverter_data = {}
                 for inverter_name in self.hub.inverter_connections.keys():
                     inverter_data[inverter_name] = await self.hub.async_read_inverter_data(inverter_name)
-                    # _LOGGER.debug("Inverter data for %s: %s", inverter_name, inverter_data[inverter_name])
+                    _LOGGER.debug("[coordinator] Inverter data for %s: %s", inverter_name, inverter_data[inverter_name])
 
                 # Fetch AC charger data for each AC charger
                 ac_charger_data = {}
