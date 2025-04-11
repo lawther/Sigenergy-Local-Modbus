@@ -114,8 +114,13 @@ class SigenergyModbusHub:
         self.ac_charger_registers_probed = set()
         self.dc_charger_registers_probed = set()
 
-    def _get_connection_key(self, slave_id: int) -> Tuple[str, int]:
-        """Get the connection key (host, port) for a slave ID."""
+    def _get_connection_key(self, device_info: dict) -> Tuple[str, int]:
+        """Get the connection key (host, port) for a device_info dict."""
+        slave_id_value = device_info.get(CONF_SLAVE_ID)
+        if slave_id_value is None:
+            raise ValueError(f"Slave ID is missing in device info: {device_info}")
+        slave_id = int(slave_id_value)
+
         # For the plant, use the plant's connection details
         if slave_id == self.plant_id:
             return (self._plant_host, self._plant_port)
@@ -135,11 +140,8 @@ class SigenergyModbusHub:
 
     async def _get_client(self, device_info: dict) -> AsyncModbusTcpClient:
         """Get or create a Modbus client for the given device_info dict."""
-        slave_id_value = device_info.get(CONF_SLAVE_ID)
-        if slave_id_value is None:
-            raise ValueError(f"Slave ID is missing in device info: {device_info}")
-        slave_id = int(slave_id_value)
-        key = self._get_connection_key(slave_id)
+
+        key = self._get_connection_key(device_info)
 
         if key not in self._clients or not self._connected.get(key, False):
             if key not in self._locks:
@@ -165,16 +167,12 @@ class SigenergyModbusHub:
         return self._clients[key]
     async def async_connect(self, device_info: dict) -> None:
         """Connect to the Modbus device using device_info dict."""
-        slave_id_value = device_info.get(CONF_SLAVE_ID)
-        if slave_id_value is None:
-            raise ValueError(f"Slave ID is missing in device info: {device_info}")
-        slave_id = int(slave_id_value)
-        key = self._get_connection_key(slave_id)
+        key = self._get_connection_key(device_info)
         await self._get_client(device_info)
         if not self._connected.get(key, False):
             host, port = key
             raise SigenergyModbusError(
-                f"Failed to establish connection to device {slave_id} at {host}:{port}"
+                f"Failed to establish connection to device at {host}:{port}"
             )
 
     async def async_close(self) -> None:
@@ -253,7 +251,7 @@ class SigenergyModbusHub:
             raise ValueError(f"Slave ID is missing in device info: {device_info}")
         slave_id = int(slave_id_value)
         client = await self._get_client(device_info)
-        key = self._get_connection_key(slave_id)
+        key = self._get_connection_key(device_info)
             
         for name, register in register_defs.items():
             try:
@@ -325,7 +323,7 @@ class SigenergyModbusHub:
 
         try:
             client = await self._get_client(device_info)
-            key = self._get_connection_key(slave_id)
+            key = self._get_connection_key(device_info)
 
             async with self._locks[key]:
                 with _suppress_pymodbus_logging():
@@ -341,7 +339,7 @@ class SigenergyModbusHub:
                     return result.registers
 
         except ConnectionException as ex:
-            key = self._get_connection_key(slave_id) # slave_id is already extracted
+            key = self._get_connection_key(device_info)
             self._connected[key] = False
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
         except ModbusException as ex:
@@ -363,7 +361,7 @@ class SigenergyModbusHub:
                 raise ValueError(f"Slave ID is missing in device info: {device_info}")
             slave_id = int(slave_id_value)
             client = await self._get_client(device_info)
-            key = self._get_connection_key(slave_id)
+            key = self._get_connection_key(device_info)
 
             async with self._locks[key]:
                 if register_type in [RegisterType.HOLDING, RegisterType.WRITE_ONLY]:
@@ -442,7 +440,7 @@ class SigenergyModbusHub:
                         f"Register type {register_type} is not writable"
                     )
         except ConnectionException as ex:
-            key = self._get_connection_key(slave_id)
+            key = self._get_connection_key(device_info)
             self._connected[key] = False
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
         except ModbusException as ex:
@@ -464,7 +462,7 @@ class SigenergyModbusHub:
                 raise ValueError(f"Slave ID is missing in device info: {device_info}")
             slave_id = int(slave_id_value)
             client = await self._get_client(device_info)
-            key = self._get_connection_key(slave_id)
+            key = self._get_connection_key(device_info)
 
             async with self._locks[key]:
                 if register_type in [RegisterType.HOLDING, RegisterType.WRITE_ONLY]:
@@ -501,7 +499,7 @@ class SigenergyModbusHub:
                         f"Register type {register_type} is not writable"
                     )
         except ConnectionException as ex:
-            key = self._get_connection_key(slave_id)
+            key = self._get_connection_key(device_info)
             self._connected[key] = False
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
         except ModbusException as ex:
@@ -832,7 +830,7 @@ class SigenergyModbusHub:
         # === Plant-Specific Handling ===
         # Certain plant registers require special handling due to Modbus quirks
         if device_type == "plant":
-            key = self._get_connection_key(slave_id) # Get connection key for client/lock
+            key = self._get_connection_key(plant_info) # Get connection key for client/lock
             # plant_info is guaranteed to be a dict here
 
             # Special handling for plant_remote_ems_enable register
