@@ -227,9 +227,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 step_id=STEP_PLANT_CONFIG, data_schema=STEP_PLANT_CONFIG_SCHEMA
             )
 
-        # Store plant configuration
-        self._data.update(user_input)
-
         # Process and validate inverter ID
         try:
             inverter_id = int(user_input[CONF_INVERTER_SLAVE_ID])
@@ -256,8 +253,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         inverter_name = "Sigen Inverter"
         self._data[CONF_INVERTER_CONNECTIONS] = {
             inverter_name: {
-                CONF_HOST: self._data[CONF_HOST],
-                CONF_PORT: self._data[CONF_PORT],
+                CONF_HOST: self._data[CONF_PLANT_CONNECTION][CONF_HOST],
+                CONF_PORT: self._data[CONF_PLANT_CONNECTION][CONF_PORT],
                 CONF_SLAVE_ID: inverter_id,
                 CONF_INVERTER_HAS_DCCHARGER: DEFAULT_INVERTER_HAS_DCCHARGER,
             }
@@ -301,16 +298,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Store the selected plant ID
         self._selected_plant_entry_id = user_input[CONF_PARENT_PLANT_ID]
         self._data[CONF_PARENT_PLANT_ID] = self._selected_plant_entry_id
-
-        # Get the plant entry to access its configuration
-        _LOGGER.debug("Selected plant entry ID: %s", self._selected_plant_entry_id)
-        plant_entry = self.hass.config_entries.async_get_entry(
-            self._selected_plant_entry_id
-        )
-        if plant_entry:
-            # Copy host and port from the plant
-            self._data[CONF_HOST] = plant_entry.data.get(CONF_HOST)
-            self._data[CONF_PORT] = plant_entry.data.get(CONF_PORT)
 
         # Proceed based on the device type
         device_type = self._data.get(CONF_DEVICE_TYPE)
@@ -645,7 +632,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             # For plants, load all child devices
             plant_entry_id = self.config_entry.entry_id
             plant_name = self._data.get(CONF_NAME, f"Plant {plant_entry_id}")
-            plant_host = self._data.get(CONF_HOST, "")
+            plant_host = self._data.get(CONF_PLANT_CONNECTION, {}).get(CONF_HOST, "")
 
             # Add the plant itself with host info
             self._devices[f"plant_{plant_entry_id}"] = (
@@ -805,10 +792,10 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
         # Update the configuration entry data (only host, port, read_only)
         new_data = dict(self._data) # Start with existing data
-        new_data[CONF_HOST] = user_input[CONF_HOST]
-        new_data[CONF_PORT] = user_input[CONF_PORT]
-        new_data[CONF_READ_ONLY] = user_input[CONF_READ_ONLY]
-        new_data[CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
+        new_data[CONF_PLANT_CONNECTION][CONF_HOST] = user_input[CONF_HOST]
+        new_data[CONF_PLANT_CONNECTION][CONF_PORT] = user_input[CONF_PORT]
+        new_data[CONF_PLANT_CONNECTION][CONF_READ_ONLY] = user_input[CONF_READ_ONLY]
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
 
         # Update data if changed (optional check, keeping existing behavior for now)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)

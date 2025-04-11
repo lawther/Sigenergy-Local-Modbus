@@ -37,15 +37,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hub.async_connect(entry.data[CONF_PLANT_CONNECTION])
         _LOGGER.debug("async_setup_entry: Modbus hub connected successfully")
     except Exception as ex:
-        _LOGGER.error("async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s",
-                      entry.data[CONF_HOST], entry.data[CONF_PORT], ex)
+        _LOGGER.error(
+            "async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s",
+            entry.data[CONF_PLANT_CONNECTION][CONF_HOST],
+            entry.data[CONF_PLANT_CONNECTION][CONF_PORT],
+            ex
+        )
         raise ConfigEntryNotReady(f"Error connecting to Sigenergy system: {ex}") from ex
 
     coordinator = SigenergyDataUpdateCoordinator(
         hass,
         _LOGGER,
         hub=hub,
-        name=f"{DOMAIN}_{entry.data[CONF_HOST]}",
+        name=f"{DOMAIN}_{entry.data[CONF_PLANT_CONNECTION][CONF_HOST]}_{entry.data[CONF_PLANT_CONNECTION][CONF_PORT]}",  # pylint: disable=line-too-long
         update_interval=timedelta(seconds=scan_interval),
     )
     _LOGGER.debug("async_setup_entry: SigenergyDataUpdateCoordinator created: %s", coordinator)
