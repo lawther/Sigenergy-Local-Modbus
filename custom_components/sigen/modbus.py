@@ -116,27 +116,7 @@ class SigenergyModbusHub:
 
     def _get_connection_key(self, device_info: dict) -> Tuple[str, int]:
         """Get the connection key (host, port) for a device_info dict."""
-        slave_id_value = device_info.get(CONF_SLAVE_ID)
-        if slave_id_value is None:
-            raise ValueError(f"Slave ID is missing in device info: {device_info}")
-        slave_id = int(slave_id_value)
-
-        # For the plant, use the plant's connection details
-        if slave_id == self.plant_id:
-            return (self._plant_host, self._plant_port)
-
-        # For inverters, look up their connection details
-        for name, details in self.inverter_connections.items():
-            if details.get(CONF_SLAVE_ID) == slave_id:
-                return (details[CONF_HOST], details[CONF_PORT])
-
-        # For AC chargers, look up their connection details
-        for name, details in self.ac_charger_connections.items():
-            if details.get(CONF_SLAVE_ID) == slave_id:
-                return (details[CONF_HOST], details[CONF_PORT])
-
-        # If no specific connection found, use the plant's connection details as default
-        return (self._plant_host, self._plant_port)
+        return (device_info[CONF_HOST], device_info[CONF_PORT])
 
     async def _get_client(self, device_info: dict) -> AsyncModbusTcpClient:
         """Get or create a Modbus client for the given device_info dict."""
