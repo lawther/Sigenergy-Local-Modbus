@@ -33,9 +33,11 @@ from .const import (
     CONF_PARENT_INVERTER_ID,
     CONF_PARENT_PLANT_ID,
     CONF_SLAVE_ID,
+    CONF_SCAN_INTERVAL,  # Added
     DEFAULT_PORT,
     DEFAULT_PLANT_SLAVE_ID,
     DEFAULT_INVERTER_SLAVE_ID,
+    DEFAULT_SCAN_INTERVAL,  # Added
     DEVICE_TYPE_NEW_PLANT,
     DEVICE_TYPE_PLANT,
     DEVICE_TYPE_INVERTER,
@@ -270,6 +272,9 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         # Set the device type as plant
         self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_PLANT
+
+        # Set default scan interval silently
+        self._data[CONF_SCAN_INTERVAL] = DEFAULT_SCAN_INTERVAL
 
         # Create the configuration entry with the default name
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
@@ -782,24 +787,29 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         """Handle reconfiguration of an existing plant device."""
         errors = {}
 
-        if user_input is None:
-            # Create schema with current values
-            schema = vol.Schema(
+        def getSchema(data_source: Dict):
+            return vol.Schema(
                 {
-                    vol.Required(CONF_HOST, default=self._data.get(CONF_HOST, "")): str,
+                    vol.Required(CONF_HOST, default=data_source.get(CONF_HOST, "")): str,
                     vol.Required(
-                        CONF_PORT, default=self._data.get(CONF_PORT, DEFAULT_PORT)
+                        CONF_PORT, default=data_source.get(CONF_PORT, DEFAULT_PORT)
                     ): int,
                     vol.Required(
                         CONF_READ_ONLY,
-                        default=self._data.get(CONF_READ_ONLY, DEFAULT_READ_ONLY),
+                        default=data_source.get(CONF_READ_ONLY, DEFAULT_READ_ONLY),
                     ): bool,
+                    vol.Required(
+                        CONF_SCAN_INTERVAL,
+                        default=data_source.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
                 }
             )
 
+
+        if user_input is None:
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
-                data_schema=schema,
+                data_schema=getSchema(self._data)
             )
 
         # Validate host and port
@@ -808,35 +818,27 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         )
         errors.update(host_port_errors)
 
+        # Validate scan interval
+
         if errors:
             # Re-create schema with user input values for error display
-            schema = vol.Schema(
-                {
-                    vol.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): str,
-                    vol.Required(
-                        CONF_PORT, default=user_input.get(CONF_PORT, DEFAULT_PORT)
-                    ): int,
-                    vol.Required(
-                        CONF_READ_ONLY,
-                        default=user_input.get(CONF_READ_ONLY, DEFAULT_READ_ONLY),
-                    ): bool,
-                }
-            )
-
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
-                data_schema=schema,
-                errors=errors,
+                data_schema=getSchema(user_input),
+                errors=errors
             )
 
-        # Update the configuration entry with the new data
-        new_data = dict(self._data)
+        # Update the configuration entry data (only host, port, read_only)
+        new_data = dict(self._data) # Start with existing data
         new_data[CONF_HOST] = user_input[CONF_HOST]
         new_data[CONF_PORT] = user_input[CONF_PORT]
         new_data[CONF_READ_ONLY] = user_input[CONF_READ_ONLY]
+        new_data[CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
 
+        # Update data if changed (optional check, keeping existing behavior for now)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
+        # Create/Update the options entry
         return self.async_create_entry(title="", data={})
 
     async def async_step_inverter_config(
