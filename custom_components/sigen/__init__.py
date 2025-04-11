@@ -18,6 +18,7 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusHub
+from .const import CONF_PLANT_CONNECTION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         _LOGGER.debug("async_setup_entry: Connecting to Modbus hub...")
-        await hub.async_connect()
+        await hub.async_connect(entry.data[CONF_PLANT_CONNECTION])
         _LOGGER.debug("async_setup_entry: Modbus hub connected successfully")
     except Exception as ex:
         _LOGGER.error("async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s", entry.data[CONF_HOST], entry.data[CONF_PORT], ex)
