@@ -51,18 +51,20 @@ class ModbusConnectionConfig:
 
 
 @contextmanager
-def _suppress_pymodbus_logging():
+def _suppress_pymodbus_logging(really_suppress: bool = True):
     """Temporarily suppress pymodbus logging."""
-    pymodbus_logger = logging.getLogger("pymodbus")
-    original_level = pymodbus_logger.level
-    original_propagate = pymodbus_logger.propagate
-    pymodbus_logger.setLevel(logging.CRITICAL)
-    pymodbus_logger.propagate = False
+    if really_suppress:
+        pymodbus_logger = logging.getLogger("pymodbus")
+        original_level = pymodbus_logger.level
+        original_propagate = pymodbus_logger.propagate
+        pymodbus_logger.setLevel(logging.CRITICAL)
+        pymodbus_logger.propagate = False
     try:
         yield
     finally:
-        pymodbus_logger.setLevel(original_level)
-        pymodbus_logger.propagate = original_propagate
+        if really_suppress:
+            pymodbus_logger.setLevel(original_level)
+            pymodbus_logger.propagate = original_propagate
 
 class SigenergyModbusError(HomeAssistantError):
     """Exception for Sigenergy Modbus errors."""
@@ -190,9 +192,9 @@ class SigenergyModbusHub:
                 max_reasonable = {
                     "voltage": 1000,  # 1000V
                     "current": 1000,  # 1000A
-                    "power": 100,     # 100kW
-                    "energy": 100000, # 100MWh
-                    "temperature": 100, # 100°C
+                    "power": 1000,     # 1000kW
+                    "energy": 10000000, # 10000MWh
+                    "temperature": 200, # 200°C
                     "percentage": 120  # 120% Some batteries can go above 100% when charging
                 }
                 
@@ -203,10 +205,10 @@ class SigenergyModbusHub:
                         return 0 <= abs(value) <= max_reasonable["voltage"]
                     elif any(u in unit for u in ["a", "amp"]):
                         return 0 <= abs(value) <= max_reasonable["current"]
-                    elif any(u in unit for u in ["w", "watt"]):
-                        return 0 <= abs(value) <= max_reasonable["power"]
                     elif any(u in unit for u in ["wh", "kwh"]):
                         return 0 <= abs(value) <= max_reasonable["energy"]
+                    elif any(u in unit for u in ["w", "watt"]):
+                        return 0 <= abs(value) <= max_reasonable["power"]
                     elif any(u in unit for u in ["c", "f", "temp"]):
                         return -50 <= value <= max_reasonable["temperature"]
                     elif "%" in unit:
@@ -236,7 +238,7 @@ class SigenergyModbusHub:
             try:
                 # Get raw result from appropriate read method
                 async with self._locks[key]:
-                    with _suppress_pymodbus_logging():
+                    with _suppress_pymodbus_logging(really_suppress=True):
                         if register.register_type == RegisterType.READ_ONLY:
                             result = await client.read_input_registers(
                                 address=register.address,
@@ -262,13 +264,13 @@ class SigenergyModbusHub:
 
                 # Validate the response without raising exceptions for expected error cases
                 register.is_supported = self._validate_register_response(result, register)
-                
+
                 if _LOGGER.isEnabledFor(logging.DEBUG) and not register.is_supported:
                     _LOGGER.debug(
-                        "Register %s (%s) for slave %d is not supported. Result: %s, registers: %s",
+                        "Register %s (%s) for device %s is not supported. Result: %s, registers: %s",
                         name,
                         register.address,
-                        slave_id,
+                        device_info,
                         str(result),
                         str(register)
                     )
