@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 
-from homeassistant.config_entries import ConfigEntry  # pylint: disable=no-name-in-module, syntax-error
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError

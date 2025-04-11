@@ -9,7 +9,7 @@
     "python.analysis.autoSearchPaths": true,
     "python.analysis.useLibraryCodeForTypes": true,
     "pylint.args": [
-        "--disable=E0401,E1123,W0613",
+        "--disable=E0401,E1123,W0613,W0212,E0611",
         "--ignore=Reference/core-dev",
         "--ignore=Reference/pymodbus",
         "--init-hook=import sys; sys.path.append('Reference/core-dev')",

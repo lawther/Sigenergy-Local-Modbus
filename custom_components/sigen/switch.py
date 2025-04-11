@@ -2,17 +2,16 @@
 from __future__ import annotations
 import logging
 import asyncio
-from typing import Coroutine
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Coroutine, Callable, Dict, Optional
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity  #pylint: disable=no-name-in-module, syntax-error
 
 from .common import *
 from .const import (

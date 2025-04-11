@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import (  # pylint: disable=no-name-in-module, syntax-error
+from homeassistant.config_entries import (
     ConfigEntry,
 )
 from homeassistant.const import (
@@ -21,7 +21,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import (   # pylint: disable=no-name-in-module, syntax-error
+from homeassistant.helpers.update_coordinator import ( 
     CoordinatorEntity,
 )
 

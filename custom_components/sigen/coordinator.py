@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 import async_timeout
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=no-name-in-module, syntax-error
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .modbus import SigenergyModbusHub
 
