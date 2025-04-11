@@ -88,9 +88,10 @@ class SigenergyModbusHub:
         self._connected: Dict[Tuple[str, int], bool] = {}
         
         # Store connection for plant
-        self._plant_host = config_entry.data[CONF_HOST]
-        self._plant_port = config_entry.data[CONF_PORT]
-        self.plant_id = config_entry.data.get(CONF_PLANT_ID, DEFAULT_PLANT_SLAVE_ID)
+        self.plant_connection = config_entry.data.get(CONF_PLANT_CONNECTION, {})
+        self._plant_host = self.plant_connection[CONF_HOST]
+        self._plant_port = self.plant_connection[CONF_PORT]
+        self.plant_id = self.plant_connection.get(CONF_PLANT_ID, DEFAULT_PLANT_SLAVE_ID)
 
         # Get inverter connections
         self.inverter_connections = config_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
@@ -643,7 +644,6 @@ class SigenergyModbusHub:
         if not self.plant_registers_probed:
             try:
                 plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {})
-                plant_id = plant_info.get(CONF_PLANT_ID, DEFAULT_PLANT_SLAVE_ID)
                 await self.async_probe_registers(plant_info, PLANT_RUNNING_INFO_REGISTERS)
                 # Also probe parameter registers that can be read
                 await self.async_probe_registers(plant_info, {
@@ -679,7 +679,6 @@ class SigenergyModbusHub:
             _LOGGER.error("Unknown inverter name provided for reading data: %s", inverter_name)
             return {} # Return empty dict if inverter name is not found
         inverter_info = self.inverter_connections[inverter_name]
-        slave_id = inverter_info.get(CONF_SLAVE_ID)
 
         # Probe registers if not done yet for this inverter
         if inverter_name not in self.inverter_registers_probed:
@@ -692,7 +691,7 @@ class SigenergyModbusHub:
                 })
                 self.inverter_registers_probed.add(inverter_name)
             except Exception as ex:
-                _LOGGER.error("Failed to probe inverter '%s' (Slave ID: %d) registers: %s", inverter_name, slave_id, ex)
+                _LOGGER.error("Failed to probe inverter '%s' registers: %s", inverter_name, ex)
                 # Continue with reading, some registers might still work
 
         # Read registers from both running info and parameter registers
@@ -721,7 +720,6 @@ class SigenergyModbusHub:
             return {}  # Return empty dict if AC charger name is not found
 
         ac_charger_info = self.ac_charger_connections[ac_charger_name]
-        slave_id = ac_charger_info.get(CONF_SLAVE_ID)
 
         # Probe registers if not done yet for this AC charger
         if ac_charger_name not in self.ac_charger_registers_probed:
@@ -734,7 +732,7 @@ class SigenergyModbusHub:
                 })
                 self.ac_charger_registers_probed.add(ac_charger_name)
             except Exception as ex:
-                _LOGGER.error("Failed to probe AC charger '%s' (Slave ID: %s) registers: %s", ac_charger_name, slave_id, ex)
+                _LOGGER.error("Failed to probe AC charger '%s' registers: %s", ac_charger_name, ex)
                 # Continue with reading, some registers might still work
 
         # Read registers from both running info and parameter registers
@@ -781,7 +779,7 @@ class SigenergyModbusHub:
 
         # Determine slave ID and parameter dictionary based on device type
         if device_type == "plant":
-            slave_id = self.plant_id
+            connection_dict = self.plant_connection
             parameter_registers = PLANT_PARAMETER_REGISTERS
         elif device_type == "inverter":
             if not device_identifier:
@@ -815,9 +813,9 @@ class SigenergyModbusHub:
         register_def = parameter_registers[register_name]
 
         _LOGGER.debug(
-            "Writing %s parameter '%s' (device: %s) with value %s to address %s (type: %s, data_type: %s, gain: %s, slave: %d)",
+            "Writing %s parameter '%s' (device: %s) with value %s to address %s (type: %s, data_type: %s, gain: %s)",
             device_type, register_name, device_identifier or 'plant', value, register_def.address,
-            register_def.register_type, register_def.data_type, register_def.gain, slave_id
+            register_def.register_type, register_def.data_type, register_def.gain
         )
 
         # === Plant-Specific Handling ===
