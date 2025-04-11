@@ -13,20 +13,19 @@ from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity  #pylint: disable=no-name-in-module, syntax-error
 
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
-    EMSWorkMode,
     RemoteEMSControlMode,
     DEVICE_TYPE_DC_CHARGER,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
-from .common import *
+from .common import generate_unique_entity_id, generate_sigen_entity
 
 _LOGGER = logging.getLogger(__name__)
 
