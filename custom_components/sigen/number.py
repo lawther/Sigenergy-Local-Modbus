@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
 from homeassistant.components.number import NumberEntity, NumberEntityDescription
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import (
     CONF_NAME,
     EntityCategory,

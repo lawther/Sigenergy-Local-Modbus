@@ -203,7 +203,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
     round_digits: Optional[int] = None
 
     @classmethod
-    def from_entity_description(cls, description, 
+    def from_entity_description(cls, description,
                                     value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None,
                                     extra_fn_data: Optional[bool] = False,
                                     extra_params: Optional[Dict[str, Any]] = None):

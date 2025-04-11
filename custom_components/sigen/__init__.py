@@ -5,7 +5,7 @@ import logging
 from datetime import timedelta
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -26,7 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Sigenergy ESS from a config entry."""
     _LOGGER.debug("async_setup_entry: Starting setup for entry: %s", entry.title)
-    scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     _LOGGER.debug("async_setup_entry: Scan interval set to %s seconds", scan_interval)
 
     hub = SigenergyModbusHub(hass, entry)
@@ -37,14 +37,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hub.async_connect(entry.data[CONF_PLANT_CONNECTION])
         _LOGGER.debug("async_setup_entry: Modbus hub connected successfully")
     except Exception as ex:
-        _LOGGER.error("async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s", entry.data[CONF_HOST], entry.data[CONF_PORT], ex)
+        _LOGGER.error(
+            "async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s",
+            entry.data[CONF_PLANT_CONNECTION][CONF_HOST],
+            entry.data[CONF_PLANT_CONNECTION][CONF_PORT],
+            ex
+        )
         raise ConfigEntryNotReady(f"Error connecting to Sigenergy system: {ex}") from ex
 
     coordinator = SigenergyDataUpdateCoordinator(
         hass,
         _LOGGER,
         hub=hub,
-        name=f"{DOMAIN}_{entry.data[CONF_HOST]}",
+        name=f"{DOMAIN}_{entry.data[CONF_PLANT_CONNECTION][CONF_HOST]}_{entry.data[CONF_PLANT_CONNECTION][CONF_PORT]}",  # pylint: disable=line-too-long
         update_interval=timedelta(seconds=scan_interval),
     )
     _LOGGER.debug("async_setup_entry: SigenergyDataUpdateCoordinator created: %s", coordinator)
