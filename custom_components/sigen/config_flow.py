@@ -247,6 +247,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             CONF_HOST: user_input[CONF_HOST],
             CONF_PORT: user_input[CONF_PORT],
             CONF_SLAVE_ID: DEFAULT_PLANT_SLAVE_ID,
+            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
         }
 
         # Create the inverter connections dictionary for the implicit first inverter
@@ -749,7 +750,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         """Handle reconfiguration of an existing plant device."""
         errors = {}
 
-        def getSchema(data_source: Dict):
+        def get_schema(data_source: Dict):
             return vol.Schema(
                 {
                     vol.Required(CONF_HOST, default=data_source.get(CONF_HOST, "")): str,
@@ -771,7 +772,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is None:
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
-                data_schema=getSchema(self._data)
+                data_schema=get_schema(self._data[CONF_PLANT_CONNECTION])
             )
 
         # Validate host and port
@@ -786,7 +787,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             # Re-create schema with user input values for error display
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
-                data_schema=getSchema(user_input),
+                data_schema=get_schema(user_input),
                 errors=errors
             )
 
@@ -800,8 +801,13 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # Update data if changed (optional check, keeping existing behavior for now)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
-        # Create/Update the options entry
-        return self.async_create_entry(title="", data={})
+        # Save configuration to file
+        self.hass.config_entries._async_schedule_save()
+
+        # Reload the entry to ensure changes take effect
+        await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+        return self.async_create_entry(title="Sigenergy", data={})
 
     async def async_step_inverter_config(
         self, user_input: dict[str, Any] | None = None
