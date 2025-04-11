@@ -309,12 +309,19 @@ class SigenergyModbusHub:
 
     async def async_read_registers(
         self,
-        slave_id: int,
+        device_info: Dict[str, Any], # Changed from slave_id
         address: int,
         count: int,
         register_type: RegisterType
     ) -> Optional[List[int]]:
         """Read registers from the Modbus device."""
+        slave_id_value = device_info.get(CONF_SLAVE_ID)
+        if slave_id_value is None:
+            _LOGGER.error("Slave ID missing in device info for read operation: %s", device_info)
+            # Return None as per function signature, indicating read failure
+            return None
+        slave_id = int(slave_id_value)
+
         try:
             client = await self._get_client(slave_id)
             key = self._get_connection_key(slave_id)
@@ -333,7 +340,7 @@ class SigenergyModbusHub:
                     return result.registers
 
         except ConnectionException as ex:
-            key = self._get_connection_key(slave_id)
+            key = self._get_connection_key(slave_id) # slave_id is already extracted
             self._connected[key] = False
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
         except ModbusException as ex:
@@ -587,19 +594,13 @@ class SigenergyModbusHub:
         registers_to_read: Dict[str, ModbusRegisterDefinition]
     ) -> Dict[str, Any]:
         """Core logic for reading device data registers."""
-        slave_id_value = device_info.get(CONF_SLAVE_ID)
-        if slave_id_value is None:
-            _LOGGER.error("Slave ID missing in device info for %s '%s': %s", device_type_log_prefix, device_name, device_info)
-            # Return empty data to avoid breaking everything if config is bad.
-            return {}
-        slave_id = int(slave_id_value)
 
         data = {}
         for register_name, register_def in registers_to_read.items():
             if register_def.is_supported is not False:  # Read if supported or unknown
                 try:
                     registers = await self.async_read_registers(
-                        slave_id=slave_id,
+                        device_info=device_info,
                         address=register_def.address,
                         count=register_def.count,
                         register_type=register_def.register_type,
