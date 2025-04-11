@@ -247,13 +247,13 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         # Create the plant connection dictionary
         self._data[CONF_PLANT_CONNECTION] = {
-            CONF_HOST: self._data[CONF_HOST],
-            CONF_PORT: self._data[CONF_PORT],
+            CONF_HOST: user_input[CONF_HOST],
+            CONF_PORT: user_input[CONF_PORT],
             CONF_SLAVE_ID: DEFAULT_PLANT_SLAVE_ID,
         }
 
         # Create the inverter connections dictionary for the implicit first inverter
-        inverter_name = "Inverter"
+        inverter_name = "Sigen Inverter"
         self._data[CONF_INVERTER_CONNECTIONS] = {
             inverter_name: {
                 CONF_HOST: self._data[CONF_HOST],
@@ -352,7 +352,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             # Get the inverter name based on number of existing inverters
             inverter_no = get_highest_device_number(list(inverter_connections.keys()))
             inverter_name = (
-                f"Inverter{'' if inverter_no == 0 else f' {inverter_no + 1}'}"
+                f"Sigen Inverter{'' if inverter_no == 0 else f' {inverter_no + 1}'}"
             )
             _LOGGER.debug("InverterName generated: %s", inverter_name)
 
@@ -389,26 +389,18 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         """Handle the AC charger configuration step when adding a new AC charger device."""
         errors = {}
 
+        def get_schema(data_source: Dict):
+            return vol.Schema({
+                vol.Required(CONF_HOST, default=data_source.get(CONF_HOST, "")): str,
+                vol.Required(CONF_PORT, default=data_source.get(CONF_PORT, DEFAULT_PORT)): int,
+                vol.Required(CONF_SLAVE_ID, default=data_source.get(CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID)): int,
+                })
+
         if user_input is None:
-            schema = vol.Schema(
-                {
-                    vol.Required(CONF_HOST): str,
-                    vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                    vol.Required(CONF_SLAVE_ID): int,
-                }
-            )
             return self.async_show_form(
                 step_id=STEP_AC_CHARGER_CONFIG,
-                data_schema=schema,
+                data_schema=get_schema({}),
             )
-
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_HOST, default=user_input[CONF_HOST]): str,
-                vol.Required(CONF_PORT, default=user_input[CONF_PORT]): int,
-                vol.Required(CONF_SLAVE_ID, default=user_input[CONF_SLAVE_ID]): int,
-            }
-        )
 
         # Validate the slave ID
         slave_id = user_input.get(CONF_SLAVE_ID)
@@ -416,7 +408,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             errors[CONF_SLAVE_ID] = "each_id_must_be_between_1_and_246"
             return self.async_show_form(
                 step_id=STEP_AC_CHARGER_CONFIG,
-                data_schema=STEP_AC_CHARGER_CONFIG_SCHEMA,
+                data_schema=get_schema(user_input),
                 errors=errors,
             )
 
@@ -434,7 +426,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             if errors:
                 return self.async_show_form(
                     step_id=STEP_AC_CHARGER_CONFIG,
-                    data_schema=STEP_AC_CHARGER_CONFIG_SCHEMA,
+                    data_schema=get_schema(user_input),
                     errors=errors,
                 )
 
@@ -444,9 +436,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             )
 
             # Get the number if any from the last ac_charger if any.
-
             ac_charger_name = (
-                f"AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no + 1}'}"
+                f"Sigen AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no + 1}'}"
             )
 
             # Create or update the AC charger connections dictionary
@@ -663,7 +654,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
             # Add inverters
             inverter_connections = self._data.get(CONF_INVERTER_CONNECTIONS, {})
-            _LOGGER.debug("Inverter connections: %s", inverter_connections)
 
             # Process inverters
             for inv_name, inv_details in inverter_connections.items():
@@ -672,11 +662,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 display_name = f"{inv_name} (Host: {inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
 
                 self._devices[device_key] = display_name
-                _LOGGER.debug(
-                    "Added inverter device: %s -> %s",
-                    device_key,
-                    self._devices[device_key],
-                )
 
             # Add AC chargers with host info
             ac_charger_connections = self._data.get(CONF_AC_CHARGER_CONNECTIONS, {})
@@ -687,11 +672,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 display_name = f"{ac_name} (Host: {ac_details.get(CONF_HOST)}, ID: {ac_details.get(CONF_SLAVE_ID)})"
 
                 self._devices[device_key] = display_name
-                _LOGGER.debug(
-                    "Added AC charger device: %s -> %s",
-                    device_key,
-                    self._devices[device_key],
-                )
 
             # Add DC chargers
             for inv_name, inv_details in inverter_connections.items():
@@ -702,11 +682,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 display_name = f"{inv_name} DC Charger (Host: {inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
 
                 self._devices[device_key] = display_name
-                _LOGGER.debug(
-                    "Added DC charger device: %s -> %s",
-                    device_key,
-                    self._devices[device_key],
-                )
 
         self._devices_loaded = True
 
