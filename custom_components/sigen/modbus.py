@@ -573,15 +573,62 @@ class SigenergyModbusHub:
         registers = builder.to_registers()
         _LOGGER.debug("Encoded registers: %s", registers)
         return registers
+    
+    async def _async_read_device_data_core(
+        self,
+        slave_id: int,
+        device_name: str,
+        device_type_log_prefix: str,
+        registers_to_read: Dict[str, ModbusRegisterDefinition]
+    ) -> Dict[str, Any]:
+        """Core logic for reading device data registers."""
+        data = {}
+        for register_name, register_def in registers_to_read.items():
+            if register_def.is_supported is not False:  # Read if supported or unknown
+                try:
+                    registers = await self.async_read_registers(
+                        slave_id=slave_id,
+                        address=register_def.address,
+                        count=register_def.count,
+                        register_type=register_def.register_type,
+                    )
+
+                    if registers is None:
+                        data[register_name] = None
+                        # If probing failed or wasn't done, and read fails, mark as unsupported
+                        if register_def.is_supported is None:
+                            register_def.is_supported = False
+                        continue
+
+                    value = self._decode_value(
+                        registers=registers,
+                        data_type=register_def.data_type,
+                        gain=register_def.gain,
+                    )
+
+                    data[register_name] = value
+                    # _LOGGER.debug("Read register %s = %s from %s '%s'", register_name, value, device_type_log_prefix, device_name)
+
+                    # If we successfully read a register that wasn't probed/confirmed, mark it as supported
+                    if register_def.is_supported is None:
+                        register_def.is_supported = True
+
+                except Exception as ex:
+                    _LOGGER.error(
+                        "Error reading %s '%s' register %s: %s",
+                        device_type_log_prefix, device_name, register_name, ex
+                    )
+                    data[register_name] = None
+                    # If this is the first time we fail to read this register, mark it as unsupported
+                    if register_def.is_supported is None:
+                        register_def.is_supported = False
+        return data
 
     async def async_read_plant_data(self) -> Dict[str, Any]:
         """Read all supported plant data."""
-        data = {}
-
         # Probe registers if not done yet
         if not self.plant_registers_probed:
             try:
-                self.ac_charger_connections
                 await self.async_probe_registers(self.plant_id, PLANT_RUNNING_INFO_REGISTERS)
                 # Also probe parameter registers that can be read
                 await self.async_probe_registers(self.plant_id, {
@@ -600,49 +647,16 @@ class SigenergyModbusHub:
                if reg.register_type != RegisterType.WRITE_ONLY}
         }
         
-        # Read only supported registers
-        for register_name, register_def in all_registers.items():
-            if register_def.is_supported is not False:  # Read if supported or unknown
-                try:
-                    registers = await self.async_read_registers(
-                        slave_id=self.plant_id,
-                        address=register_def.address,
-                        count=register_def.count,
-                        register_type=register_def.register_type,
-                    )
-                    
-                    if registers is None:
-                        data[register_name] = None
-                        if register_def.is_supported is None:
-                            register_def.is_supported = False
-                        continue
-
-                    value = self._decode_value(
-                        registers=registers,
-                        data_type=register_def.data_type,
-                        gain=register_def.gain,
-                    )
-                    
-                    data[register_name] = value
-                    # _LOGGER.debug("Read register %s = %s from plant", register_name, value)
-                    
-                    # If we successfully read a register that wasn't probed, mark it as supported
-                    if register_def.is_supported is None:
-                        register_def.is_supported = True
-                        
-                except Exception as ex:
-                    _LOGGER.error("Error reading plant register %s: %s", register_name, ex)
-                    data[register_name] = None
-                    # If this is the first time we fail to read this register, mark it as unsupported
-                    if register_def.is_supported is None:
-                        register_def.is_supported = False
-        
-        return data
+        # Use the core reading logic
+        return await self._async_read_device_data_core(
+            slave_id=self.plant_id,
+            device_name="plant",
+            device_type_log_prefix="plant",
+            registers_to_read=all_registers
+        )
 
     async def async_read_inverter_data(self, inverter_name: str) -> Dict[str, Any]:
         """Read all supported inverter data."""
-        data = {}
-
         # Look up inverter details by name
         if inverter_name not in self.inverter_connections:
             _LOGGER.error("Unknown inverter name provided for reading data: %s", inverter_name)
@@ -674,50 +688,16 @@ class SigenergyModbusHub:
             if reg.register_type != RegisterType.WRITE_ONLY},
         }
 
-        # Read only supported registers
-        for register_name, register_def in all_registers.items():
-            # _LOGGER.debug("[modbus] read_inverter_data for register_name: %s", register_name)
-            if register_def.is_supported is not False:  # Read if supported or unknown
-                try:
-                    registers = await self.async_read_registers(
-                        slave_id=slave_id,
-                        address=register_def.address,
-                        count=register_def.count,
-                        register_type=register_def.register_type,
-                    )
-
-                    if registers is None:
-                        data[register_name] = None
-                        if register_def.is_supported is None:
-                            register_def.is_supported = False
-                        continue
-
-                    value = self._decode_value(
-                        registers=registers,
-                        data_type=register_def.data_type,
-                        gain=register_def.gain,
-                    )
-
-                    data[register_name] = value
-                    _LOGGER.debug("Read register %s = %s from inverter '%s'", register_name, value, inverter_name)
-
-                    # If we successfully read a register that wasn't probed, mark it as supported
-                    if register_def.is_supported is None:
-                        register_def.is_supported = True
-
-                except Exception as ex:
-                    _LOGGER.error("Error reading inverter '%s' register %s: %s", inverter_name, register_name, ex)
-                    data[register_name] = None
-                    # If this is the first time we fail to read this register, mark it as unsupported
-                    if register_def.is_supported is None:
-                        register_def.is_supported = False
-
-        return data
+        # Use the core reading logic
+        return await self._async_read_device_data_core(
+            slave_id=slave_id,
+            device_name=inverter_name,
+            device_type_log_prefix="inverter",
+            registers_to_read=all_registers
+        )
 
     async def async_read_ac_charger_data(self, ac_charger_name: str) -> Dict[str, Any]:
         """Read all supported AC charger data."""
-        data = {}
-
         # Look up AC charger details by name
         if ac_charger_name not in self.ac_charger_connections:
             _LOGGER.error("Unknown AC charger name provided for reading data: %s", ac_charger_name)
@@ -747,44 +727,13 @@ class SigenergyModbusHub:
                if reg.register_type != RegisterType.WRITE_ONLY}
         }
 
-        # Read only supported registers
-        for register_name, register_def in all_registers.items():
-            if register_def.is_supported is not False:  # Read if supported or unknown
-                try:
-                    registers = await self.async_read_registers(
-                        slave_id=slave_id,
-                        address=register_def.address,
-                        count=register_def.count,
-                        register_type=register_def.register_type,
-                    )
-
-                    if registers is None:
-                        data[register_name] = None
-                        if register_def.is_supported is None:
-                            register_def.is_supported = False
-                        continue
-
-                    value = self._decode_value(
-                        registers=registers,
-                        data_type=register_def.data_type,
-                        gain=register_def.gain,
-                    )
-
-                    data[register_name] = value
-                    # _LOGGER.debug("Read register %s = %s from AC charger '%s'", register_name, value, ac_charger_name)
-
-                    # If we successfully read a register that wasn't probed, mark it as supported
-                    if register_def.is_supported is None:
-                        register_def.is_supported = True
-
-                except Exception as ex:
-                    _LOGGER.error("Error reading AC charger '%s' register %s: %s", ac_charger_name, register_name, ex)
-                    data[register_name] = None
-                    # If this is the first time we fail to read this register, mark it as unsupported
-                    if register_def.is_supported is None:
-                        register_def.is_supported = False
-
-        return data
+        # Use the core reading logic
+        return await self._async_read_device_data_core(
+            slave_id=slave_id,
+            device_name=ac_charger_name,
+            device_type_log_prefix="AC charger",
+            registers_to_read=all_registers
+        )
 
     async def async_write_parameter(
         self,
@@ -1006,4 +955,3 @@ class SigenergyModbusHub:
             _LOGGER.error("Failed to write %s parameter '%s' (device: %s): %s",
                           device_type, register_name, device_identifier or 'plant', ex)
             raise # Re-raise the specific error
-
