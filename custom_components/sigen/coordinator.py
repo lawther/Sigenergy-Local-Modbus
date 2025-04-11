@@ -10,7 +10,6 @@ import async_timeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=no-name-in-module, syntax-error
 
-from .const import CONF_SLAVE_ID
 from .modbus import SigenergyModbusHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,9 +60,6 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "inverters": inverter_data,
                     "ac_chargers": ac_charger_data,
                 }
-
-                # Log the final DC charger data structure
-                # _LOGGER.debug("Coordinator Update: Final dc_chargers data: %s", dc_charger_data)
 
                 return data
         except asyncio.TimeoutError as exception:
