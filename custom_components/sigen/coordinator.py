@@ -49,14 +49,16 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 inverter_data = {}
                 for inverter_name in self.hub.inverter_connections.keys():
                     inverter_data[inverter_name] = await self.hub.async_read_inverter_data(inverter_name)
-                    _LOGGER.debug("[coordinator] Inverter data for %s: %s", inverter_name, inverter_data[inverter_name])
 
                 # Fetch AC charger data for each AC charger
                 ac_charger_data = {}
-                for details in self.hub.ac_charger_connections.values():
-                    slave_id = details.get(CONF_SLAVE_ID)
-                    if slave_id is not None:
-                        ac_charger_data[slave_id] = await self.hub.async_read_ac_charger_data(slave_id)
+                for ac_charger_name in self.hub.ac_charger_connections.keys():
+                    ac_charger_data[ac_charger_name] = await self.hub.async_read_ac_charger_data(ac_charger_name)
+                    # _LOGGER.debug("[coordinator] AC charger data for %s: %s", ac_charger_name, ac_charger_data[ac_charger_name])
+                # for details in self.hub.ac_charger_connections.values():
+                #     slave_id = details.get(CONF_SLAVE_ID)
+                #     if slave_id is not None:
+                #         ac_charger_data[slave_id] = await self.hub.async_read_ac_charger_data(slave_id)
 
                 # Combine all data
                 data = {
