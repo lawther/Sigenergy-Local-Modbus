@@ -37,6 +37,7 @@ from .const import (
     RegisterType,
     DEFAULT_READ_ONLY,
     CONF_READ_ONLY,
+    CONF_PLANT_CONNECTION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -242,10 +243,14 @@ class SigenergyModbusHub:
             
     async def async_probe_registers(
         self,
-        slave_id: int,
+        device_info: Dict[str, str | int],
         register_defs: Dict[str, ModbusRegisterDefinition]
     ) -> None:
         """Probe registers to determine which ones are supported."""
+        slave_id_value = device_info.get(CONF_SLAVE_ID)
+        if slave_id_value is None:
+            raise ValueError(f"Slave ID is missing in device info: {device_info}")
+        slave_id = int(slave_id_value)
         client = await self._get_client(slave_id)
         key = self._get_connection_key(slave_id)
             
@@ -576,12 +581,19 @@ class SigenergyModbusHub:
     
     async def _async_read_device_data_core(
         self,
-        slave_id: int,
+        device_info: Dict[str, Any], # Changed from slave_id
         device_name: str,
         device_type_log_prefix: str,
         registers_to_read: Dict[str, ModbusRegisterDefinition]
     ) -> Dict[str, Any]:
         """Core logic for reading device data registers."""
+        slave_id_value = device_info.get(CONF_SLAVE_ID)
+        if slave_id_value is None:
+            _LOGGER.error("Slave ID missing in device info for %s '%s': %s", device_type_log_prefix, device_name, device_info)
+            # Return empty data to avoid breaking everything if config is bad.
+            return {}
+        slave_id = int(slave_id_value)
+
         data = {}
         for register_name, register_def in registers_to_read.items():
             if register_def.is_supported is not False:  # Read if supported or unknown
@@ -629,9 +641,11 @@ class SigenergyModbusHub:
         # Probe registers if not done yet
         if not self.plant_registers_probed:
             try:
-                await self.async_probe_registers(self.plant_id, PLANT_RUNNING_INFO_REGISTERS)
+                plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {})
+                plant_id = plant_info.get(CONF_PLANT_ID, DEFAULT_PLANT_SLAVE_ID)
+                await self.async_probe_registers(plant_info, PLANT_RUNNING_INFO_REGISTERS)
                 # Also probe parameter registers that can be read
-                await self.async_probe_registers(self.plant_id, {
+                await self.async_probe_registers(plant_info, {
                     name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
                     if reg.register_type != RegisterType.WRITE_ONLY
                 })
@@ -648,8 +662,10 @@ class SigenergyModbusHub:
         }
         
         # Use the core reading logic
+        plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {}) # Ensure plant_info is available
+        plant_info.setdefault(CONF_SLAVE_ID, self.plant_id) # Ensure slave_id is in plant_info
         return await self._async_read_device_data_core(
-            slave_id=self.plant_id,
+            device_info=plant_info,
             device_name="plant",
             device_type_log_prefix="plant",
             registers_to_read=all_registers
@@ -667,9 +683,9 @@ class SigenergyModbusHub:
         # Probe registers if not done yet for this inverter
         if inverter_name not in self.inverter_registers_probed:
             try:
-                await self.async_probe_registers(slave_id, INVERTER_RUNNING_INFO_REGISTERS)
+                await self.async_probe_registers(inverter_info, INVERTER_RUNNING_INFO_REGISTERS)
                 # Also probe parameter registers that can be read
-                await self.async_probe_registers(slave_id, {
+                await self.async_probe_registers(inverter_info, {
                     name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
                     if reg.register_type != RegisterType.WRITE_ONLY
                 })
@@ -690,7 +706,7 @@ class SigenergyModbusHub:
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
-            slave_id=slave_id,
+            device_info=inverter_info,
             device_name=inverter_name,
             device_type_log_prefix="inverter",
             registers_to_read=all_registers
@@ -709,9 +725,9 @@ class SigenergyModbusHub:
         # Probe registers if not done yet for this AC charger
         if ac_charger_name not in self.ac_charger_registers_probed:
             try:
-                await self.async_probe_registers(slave_id, AC_CHARGER_RUNNING_INFO_REGISTERS)
+                await self.async_probe_registers(ac_charger_info, AC_CHARGER_RUNNING_INFO_REGISTERS)
                 # Also probe parameter registers that can be read
-                await self.async_probe_registers(slave_id, {
+                await self.async_probe_registers(ac_charger_info, {
                     name: reg for name, reg in AC_CHARGER_PARAMETER_REGISTERS.items()
                     if reg.register_type != RegisterType.WRITE_ONLY
                 })
@@ -729,7 +745,7 @@ class SigenergyModbusHub:
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
-            slave_id=slave_id,
+            device_info=ac_charger_info,
             device_name=ac_charger_name,
             device_type_log_prefix="AC charger",
             registers_to_read=all_registers
