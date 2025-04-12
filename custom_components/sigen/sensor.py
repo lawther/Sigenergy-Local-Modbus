@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import (
+from homeassistant.config_entries import (  # pylint: disable=syntax-error
     ConfigEntry,
 )
 from homeassistant.const import (
@@ -21,7 +21,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import ( 
+from homeassistant.helpers.update_coordinator import (  # pylint: disable=syntax-error
     CoordinatorEntity,
 )
 
@@ -173,7 +173,7 @@ async def async_setup_entry(
                         via_device=(DOMAIN, parent_inverter_id),
                     )
 
-                    # Add sensors for this PV string first the static and then the calculated sensors
+                    # For this PV string add first the static and then the calculated sensors
                     async_add_entities(
                         generate_sigen_entity(
                             plant_name,
@@ -242,30 +242,10 @@ async def async_setup_entry(
                     coordinator,
                     SigenergySensor,
                     SS.DC_CHARGER_SENSORS,
-                    # DEVICE_TYPE_INVERTER,
                     DEVICE_TYPE_DC_CHARGER,
                     device_info=dc_device_info
                 )
             )
-            # Calculated Sensors:
-
-
-            # for description in SS.DC_CHARGER_SENSORS + SCS.DC_CHARGER_SENSORS:
-            #     sensor_name = f"{dc_charger_name} {description.name}"
-            #     entity_id = f"sensor.{sensor_name.lower().replace(' ', '_')}"
-
-            #     entities.append(
-            #         SigenergySensor(
-            #             coordinator=coordinator,
-            #             description=description,
-            #             name=sensor_name,
-            #             device_type=DEVICE_TYPE_DC_CHARGER,
-            #             device_id=dc_charger_id,
-            #             device_name=dc_charger_name,
-            #         )
-            #     )
-            # dc_charger_no += 1
-
 
     # Add AC charger sensors
     # Iterate through the AC charger connection details dictionary
@@ -384,7 +364,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 self._attr_device_info = self._device_info_override
                 return
 
-            # Pland device info
+            # Plant device info
             if device_type == DEVICE_TYPE_PLANT:
                 self._attr_device_info = DeviceInfo(
                     identifiers={

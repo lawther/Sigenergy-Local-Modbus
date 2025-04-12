@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import logging
 import asyncio
-from typing import Coroutine
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Coroutine
 
 from homeassistant.components.number import NumberEntity, NumberEntityDescription
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
@@ -19,19 +18,17 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity  # pylint: disable=syntax-error
 
 from .const import (
-    CONF_SLAVE_ID, # Import CONF_SLAVE_ID
     DEVICE_TYPE_AC_CHARGER,
-    DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
-from .common import(generate_device_name, generate_sigen_entity, generate_unique_entity_id)
+from .common import(generate_sigen_entity, generate_unique_entity_id)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -466,24 +463,30 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Sigenergy number platform."""
-    coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    coordinator: SigenergyDataUpdateCoordinator = (
+        hass.data[DOMAIN][config_entry.entry_id]["coordinator"])
     plant_name = config_entry.data[CONF_NAME]
-    _LOGGER.debug(f"Starting to add {SigenergyNumber}")
+
     # Add plant numbers
-    entities : list[SigenergyNumber] = generate_sigen_entity(plant_name, None, None, coordinator, SigenergyNumber,
-                                           PLANT_NUMBERS, DEVICE_TYPE_PLANT)
+    entities : list[SigenergyNumber] = generate_sigen_entity(plant_name, None, None, coordinator,
+                                                             SigenergyNumber,
+                                                             PLANT_NUMBERS,
+                                                             DEVICE_TYPE_PLANT)
 
     # Add inverter numbers
     for device_name, device_conn in coordinator.hub.inverter_connections.items():
-        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergyNumber,
-                                           INVERTER_NUMBERS, DEVICE_TYPE_INVERTER)
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator,
+                                           SigenergyNumber,
+                                           INVERTER_NUMBERS,
+                                           DEVICE_TYPE_INVERTER)
 
     # Add AC charger numbers
     for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
-        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergyNumber,
-                                           AC_CHARGER_NUMBERS, DEVICE_TYPE_AC_CHARGER)
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator,
+                                           SigenergyNumber,
+                                           AC_CHARGER_NUMBERS,
+                                           DEVICE_TYPE_AC_CHARGER)
 
-    _LOGGER.debug(f"Class to add {SigenergyNumber}")
     async_add_entities(entities)
 
 
@@ -511,17 +514,11 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
         self._device_id = device_id # Keep slave ID if needed elsewhere
         self._device_name = device_name # Store device name
         self._pv_string_idx = pv_string_idx
-        
-        # Get the device number if any as a string for use in names
-        device_number_str = ""
-        if device_name: # Check if device_name is not None or empty
-            parts = device_name.split()
-            if parts and parts[-1].isdigit():
-                device_number_str = f" {parts[-1]}"
 
         # Set unique ID (already uses device_name)
-        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator, description.key, pv_string_idx)
-        
+        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator,
+                                                         description.key, pv_string_idx)
+
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_device_info = DeviceInfo(
@@ -558,14 +555,6 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
                 name=device_name,
                 manufacturer="Sigenergy",
                 model="AC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_DC_CHARGER:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="DC Charger",
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
 
@@ -610,15 +599,6 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
         elif self._device_type == DEVICE_TYPE_AC_CHARGER:
             data_key = "ac_chargers"
             identifier = self._device_id # Use ID for AC chargers
-            device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
-            base_available = (
-                self.coordinator.data is not None
-                and data_key in self.coordinator.data
-                and identifier in self.coordinator.data[data_key]
-            )
-        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-            data_key = "dc_chargers"
-            identifier = self._device_id # Use ID for DC chargers (assuming based on pattern)
             device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
             base_available = (
                 self.coordinator.data is not None

@@ -21,7 +21,6 @@ from .const import (
     DEVICE_TYPE_PLANT,
     DOMAIN,
     RemoteEMSControlMode,
-    DEVICE_TYPE_DC_CHARGER,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
@@ -171,24 +170,30 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Sigenergy select platform."""
-    coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    coordinator: SigenergyDataUpdateCoordinator = (
+        hass.data[DOMAIN][config_entry.entry_id]["coordinator"])
     plant_name = config_entry.data[CONF_NAME]
     _LOGGER.debug(f"Starting to add {SigenergySelect}")
     # Add plant Selects
-    entities : list[SigenergySelect] = generate_sigen_entity(plant_name, None, None, coordinator, SigenergySelect,
-                                           PLANT_SELECTS, DEVICE_TYPE_PLANT)
+    entities : list[SigenergySelect] = generate_sigen_entity(plant_name, None, None, coordinator,
+                                                             SigenergySelect,
+                                                             PLANT_SELECTS,
+                                                             DEVICE_TYPE_PLANT)
 
     # Add inverter Selects
     for device_name, device_conn in coordinator.hub.inverter_connections.items():
-        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySelect,
-                                           INVERTER_SELECTS, DEVICE_TYPE_INVERTER)
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator,
+                                          SigenergySelect,
+                                          INVERTER_SELECTS,
+                                          DEVICE_TYPE_INVERTER)
 
     # Add AC charger Selects
     for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
-        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySelect,
-                                           AC_CHARGER_SELECTS, DEVICE_TYPE_AC_CHARGER)
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator,
+                                          SigenergySelect,
+                                          AC_CHARGER_SELECTS,
+                                          DEVICE_TYPE_AC_CHARGER)
 
-    _LOGGER.debug(f"Class to add {SigenergySelect}")
     async_add_entities(entities)
     return
 
@@ -218,17 +223,11 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         # Ensure options is a list, default to empty list if None
         self._attr_options = description.options if description.options is not None else []
         self._pv_string_idx = pv_string_idx
-        
-        # Get the device number if any as a string for use in names
-        device_number_str = ""
-        if device_name: # Check if device_name is not None or empty
-            parts = device_name.split()
-            if parts and parts[-1].isdigit():
-                device_number_str = f" {parts[-1]}"
 
         # Set unique ID (already uses device_name)
-        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator, description.key, pv_string_idx)
-        
+        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator,
+                                                         description.key, pv_string_idx)
+
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_device_info = DeviceInfo(
@@ -266,15 +265,6 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
                 model="AC Charger",
                 via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
             )
-        elif device_type == DEVICE_TYPE_DC_CHARGER: # Added DC Charger
-             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="DC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-
 
     @property
     def current_option(self) -> str:
@@ -316,15 +306,6 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         elif self._device_type == DEVICE_TYPE_AC_CHARGER:
             data_key = "ac_chargers"
             identifier = self._device_id # Use ID for AC chargers
-            device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
-            base_available = (
-                self.coordinator.data is not None
-                and data_key in self.coordinator.data
-                and identifier in self.coordinator.data[data_key]
-            )
-        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-            data_key = "dc_chargers"
-            identifier = self._device_id # Use ID for DC chargers (assuming based on pattern)
             device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
             base_available = (
                 self.coordinator.data is not None
