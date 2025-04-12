@@ -13,3 +13,7 @@
 - Add "Sigen x DC Charger y" to fileds such as Power.
 - Refactor setup to look for dc chargers.
 - Refactor the code for calculated sensors to take in acccount multiple plants and inverters.
+
+- Recheck availability all sensors each 100th check.
+- Slow sensors are checked every x times the normal sensors are checked 2-10
+- All sensors are rechecked for data after an update to sliders, number, switch.

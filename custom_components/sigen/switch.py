@@ -15,12 +15,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity  #pylint:
 
 from .common import *
 from .const import (
-    CONF_SLAVE_ID, # Import CONF_SLAVE_ID
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
+    CONF_INVERTER_HAS_DCCHARGER,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
@@ -133,13 +133,45 @@ async def async_setup_entry(
 
     # Add inverter Switches
     for device_name, device_conn in coordinator.hub.inverter_connections.items():
-        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySwitch,
-                                           INVERTER_SWITCHES, DEVICE_TYPE_INVERTER)
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, 
+                                          SigenergySwitch, INVERTER_SWITCHES, DEVICE_TYPE_INVERTER)
+
+        # Add DC charger sensors
+        if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
+            dc_name = f"{device_name} DC Charger"
+            parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
+            dc_id = f"{parent_inverter_id}_dc_charger"
+            _LOGGER.debug("[switch] Adding DC Charger with dc_name: %s, parent_inverter_id: %s, dc_id: %s",
+                          dc_name, parent_inverter_id, dc_id)
+
+            # Create device info
+            dc_device_info = DeviceInfo(
+                identifiers={(DOMAIN, dc_id)},
+                name=dc_name,
+                manufacturer="Sigenergy",
+                model="DC Charger",
+                via_device=(DOMAIN, parent_inverter_id),
+            )
+
+            # Static Sensors:
+            async_add_entities(
+                generate_sigen_entity(
+                    plant_name,
+                    device_name,
+                    device_conn,
+                    coordinator,
+                    SigenergySwitch,
+                    DC_CHARGER_SWITCHES,
+                    DEVICE_TYPE_DC_CHARGER,
+                    device_info=dc_device_info
+                )
+            )
 
     # Add AC charger Switches
     for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
-        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, SigenergySwitch,
-                                           AC_CHARGER_SWITCHES, DEVICE_TYPE_AC_CHARGER)
+        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator,
+                                          SigenergySwitch, AC_CHARGER_SWITCHES,
+                                          DEVICE_TYPE_AC_CHARGER)
 
     _LOGGER.debug(f"Class to add {SigenergySwitch}")
     async_add_entities(entities)
@@ -158,6 +190,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         device_type: str,
         device_id: Optional[int],
         device_name: Optional[str] = "",
+        device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the switch."""
@@ -166,20 +199,19 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         self.hub = coordinator.hub
         self._attr_name = name
         self._device_type = device_type
-        self._device_id = device_id # Keep slave ID if needed elsewhere, but prefer name for inverter lookups
+        self._device_id = device_id
         self._device_name = device_name # Store device name
         self._pv_string_idx = pv_string_idx
-        
-        # Get the device number if any as a string for use in names
-        device_number_str = ""
-        if device_name: # Check if device_name is not None or empty
-            parts = device_name.split()
-            if parts and parts[-1].isdigit():
-                device_number_str = f" {parts[-1]}"
+        self._device_info_override = device_info
 
-        # Set unique ID (already uses device_name)
-            self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator, description.key, pv_string_idx)
-        
+        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator,
+                                                         description.key, pv_string_idx)
+
+        # Set device info (use provided device_info if available)
+        if self._device_info_override:
+            self._attr_device_info = self._device_info_override
+            return
+
         # Set device info
         if device_type == DEVICE_TYPE_PLANT:
             self._attr_device_info = DeviceInfo(
