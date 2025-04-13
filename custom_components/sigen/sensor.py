@@ -340,6 +340,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     transformed_value = self.entity_description.value_fn(
                         None, self.coordinator.data, None
                     )
+                    # _LOGGER.debug("[SigenergySensor][%s] Reporting state: %s", self.entity_id, transformed_value)
                     return transformed_value
                 except Exception as ex:
                     _LOGGER.error(
@@ -434,6 +435,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     )
 
                 if transformed_value is not None:
+                    # _LOGGER.debug("[SigenergySensor][%s] Reporting state: %s", self.entity_id, transformed_value)
                     return transformed_value
             except Exception as ex:
                 _LOGGER.error(
@@ -493,6 +495,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             else value
         )
 
+        # _LOGGER.debug("[SigenergySensor][%s] Reporting state: %s", self.entity_id, value)
         return value
 
     # The 'available' property is now inherited from SigenergyEntity
@@ -609,9 +612,11 @@ class PVStringSensor(SigenergySensor):
             try:
                 # Check if it's already a number (int, float, Decimal)
                 if isinstance(value, (int, float, Decimal)):
-                    return float(value)  # Convert to float for HA consistency
+                    final_value = float(value)  # Convert to float for HA consistency
                 else:
-                    return value  # Return non-numeric values directly
+                    final_value = value  # Return non-numeric values directly
+                # _LOGGER.debug("[PVStringSensor][%s] Reporting state: %s", self.entity_id, final_value)
+                return final_value
             except (ValueError, TypeError) as conv_ex:
                 _LOGGER.warning(
                     "PVStringSensor %s native_value: Could not convert final value '%s' to float: %s",
