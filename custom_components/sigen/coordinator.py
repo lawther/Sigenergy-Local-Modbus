@@ -48,12 +48,6 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # Fetch plant data
                 plant_data = await self.hub.async_read_plant_data()
 
-                for plant_integrated_sensors in [None]:  # Placeholder for actual integrated sensors
-                    # Call _integrate_on_state_change of the integrated sensors
-                    # This is a placeholder for the actual integration logic
-                    # await plant_integrated_sensors._integrate_on_state_change()
-                    _LOGGER.debug("Called _integrate_on_state_change for integrated sensor: %s", plant_integrated_sensors)
-
                 _LOGGER.debug("Fetched plant data in %s seconds", (dt_util.utcnow() - start_time).total_seconds())
 
                 # Fetch inverter data for each inverter

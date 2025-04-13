@@ -547,10 +547,10 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         now = dt_util.utcnow()
         # Compare coordinator update time and elapsed interval
         coordinatorTime = self.coordinator.last_update_success or now
-        timeSinceLast = now - self._last_integration_time
+        timeSinceLast = (now - self._last_integration_time).total_seconds()
         if coordinatorTime == getattr(self, "_lastCoordinatorUpdate", None) \
-           and timeSinceLast < self._max_sub_interval:
-            _LOGGER.debug("Skipping integration: no new fetch, interval too short: %s", timeSinceLast)
+           and timeSinceLast < 2:
+            _LOGGER.debug("Skipping integration: %s, interval too short: %s", self.name, timeSinceLast)
         else:
             self._lastCoordinatorUpdate = coordinatorTime
             try:
