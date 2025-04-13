@@ -510,6 +510,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             self.async_on_remove(self._cancel_max_sub_interval_exceeded_callback)
             handle_state_change = self._integrate_on_state_change_with_max_sub_interval
         else:
+            _LOGGER.debug("No max_sub_interval set, using default state change handler for %s", self.name)
             handle_state_change = self._integrate_on_state_change_callback
 
         # Check source entity and log potential alternatives
@@ -539,19 +540,28 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
     @callback
     def _integrate_on_state_change_with_max_sub_interval(self, event) -> None:
-        """Handle sensor state change with max_sub_interval."""
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
-        # Cancel any pending callbacks
         self._cancel_max_sub_interval_exceeded_callback()
 
-        try:
-            self._integrate_on_state_change(old_state, new_state)
-            self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
-            self._last_integration_time = dt_util.utcnow()
-        finally:
-            # Schedule the next time-based integration
-            self._schedule_max_sub_interval_exceeded_if_state_is_numeric(new_state)
+        now = dt_util.utcnow()
+        # Compare coordinator update time and elapsed interval
+        coordinatorTime = self.coordinator.last_update_success or now
+        timeSinceLast = now - self._last_integration_time
+        if coordinatorTime == getattr(self, "_lastCoordinatorUpdate", None) \
+           and timeSinceLast < self._max_sub_interval:
+            _LOGGER.debug("Skipping integration: no new fetch, interval too short: %s", timeSinceLast)
+        else:
+            self._lastCoordinatorUpdate = coordinatorTime
+            try:
+                self._integrate_on_state_change(old_state, new_state)
+                self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
+                self._last_integration_time = now
+                _LOGGER.debug(f"[_integrate_on_state_change_with_max_sub_interval] Setting _last_integration_time: {self._last_integration_time.time()}")
+            except Exception as ex:
+                _LOGGER.warning("Integration error: %s", ex)
+            finally:
+                self._schedule_max_sub_interval_exceeded_if_state_is_numeric(new_state)
 
     def _integrate_on_state_change(
         self, old_state: State | None, new_state: State | None
@@ -581,7 +591,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         # Update the integral
         self._update_integral(area)
-        _LOGGER.debug("[%s] Updated state to: %s", self.entity_id, self._state)
+        _LOGGER.debug("[on_state_change][%s] Updated state to: %s", self.entity_id, self._state)
         self.async_write_ha_state()
 
     def _schedule_max_sub_interval_exceeded_if_state_is_numeric(
@@ -598,6 +608,22 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             @callback
             def _integrate_on_max_sub_interval_exceeded_callback(now: datetime) -> None:
                 """Integrate based on time and reschedule."""
+                # Check if a state change happened very recently to avoid double updates
+                time_since_last = now - self._last_integration_time
+                # Use timedelta for comparison
+                if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT and time_since_last < timedelta(seconds=2):
+                    _LOGGER.debug(
+                        "[%s] Skipping time-based integration; state change occurred %s ago",
+                        self.entity_id,
+                        time_since_last,
+                    )
+                    # Only reschedule the next integration
+                    # Need the original source_state object here, which is captured by the closure
+                    source_state_obj = self.hass.states.get(self._source_entity_id)
+                    if source_state_obj: # Ensure state object exists before rescheduling
+                         self._schedule_max_sub_interval_exceeded_if_state_is_numeric(source_state_obj)
+                    return
+
                 elapsed_seconds = Decimal(
                     (now - self._last_integration_time).total_seconds()
                 )
@@ -609,7 +635,15 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
                 # Update the integral
                 self._update_integral(area)
-                _LOGGER.debug("[%s] Updated state to: %s", self.entity_id, self._state)
+                _LOGGER.debug("[schedule_max_sub_interval_exceeded][%s] Updated state to: %s", self.entity_id, self._state)
+                # Calculate seconds since last update
+                secondsSinceLastUpdate = (now - self._last_integration_time).total_seconds()
+                _LOGGER.debug(
+                    "[schedule_max_sub_interval_exceeded][%s] Max interval: %s, Seconds since last update: %.2f",
+                    self.entity_id,
+                    self._max_sub_interval,
+                    secondsSinceLastUpdate,
+                )
                 self.async_write_ha_state()
 
                 # Update tracking variables

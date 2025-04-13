@@ -8,7 +8,8 @@ from typing import Any, Dict
 
 import async_timeout
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=syntax-error
+from homeassistant.util import dt as dt_util
 
 from .modbus import SigenergyModbusHub
 
@@ -41,18 +42,31 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         """Update data via Modbus library."""
         try:
             async with async_timeout.timeout(60):
+                _LOGGER.debug("Fetching data from Sigenergy system by Modbus")
+                start_time = dt_util.utcnow()
+
                 # Fetch plant data
                 plant_data = await self.hub.async_read_plant_data()
+
+                for plant_integrated_sensors in [None]:  # Placeholder for actual integrated sensors
+                    # Call _integrate_on_state_change of the integrated sensors
+                    # This is a placeholder for the actual integration logic
+                    # await plant_integrated_sensors._integrate_on_state_change()
+                    _LOGGER.debug("Called _integrate_on_state_change for integrated sensor: %s", plant_integrated_sensors)
+
+                _LOGGER.debug("Fetched plant data in %s seconds", (dt_util.utcnow() - start_time).total_seconds())
 
                 # Fetch inverter data for each inverter
                 inverter_data = {}
                 for inverter_name in self.hub.inverter_connections.keys():
                     inverter_data[inverter_name] = await self.hub.async_read_inverter_data(inverter_name)
+                _LOGGER.debug("Fetched inverter data in %s seconds", (dt_util.utcnow() - start_time).total_seconds())
 
                 # Fetch AC charger data for each AC charger
                 ac_charger_data = {}
                 for ac_charger_name in self.hub.ac_charger_connections.keys():
                     ac_charger_data[ac_charger_name] = await self.hub.async_read_ac_charger_data(ac_charger_name)
+                _LOGGER.debug("Fetched AC charger data in %s seconds", (dt_util.utcnow() - start_time).total_seconds())
 
                 # Combine all data
                 data = {
@@ -60,6 +74,9 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "inverters": inverter_data,
                     "ac_chargers": ac_charger_data,
                 }
+
+
+                _LOGGER.debug("Fetched all data in %s seconds", (dt_util.utcnow() - start_time).total_seconds())
 
                 return data
         except asyncio.TimeoutError as exception:
