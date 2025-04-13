@@ -40,6 +40,7 @@ from .const import (
 from .common import (
     SigenergySensorEntityDescription,
 )
+from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -382,7 +383,7 @@ class IntegrationTrigger(Enum):
     TIME_ELAPSED = "time_elapsed"
 
 
-class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
+class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     """Implementation of an Integration Sensor with identical behavior to HA core."""
 
     _attr_state_class = SensorStateClass.TOTAL
@@ -402,16 +403,23 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the integration sensor."""
-        CoordinatorEntity.__init__(self, coordinator)
+        # Call SigenergyEntity's __init__ first
+        super().__init__(
+            coordinator=coordinator,
+            description=description,
+            name=name,
+            device_type=device_type,
+            device_id=device_id,
+            device_name=device_name,
+            device_info=device_info,
+            pv_string_idx=pv_string_idx,
+        )
+        # Then initialize RestoreSensor
         RestoreSensor.__init__(self)
-        self.entity_description = description
-        self._attr_name = name
-        self._device_type = device_type
-        self._device_id = device_id  # Keep slave ID if needed
-        self._device_name = device_name  # Store device name
-        self._device_info_override = device_info
+
+        # Sensor-specific initialization
         self._source_entity_id = source_entity_id
-        self._pv_string_idx = pv_string_idx
+        # self._pv_string_idx = pv_string_idx # Already handled by SigenergyEntity
         self._round_digits = getattr(description, "round_digits", None)
         self._max_sub_interval = getattr(description, "max_sub_interval", None)
 
@@ -434,49 +442,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         self._last_integration_time = dt_util.utcnow()
         self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
 
-        # Set device info
-        if self._device_info_override:
-            self._attr_device_info = self._device_info_override
-        else:
-            # Use the same device info logic as in SigenergySensor class
-            if device_type == DEVICE_TYPE_PLANT:
-                self._attr_device_info = DeviceInfo(
-                    identifiers={
-                        (DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")
-                    },
-                    name=device_name,  # Should be plant_name
-                    manufacturer="Sigenergy",
-                    model="Energy Storage System",
-                )
-            elif device_type == DEVICE_TYPE_INVERTER:
-                # Get model and serial number if available
-                model = None
-                serial_number = None
-                sw_version = None
-                if coordinator.data and "inverters" in coordinator.data:
-                    # Use device_name (inverter_name) to fetch data
-                    inverter_data = coordinator.data["inverters"].get(device_name, {})
-                    model = inverter_data.get("inverter_model_type")
-                    serial_number = inverter_data.get("inverter_serial_number")
-                    sw_version = inverter_data.get("inverter_machine_firmware_version")
-
-                self._attr_device_info = DeviceInfo(
-                    identifiers={
-                        (
-                            DOMAIN,
-                            f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}",
-                        )
-                    },
-                    name=device_name,
-                    manufacturer="Sigenergy",
-                    model=model,
-                    serial_number=serial_number,
-                    sw_version=sw_version,
-                    via_device=(
-                        DOMAIN,
-                        f"{coordinator.hub.config_entry.entry_id}_plant",
-                    ),
-                )
+        # Device info is now handled by SigenergyEntity's __init__
 
     def _decimal_state(self, state: str) -> Optional[Decimal]:
         """Convert state to Decimal or return None if not possible."""
@@ -636,13 +602,6 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         """Perform integration based on state change."""
         if new_state is None:
             return
-
-        if new_state.state == STATE_UNAVAILABLE:
-            self._attr_available = False
-            self.async_write_ha_state()
-            return
-
-        self._attr_available = True
 
         if old_state is None or old_state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             self.async_write_ha_state()
