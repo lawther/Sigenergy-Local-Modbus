@@ -5,7 +5,7 @@ import logging
 from typing import Any, Optional
 
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import CoordinatorEntity  # pylint: disable=syntax-error
 
 from .const import (
     DOMAIN,
@@ -119,12 +119,6 @@ class SigenergyEntity(CoordinatorEntity):
                 manufacturer="Sigenergy",
                 via_device=plant_device_identifier,
             )
-
-        _LOGGER.debug(
-            "Initialized SigenergyEntity: %s (Type: %s, Name: %s, ID: %s, UniqueID: %s)",
-            name, device_type, device_name, device_id, self._attr_unique_id
-        )
-        _LOGGER.debug("Device Info for %s: %s", self._attr_unique_id, self._attr_device_info)
 
     @property
     def available(self) -> bool:
