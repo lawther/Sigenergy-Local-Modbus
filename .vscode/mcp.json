@@ -39,19 +39,20 @@
             "autoApprove": [],
             "alwaysAllow": []
         },
-        "homeassistant_debug_sql": {
-            "command": "uv",
+        "fetch": {
+            "command": "uvx",
             "args": [
-                "--directory",
-                "E:/Users/andrei/Documents/Cline/MCP/github.com-modelcontextprotocol-servers-tree-main-src-sqlite/src/sqlite",
-                "run",
-                "mcp-server-sqlite",
-                "--db-path",
-                "e:/Users/andrei/Downloads/hacs-sig-issue-15-oom/home-assistant_v2.db"
+                "mcp-server-fetch"
+            ]
+        },
+        "serper-search-server": {
+            "command": "node",
+            "args": [
+                "E:/Users/andrei/Documents/Cline/MCP/Serper-search-mcp/build/index.js"
             ],
-            "disabled": true,
-            "autoApprove": [],
-            "alwaysAllow": []
+            "env": {
+                "SERPER_API_KEY": "945a7657ae6701aaa31334a065ab338a43cbffeb"
+            }
         }
     }
 }
