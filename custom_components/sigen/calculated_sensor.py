@@ -655,9 +655,9 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
 
         # Calculate elapsed time
         elapsed_seconds = Decimal(
-            (new_state.last_updated - old_state.last_updated).total_seconds()
+            (new_state.last_reported - old_state.last_reported).total_seconds()
             if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT
-            else (new_state.last_updated - self._last_integration_time).total_seconds()
+            else (new_state.last_reported - self._last_integration_time).total_seconds()
         )
 
         # Calculate area
