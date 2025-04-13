@@ -11,7 +11,6 @@ from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity  #pylint: disable=no-name-in-module, syntax-error
 
 from .common import *
 from .const import (
@@ -24,6 +23,7 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
+from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -177,7 +177,7 @@ async def async_setup_entry(
     async_add_entities(entities)
     return
 
-class SigenergySwitch(CoordinatorEntity, SwitchEntity):
+class SigenergySwitch(SigenergyEntity, SwitchEntity):
     """Representation of a Sigenergy switch."""
 
     entity_description: SigenergySwitchEntityDescription
@@ -188,76 +188,24 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         description: SigenergySwitchEntityDescription,
         name: str,
         device_type: str,
-        device_id: Optional[int],
+        device_id: Optional[str] = None, # Changed to Optional[str]
         device_name: Optional[str] = "",
         device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the switch."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        self.hub = coordinator.hub
-        self._attr_name = name
-        self._device_type = device_type
-        self._device_id = device_id
-        self._device_name = device_name # Store device name
-        self._pv_string_idx = pv_string_idx
-        self._device_info_override = device_info
-
-        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator,
-                                                         description.key, pv_string_idx)
-
-        # Set device info (use provided device_info if available)
-        if self._device_info_override:
-            self._attr_device_info = self._device_info_override
-            return
-
-        # Set device info
-        if device_type == DEVICE_TYPE_PLANT:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
-                name=device_name, # Should be plant_name here
-                manufacturer="Sigenergy",
-                model="Energy Storage System",
-                # via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_INVERTER:
-            # Get model and serial number if available
-            model = None
-            serial_number = None
-            sw_version = None
-            if coordinator.data and "inverters" in coordinator.data:
-                # Use device_name (inverter_name) to fetch data
-                inverter_data = coordinator.data["inverters"].get(device_name, {})
-                model = inverter_data.get("inverter_model_type")
-                serial_number = inverter_data.get("inverter_serial_number")
-                sw_version = inverter_data.get("inverter_machine_firmware_version")
-
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model=model,
-                serial_number=serial_number,
-                sw_version=sw_version,
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_AC_CHARGER:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="AC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_DC_CHARGER:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="DC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
+        # Call the base class __init__
+        super().__init__(
+            coordinator=coordinator,
+            description=description,
+            name=name,
+            device_type=device_type,
+            device_id=device_id,
+            device_name=device_name,
+            device_info=device_info,
+            pv_string_idx=pv_string_idx,
+        )
+        # No switch-specific init needed for now
 
     @property
     def is_on(self) -> bool:
@@ -266,32 +214,13 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
             return False
             
         # Pass device_name for inverters, device_id otherwise
-        identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+        # Use device_name as the primary identifier passed to the lambda,
+        # consistent with base class setup and other platforms.
+        # The lambda itself needs to handle how to access data (e.g., using device_name for inverters/AC, or potentially device_id for AC if needed)
+        identifier = self._device_name
         return self.entity_description.is_on_fn(self.coordinator.data, identifier)
 
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        if not self.coordinator.last_update_success:
-            return False
-
-        if self._device_type == DEVICE_TYPE_PLANT:
-            return self.coordinator.data is not None and "plant" in self.coordinator.data
-        elif self._device_type == DEVICE_TYPE_INVERTER:
-            return (
-                self.coordinator.data is not None
-                and "inverters" in self.coordinator.data
-                # Check availability using device_name (inverter_name)
-                and self._device_name in self.coordinator.data["inverters"]
-            )
-        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            return (
-                self.coordinator.data is not None
-                and "ac_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["ac_chargers"] # AC Chargers still use ID
-            )
-
-        return False
+    # The 'available' property is now inherited from SigenergyEntity
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
