@@ -210,6 +210,7 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
         device_type: str,
         device_id: Optional[str] = None, # Changed to Optional[str]
         device_name: Optional[str] = "",
+        device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the select."""
@@ -221,10 +222,12 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
             device_type=device_type,
             device_id=device_id,
             device_name=device_name,
+            device_info=device_info,
             pv_string_idx=pv_string_idx,
         )
 
         # Select-specific initialization
+        # Used by SelectEntity to determine valid choices.
         self._attr_options = description.options if description.options is not None else []
 
     @property
@@ -241,11 +244,6 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
         except Exception as e:
             _LOGGER.error(f"Error getting current_option for {self.entity_id} (identifier: {identifier}): {e}")
             return ""
-
-
-    # The 'available' property is now inherited from SigenergyEntity
-    # We might need to override it here if the available_fn logic needs specific handling
-    # for select entities, but for now, let's rely on the base implementation.
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""

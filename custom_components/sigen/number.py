@@ -503,6 +503,7 @@ class SigenergyNumber(SigenergyEntity, NumberEntity):
         device_type: str,
         device_id: Optional[str] = None, # Changed to Optional[str]
         device_name: Optional[str] = "",
+        device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the number."""
@@ -514,8 +515,8 @@ class SigenergyNumber(SigenergyEntity, NumberEntity):
             device_type=device_type,
             device_id=device_id,
             device_name=device_name,
+            device_info=device_info,
             pv_string_idx=pv_string_idx,
-            # device_info is handled by base class if not provided
         )
         # No number-specific init needed for now
 

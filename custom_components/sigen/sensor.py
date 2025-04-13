@@ -54,17 +54,10 @@ async def async_setup_entry(
     coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][
         config_entry.entry_id]["coordinator"]
     plant_name = config_entry.data[CONF_NAME]
-    _LOGGER.debug("Starting to add %s", SigenergySensor)
 
     entities: list[SigenergySensor] = []
 
-    _LOGGER.debug("Setting up sensors for %s", config_entry.data[CONF_NAME])
-    _LOGGER.debug("Inverters: %s", coordinator.hub.inverter_connections)
-
     # Add plant sensors
-    _LOGGER.debug(
-        "[CS][Setup] Adding plant sensors from SS.PLANT_SENSORS + SCS.PLANT_SENSORS"
-    )
     # Static Sensors:
     async_add_entities(
         generate_sigen_entity(
@@ -211,15 +204,9 @@ async def async_setup_entry(
         if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
             dc_charger_name = f"{device_name} DC Charger"
 
-            _LOGGER.debug(
-                "Adding sensors for DC charger: %s", dc_charger_name
-            )
-
             dc_name = f"{device_name} DC Charger"
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
             dc_id = f"{parent_inverter_id}_dc_charger"
-            _LOGGER.debug("[sensor] Adding DC Charger with dc_name: %s, parent_inverter_id: %s, dc_id: %s",
-                          dc_name, parent_inverter_id, dc_id)
 
             # Create device info
             dc_device_info = DeviceInfo(
@@ -256,9 +243,6 @@ async def async_setup_entry(
             )
             continue  # Skip this charger if slave_id is missing
 
-        _LOGGER.debug(
-            "Adding sensors for AC charger '%s' (ID: %s)", ac_charger_name, slave_id
-        )
         for description in SS.AC_CHARGER_SENSORS + SCS.AC_CHARGER_SENSORS:
             # Use the ac_charger_name directly from the dictionary key
             sensor_name = f"{ac_charger_name} {description.name}"
@@ -275,23 +259,16 @@ async def async_setup_entry(
                 )
             )
 
-    _LOGGER.debug("[Setup Entry] Final entity list count before add: %d", len(entities))
     # Log first 5 entities to see if they look valid
-    _LOGGER.debug("[Setup Entry] Sample entities before add: %s", entities[:5])
     if entities:  # Only call if list is not empty
         try:
             async_add_entities(entities)
-            _LOGGER.debug(
-                "[Setup Entry] Successfully called async_add_entities for all %d entities.",
-                len(entities),
-            )
         except Exception as ex:
             _LOGGER.exception(
                 "[Setup Entry] Error during final async_add_entities call: %s", ex
             )
     else:
         _LOGGER.debug("[Setup Entry] No entities collected to add.")
-    _LOGGER.debug("[Setup Entry] Finished async_setup_entry for %s", config_entry.title)
 
 
 class SigenergySensor(SigenergyEntity, SensorEntity):
@@ -312,12 +289,11 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         try:
-
-            # Call the base class __init__ to handle common setup
+        # Call the base class __init__
             super().__init__(
                 coordinator=coordinator,
                 description=description,
-                name=name, # Pass name for logging/potential use
+                name=name,
                 device_type=device_type,
                 device_id=device_id,
                 device_name=device_name,
@@ -326,18 +302,18 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             )
 
             # Sensor-specific initialization
-            self._round_digits = None
-            if hasattr(description, "round_digits") and description.round_digits is not None:  # type: ignore
-                self._round_digits = description.round_digits  # type: ignore
+            if (
+                isinstance(description, SigenergySensorEntityDescription)
+                and description.round_digits is not None
+            ):
+                self._round_digits = description.round_digits
+            else:
+                self._round_digits = None
+
         except Exception as ex:
             _LOGGER.exception(
                 "[Sensor Init] Error initializing SigenergySensor '%s': %s", name, ex
             )  # Use exception
-        _LOGGER.debug(
-            "[Sensor Init] Completed initialization for SigenergySensor: %s (Unique ID: %s)",
-            self.entity_id,
-            self._attr_unique_id,
-        )
 
     @property
     def native_value(self) -> Any:
@@ -426,8 +402,6 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
 
                 # Use epoch_to_datetime for timestamp conversion
                 converted_timestamp = SC.epoch_to_datetime(value, self.coordinator.data)
-                # _LOGGER.debug("Timestamp conversion for %s: %s -> %s",
-                #             self.entity_id, value, converted_timestamp)
                 return converted_timestamp
             except Exception as ex:
                 _LOGGER.error(
@@ -450,12 +424,10 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     extra_params = getattr(
                         self.entity_description, "extra_params", None
                     )
-                    # _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     transformed_value = self.entity_description.value_fn(
                         value, self.coordinator.data, extra_params
                     )
                 else:
-                    # _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     # Pass coordinator data and None for extra_params for consistency
                     transformed_value = self.entity_description.value_fn(
                         value, self.coordinator.data, None
@@ -488,7 +460,6 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                 RunningState.SHUTDOWN: "Shutdown",
             }.get(value, STATE_UNKNOWN)
         if self.entity_description.key == "inverter_running_state":
-            # _LOGGER.debug("inverter_running_state value: %s", value)
             return {
                 RunningState.STANDBY: "Standby",
                 RunningState.RUNNING: "Running",
@@ -576,7 +547,6 @@ class PVStringSensor(SigenergySensor):
         parent_inverter_available = (
             self._device_name in self.coordinator.data["inverters"]
         )
-        # _LOGGER.debug("PVStringSensor %s availability check: Parent inverter '%s' data exists: %s", self.entity_id, self._device_name, parent_inverter_available)
 
         return parent_inverter_available  # Base availability on parent inverter for now
 
@@ -587,7 +557,6 @@ class PVStringSensor(SigenergySensor):
             _LOGGER.warning("No coordinator data available for %s", self.entity_id)
             return STATE_UNKNOWN
 
-        # _LOGGER.debug("PVStringSensor %s native_value: Getting value for PV %d on inverter '%s'", self.entity_id, self._pv_string_idx, self._device_name)
         try:
             # Access inverter data using device_name (inverter_name)
             inverter_data = self.coordinator.data["inverters"].get(

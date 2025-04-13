@@ -126,7 +126,6 @@ async def async_setup_entry(
     """Set up the Sigenergy switch platform."""
     coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     plant_name = config_entry.data[CONF_NAME]
-    _LOGGER.debug(f"Starting to add {SigenergySwitch}")
     # Add plant Switches
     entities : list[SigenergySwitch] = generate_sigen_entity(plant_name, None, None, coordinator, SigenergySwitch,
                                            PLANT_SWITCHES, DEVICE_TYPE_PLANT)
@@ -141,8 +140,6 @@ async def async_setup_entry(
             dc_name = f"{device_name} DC Charger"
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
             dc_id = f"{parent_inverter_id}_dc_charger"
-            _LOGGER.debug("[switch] Adding DC Charger with dc_name: %s, parent_inverter_id: %s, dc_id: %s",
-                          dc_name, parent_inverter_id, dc_id)
 
             # Create device info
             dc_device_info = DeviceInfo(
@@ -173,7 +170,6 @@ async def async_setup_entry(
                                           SigenergySwitch, AC_CHARGER_SWITCHES,
                                           DEVICE_TYPE_AC_CHARGER)
 
-    _LOGGER.debug(f"Class to add {SigenergySwitch}")
     async_add_entities(entities)
     return
 
@@ -219,8 +215,6 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
         # The lambda itself needs to handle how to access data (e.g., using device_name for inverters/AC, or potentially device_id for AC if needed)
         identifier = self._device_name
         return self.entity_description.is_on_fn(self.coordinator.data, identifier)
-
-    # The 'available' property is now inherited from SigenergyEntity
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
