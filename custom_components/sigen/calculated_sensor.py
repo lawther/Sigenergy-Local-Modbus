@@ -14,9 +14,6 @@ from homeassistant.components.sensor import (
     SensorStateClass,
     RestoreSensor,
 )
-from homeassistant.helpers.update_coordinator import (  # pylint: disable=syntax-error
-    CoordinatorEntity,
-)
 from homeassistant.const import (
     UnitOfEnergy,
     EntityCategory,
@@ -30,16 +27,12 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 from homeassistant.util import dt as dt_util
 
-from .const import (
-    EMSWorkMode,
-    DEVICE_TYPE_PLANT,
-    DEVICE_TYPE_INVERTER,
-    DOMAIN,
-)
+from .const import EMSWorkMode
 
 from .common import (
     SigenergySensorEntityDescription,
 )
+from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,9 +59,7 @@ class SigenergyCalculations:
         epoch: Any, coordinator_data: Optional[dict] = None
     ) -> Optional[datetime]:
         """Convert epoch timestamp to datetime using system's configured timezone."""
-        # _LOGGER.debug("[CS][Timestamp] Converting epoch: %s (type: %s)", epoch, type(epoch))
         if epoch is None or epoch == 0:  # Also treat 0 as None for timestamps
-            # _LOGGER.debug("[CS][Timestamp] Received null or zero timestamp")
             return None
 
         try:
@@ -79,7 +70,6 @@ class SigenergyCalculations:
             if coordinator_data and "plant" in coordinator_data:
                 try:
                     tz_offset = coordinator_data["plant"].get("plant_system_timezone")
-                    # _LOGGER.debug("[CS][Timestamp] Found timezone offset: %s", tz_offset)
                     if tz_offset is not None:
                         tz_minutes = int(tz_offset)
                         tz_hours = tz_minutes // 60
@@ -87,10 +77,7 @@ class SigenergyCalculations:
                         tz = timezone(
                             timedelta(hours=tz_hours, minutes=tz_remaining_minutes)
                         )
-                        # _LOGGER.debug("[CS][Timestamp] Calculated timezone: UTC%+d:%02d",
-                        # tz_hours, abs(tz_remaining_minutes))
                     else:
-                        # _LOGGER.debug("[CS][Timestamp] No timezone offset found, using UTC")
                         tz = timezone.utc
                 except (ValueError, TypeError) as e:
                     _LOGGER.warning(
@@ -98,7 +85,6 @@ class SigenergyCalculations:
                     )
                     tz = timezone.utc
             else:
-                # _LOGGER.debug("[CS][Timestamp] No plant data available, using UTC")
                 tz = timezone.utc
 
             # Additional validation for timestamp range
@@ -112,8 +98,6 @@ class SigenergyCalculations:
             try:
                 # Convert timestamp using the determined timezone
                 dt = datetime.fromtimestamp(epoch_int, tz=tz)
-                # _LOGGER.debug("[CS][Timestamp] Successfully converted %s to %s (timezone: %s)",
-                # epoch_int, dt.isoformat(), tz)
                 return dt
             except (OSError, OverflowError) as ex:
                 _LOGGER.warning(
@@ -222,7 +206,6 @@ class SigenergyCalculations:
             else:
                 final_power = power / 1000
 
-            # _LOGGER.debug("[CS][PV Power] Final power for PV%d: %s kW", pv_idx, final_power)
             return (
                 float(final_power) if isinstance(final_power, Decimal) else final_power
             )
@@ -242,15 +225,12 @@ class SigenergyCalculations:
     ) -> Optional[float]:
         """Calculate grid import power (positive values only)."""
         if coordinator_data is None or "plant" not in coordinator_data:
-            # _LOGGER.debug("[CS][Grid Import] No plant data available")
             return None
 
         # Get the grid active power value from coordinator data
         grid_power = coordinator_data["plant"].get("plant_grid_sensor_active_power")
-        # _LOGGER.debug("[CS][Grid Import] Starting calculation with grid_power=%s", grid_power)
 
         if grid_power is None or not isinstance(grid_power, (int, float)):
-            # _LOGGER.debug("[CS][Grid Import] Invalid grid power value: %s", grid_power)
             return None
 
         # Convert to Decimal for precise calculation
@@ -259,7 +239,6 @@ class SigenergyCalculations:
             # Return value if positive, otherwise 0
             return float(power_dec) if power_dec > Decimal("0") else 0
         except (ValueError, TypeError, InvalidOperation):
-            # _LOGGER.debug("[CS][Grid Import] Error converting value to Decimal: %s", grid_power)
             # Fallback to float calculation
             return grid_power if grid_power > 0 else 0
 
@@ -271,15 +250,12 @@ class SigenergyCalculations:
     ) -> Optional[float]:
         """Calculate grid export power (negative values converted to positive)."""
         if coordinator_data is None or "plant" not in coordinator_data:
-            # _LOGGER.debug("[CS][Grid Export] No plant data available")
             return None
 
         # Get the grid active power value from coordinator data
         grid_power = coordinator_data["plant"].get("plant_grid_sensor_active_power")
-        # _LOGGER.debug("[CS][Grid Export] Starting calculation with grid_power=%s", grid_power)
 
         if grid_power is None or not isinstance(grid_power, (int, float)):
-            # _LOGGER.debug("[CS][Grid Export] Invalid grid power value: %s", grid_power)
             return None
 
         # Convert to Decimal for precise calculation
@@ -288,7 +264,6 @@ class SigenergyCalculations:
             # Return absolute value if negative, otherwise 0
             return float(-power_dec) if power_dec < Decimal("0") else 0
         except (ValueError, TypeError, InvalidOperation):
-            # _LOGGER.debug("[CS][Grid Export] Error converting value to Decimal: %s", grid_power)
             # Fallback to float calculation
             return -grid_power if grid_power < 0 else 0
 
@@ -303,12 +278,10 @@ class SigenergyCalculations:
         Formula: PV Power + Grid Import Power - Grid Export Power - Plant Battery Power
         """
         if coordinator_data is None or "plant" not in coordinator_data:
-            # _LOGGER.debug("[CS][Plant Consumed] No plant data available")
             return None
 
         # Get the required values from coordinator data
         plant_data = coordinator_data["plant"]
-        # _LOGGER.debug("[CS][Plant Consumed] Plant data keys: %s", list(plant_data.keys()))
 
         # Get PV power
         pv_power = plant_data.get("plant_photovoltaic_power")
@@ -345,8 +318,6 @@ class SigenergyCalculations:
         # Grid power is positive when importing, negative when exporting
         grid_import = max(0, grid_power)
         grid_export = max(0, -grid_power)
-        # _LOGGER.debug("[CS][Plant Consumed] Calculated Grid Import: %s, Grid Export: %s",
-        #              grid_import, grid_export)
 
         # Calculate plant consumed power
         # Note: battery_power is positive when charging, negative when discharging
@@ -382,7 +353,7 @@ class IntegrationTrigger(Enum):
     TIME_ELAPSED = "time_elapsed"
 
 
-class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
+class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     """Implementation of an Integration Sensor with identical behavior to HA core."""
 
     _attr_state_class = SensorStateClass.TOTAL
@@ -394,24 +365,30 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         description: SensorEntityDescription,
         name: str,
         device_type: str,
-        device_id: Optional[int],
+        device_id: Optional[str] = None,
         device_name: Optional[str] = "",
         device_info: Optional[DeviceInfo] = None,
         source_entity_id: Optional[str] = None,
-        # max_sub_interval: Optional[timedelta] = None,
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the integration sensor."""
-        CoordinatorEntity.__init__(self, coordinator)
+        # Call SigenergyEntity's __init__ first
+        super().__init__(
+            coordinator=coordinator,
+            description=description,
+            name=name,
+            device_type=device_type,
+            device_id=device_id,
+            device_name=device_name,
+            device_info=device_info,
+            pv_string_idx=pv_string_idx,
+        )
+        # Then initialize RestoreSensor
         RestoreSensor.__init__(self)
-        self.entity_description = description
-        self._attr_name = name
-        self._device_type = device_type
-        self._device_id = device_id  # Keep slave ID if needed
-        self._device_name = device_name  # Store device name
-        self._device_info_override = device_info
+
+        # Sensor-specific initialization
         self._source_entity_id = source_entity_id
-        self._pv_string_idx = pv_string_idx
+        # self._pv_string_idx = pv_string_idx # Already handled by SigenergyEntity
         self._round_digits = getattr(description, "round_digits", None)
         self._max_sub_interval = getattr(description, "max_sub_interval", None)
 
@@ -434,55 +411,12 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         self._last_integration_time = dt_util.utcnow()
         self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
 
-        # Set device info
-        if self._device_info_override:
-            self._attr_device_info = self._device_info_override
-        else:
-            # Use the same device info logic as in SigenergySensor class
-            if device_type == DEVICE_TYPE_PLANT:
-                self._attr_device_info = DeviceInfo(
-                    identifiers={
-                        (DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")
-                    },
-                    name=device_name,  # Should be plant_name
-                    manufacturer="Sigenergy",
-                    model="Energy Storage System",
-                )
-            elif device_type == DEVICE_TYPE_INVERTER:
-                # Get model and serial number if available
-                model = None
-                serial_number = None
-                sw_version = None
-                if coordinator.data and "inverters" in coordinator.data:
-                    # Use device_name (inverter_name) to fetch data
-                    inverter_data = coordinator.data["inverters"].get(device_name, {})
-                    model = inverter_data.get("inverter_model_type")
-                    serial_number = inverter_data.get("inverter_serial_number")
-                    sw_version = inverter_data.get("inverter_machine_firmware_version")
-
-                self._attr_device_info = DeviceInfo(
-                    identifiers={
-                        (
-                            DOMAIN,
-                            f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}",
-                        )
-                    },
-                    name=device_name,
-                    manufacturer="Sigenergy",
-                    model=model,
-                    serial_number=serial_number,
-                    sw_version=sw_version,
-                    via_device=(
-                        DOMAIN,
-                        f"{coordinator.hub.config_entry.entry_id}_plant",
-                    ),
-                )
+        # Device info is now handled by SigenergyEntity's __init__
 
     def _decimal_state(self, state: str) -> Optional[Decimal]:
         """Convert state to Decimal or return None if not possible."""
         try:
             decimal_value = Decimal(state)
-            # _LOGGER.debug("[CS][State] Converted %s to Decimal: %s", state, decimal_value)
             return decimal_value
         except (InvalidOperation, TypeError) as e:
             _LOGGER.warning("[CS][State] Failed to convert %s to Decimal: %s", state, e)
@@ -492,14 +426,10 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         self, left: str, right: str
     ) -> Optional[tuple[Decimal, Decimal]]:
         """Validate states and convert to Decimal."""
-        # _LOGGER.debug("[CS][State] Validating states - Left: %s, Right: %s", left, right)
         if (left_dec := self._decimal_state(left)) is None or (
             right_dec := self._decimal_state(right)
         ) is None:
-            # _LOGGER.debug("[CS][State] State validation failed - Left: %s, Right: %s",
-            #             left_dec, right_dec)
             return None
-        # _LOGGER.debug("[CS][State] States validated - Left: %s, Right: %s", left_dec, right_dec)
         return (left_dec, right_dec)
 
     def _calculate_trapezoidal(
@@ -524,9 +454,6 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         else:
             self._state = area_scaled
 
-        # _LOGGER.debug(
-        #     "area = %s, area_scaled = %s new state = %s", area, area_scaled, self._state
-        # )
         self._last_valid_state = self._state
 
     def _setup_midnight_reset(self) -> None:
@@ -555,8 +482,6 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
 
         # Restore previous state if available
         last_state = await self.async_get_last_state()
-        # _LOGGER.debug("[CS][Integration] Attempting to restore state for %s: %s",
-        #              self.entity_id, last_state.state if last_state else None)
         if last_state and last_state.state not in (
             None,
             STATE_UNKNOWN,
@@ -585,6 +510,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             self.async_on_remove(self._cancel_max_sub_interval_exceeded_callback)
             handle_state_change = self._integrate_on_state_change_with_max_sub_interval
         else:
+            # _LOGGER.debug("No max_sub_interval set, using default state change handler for %s", self.name)
             handle_state_change = self._integrate_on_state_change_callback
 
         # Check source entity and log potential alternatives
@@ -614,21 +540,28 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
 
     @callback
     def _integrate_on_state_change_with_max_sub_interval(self, event) -> None:
-        """Handle sensor state change with max_sub_interval."""
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
-        # Cancel any pending callbacks
-        # _LOGGER.debug("[Callback] Cancelling pending callbacks for %s due to state change",
-        #            self.entity_id)
         self._cancel_max_sub_interval_exceeded_callback()
 
-        try:
-            self._integrate_on_state_change(old_state, new_state)
-            self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
-            self._last_integration_time = dt_util.utcnow()
-        finally:
-            # Schedule the next time-based integration
-            self._schedule_max_sub_interval_exceeded_if_state_is_numeric(new_state)
+        now = dt_util.utcnow()
+        # Compare coordinator update time and elapsed interval
+        coordinatorTime = self.coordinator.last_update_success or now
+        timeSinceLast = (now - self._last_integration_time).total_seconds()
+        if coordinatorTime == getattr(self, "_lastCoordinatorUpdate", None) \
+           and timeSinceLast < 2:
+            _LOGGER.debug("Skipping integration: %s, interval too short: %s", self.name, timeSinceLast)
+        else:
+            self._lastCoordinatorUpdate = coordinatorTime
+            try:
+                self._integrate_on_state_change(old_state, new_state)
+                self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
+                self._last_integration_time = now
+                # _LOGGER.debug(f"[_integrate_on_state_change_with_max_sub_interval] Setting _last_integration_time: {self._last_integration_time.time()}")
+            except Exception as ex:
+                _LOGGER.warning("Integration error: %s", ex)
+            finally:
+                self._schedule_max_sub_interval_exceeded_if_state_is_numeric(new_state)
 
     def _integrate_on_state_change(
         self, old_state: State | None, new_state: State | None
@@ -636,13 +569,6 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
         """Perform integration based on state change."""
         if new_state is None:
             return
-
-        if new_state.state == STATE_UNAVAILABLE:
-            self._attr_available = False
-            self.async_write_ha_state()
-            return
-
-        self._attr_available = True
 
         if old_state is None or old_state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             self.async_write_ha_state()
@@ -655,9 +581,9 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
 
         # Calculate elapsed time
         elapsed_seconds = Decimal(
-            (new_state.last_updated - old_state.last_updated).total_seconds()
+            (new_state.last_reported - old_state.last_reported).total_seconds()
             if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT
-            else (new_state.last_updated - self._last_integration_time).total_seconds()
+            else (new_state.last_reported - self._last_integration_time).total_seconds()
         )
 
         # Calculate area
@@ -665,6 +591,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
 
         # Update the integral
         self._update_integral(area)
+        # _LOGGER.debug("[on_state_change][%s] Updated state to: %s", self.entity_id, self._state)
         self.async_write_ha_state()
 
     def _schedule_max_sub_interval_exceeded_if_state_is_numeric(
@@ -681,6 +608,26 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             @callback
             def _integrate_on_max_sub_interval_exceeded_callback(now: datetime) -> None:
                 """Integrate based on time and reschedule."""
+                if not self._source_entity_id:
+                    _LOGGER.error("Source entity ID is not set for %s", self.entity_id)
+                    return
+                
+                # Check if a state change happened very recently to avoid double updates
+                time_since_last = now - self._last_integration_time
+                # Use timedelta for comparison
+                if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT and time_since_last < timedelta(seconds=self.coordinator.largest_update_interval):
+                    _LOGGER.debug(
+                        "[%s] Skipping time-based integration; state change occurred %s ago",
+                        self.entity_id,
+                        time_since_last,
+                    )
+                    # Only reschedule the next integration
+                    # Need the original source_state object here, which is captured by the closure
+                    source_state_obj = self.hass.states.get(self._source_entity_id)
+                    if source_state_obj: # Ensure state object exists before rescheduling
+                         self._schedule_max_sub_interval_exceeded_if_state_is_numeric(source_state_obj)
+                    return
+
                 elapsed_seconds = Decimal(
                     (now - self._last_integration_time).total_seconds()
                 )
@@ -692,6 +639,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
 
                 # Update the integral
                 self._update_integral(area)
+                # Calculate seconds since last update
                 self.async_write_ha_state()
 
                 # Update tracking variables
@@ -718,9 +666,6 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             if isinstance(self._state, Decimal) and self._round_digits is not None
             else self._state
         )
-        # _LOGGER.debug("[CS][State] %s value: %s (type: %s)",
-        # self.entity_id, value,
-        # type(value).__name__ if value is not None else 'None')
         return value
 
     @property
@@ -737,19 +682,11 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             if self._source_entity_id
             else None
         )  # Check for None
-        # _LOGGER.debug("[CS][Diagnostic] Source entity check for %s:", self.entity_id)
-        # _LOGGER.debug("  - Expected source: %s", self._source_entity_id)
-        # _LOGGER.debug("  - Source exists: %s", source_entity is not None)
-        # _LOGGER.debug("  - Source state: %s", source_entity.state if source_entity else "N/A")
-
         # If source doesn't exist, look for similar entities
         if source_entity is None:
             # Extract key parts from the entity description
             source_key = getattr(self.entity_description, "source_key", "")
             device_type = self._device_type.lower().replace("_", "")
-
-            # _LOGGER.debug("  - Source key: %s", source_key)
-            # _LOGGER.debug("  - Device type: %s", device_type)
 
             # Look for entities with similar names
             similar_entities = []
@@ -815,25 +752,6 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
 
                     # Add any other sigen entities as general matches
                     similar_entities.append((state.entity_id, state.state))
-
-            # Log the results
-            # if exact_match_entities:
-            #     _LOGGER.debug("  - Exact match entities:")
-            #     for entity_id, state in exact_match_entities:
-            #         _LOGGER.debug("    * %s (state: %s)", entity_id, state)
-
-            # if pattern_match_entities:
-            #     _LOGGER.debug("  - Pattern match entities:")
-            #     for entity_id, state in pattern_match_entities:
-            #         _LOGGER.debug("    * %s (state: %s)", entity_id, state)
-
-            # if not exact_match_entities and not pattern_match_entities and similar_entities:
-            #     _LOGGER.debug("  - Other Sigen entities:")
-            #     for entity_id, state in similar_entities[:10]:  # Limit to 10 to avoid log spam
-            #         _LOGGER.debug("    * %s (state: %s)", entity_id, state)
-
-            # if not exact_match_entities and not pattern_match_entities and not similar_entities:
-            #     _LOGGER.debug("  - No potential alternative sources found")
 
             # Suggest the best alternative
             if exact_match_entities:

@@ -18,7 +18,6 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity  # pylint: disable=syntax-error
 
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
@@ -28,7 +27,8 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
-from .common import(generate_sigen_entity, generate_unique_entity_id)
+from .common import(generate_sigen_entity, generate_unique_entity_id, generate_device_id) # Added generate_device_id
+from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -490,7 +490,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class SigenergyNumber(CoordinatorEntity, NumberEntity):
+class SigenergyNumber(SigenergyEntity, NumberEntity):
     """Representation of a Sigenergy number."""
 
     entity_description: SigenergyNumberEntityDescription
@@ -501,62 +501,24 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
         description: SigenergyNumberEntityDescription,
         name: str,
         device_type: str,
-        device_id: Optional[int],
+        device_id: Optional[str] = None, # Changed to Optional[str]
         device_name: Optional[str] = "",
+        device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the number."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        self.hub = coordinator.hub
-        self._attr_name = name
-        self._device_type = device_type
-        self._device_id = device_id # Keep slave ID if needed elsewhere
-        self._device_name = device_name # Store device name
-        self._pv_string_idx = pv_string_idx
-
-        # Set unique ID (already uses device_name)
-        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator,
-                                                         description.key, pv_string_idx)
-
-        # Set device info
-        if device_type == DEVICE_TYPE_PLANT:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
-                name=device_name, # Should be plant_name
-                manufacturer="Sigenergy",
-                model="Energy Storage System",
-            )
-        elif device_type == DEVICE_TYPE_INVERTER:
-            # Get model and serial number if available
-            model = None
-            serial_number = None
-            sw_version = None
-            if coordinator.data and "inverters" in coordinator.data:
-                # Use device_name (inverter_name) to fetch data
-                inverter_data = coordinator.data["inverters"].get(device_name, {})
-                model = inverter_data.get("inverter_model_type")
-                serial_number = inverter_data.get("inverter_serial_number")
-                sw_version = inverter_data.get("inverter_machine_firmware_version")
-
-
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model=model,
-                serial_number=serial_number,
-                sw_version=sw_version,
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_AC_CHARGER:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="AC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
+        # Call the base class __init__
+        super().__init__(
+            coordinator=coordinator,
+            description=description,
+            name=name,
+            device_type=device_type,
+            device_id=device_id,
+            device_name=device_name,
+            device_info=device_info,
+            pv_string_idx=pv_string_idx,
+        )
+        # No number-specific init needed for now
 
     @property
     def native_value(self) -> float:
@@ -564,8 +526,8 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
         if self.coordinator.data is None:
             return 0.0 # Return float default
             
-        # Pass device_name for inverters, device_id otherwise
-        identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+        # Use device_name as the primary identifier passed to the lambda/function
+        identifier = self._device_name
         try:
             value = self.entity_description.value_fn(self.coordinator.data, identifier)
             # Ensure the value is a float
@@ -575,58 +537,15 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
             return 0.0
 
 
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        if not self.coordinator.last_update_success:
-            return False
-            
-        # Determine the correct identifier and data key based on device type
-        if self._device_type == DEVICE_TYPE_PLANT:
-            data_key = "plant"
-            identifier = None # Plant entities don't use a specific identifier in the data dict
-            device_data = self.coordinator.data.get(data_key, {}) if self.coordinator.data else {}
-            base_available = self.coordinator.data is not None and data_key in self.coordinator.data
-        elif self._device_type == DEVICE_TYPE_INVERTER:
-            data_key = "inverters"
-            identifier = self._device_name # Use name for inverters
-            device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
-            base_available = (
-                self.coordinator.data is not None
-                and data_key in self.coordinator.data
-                and identifier in self.coordinator.data[data_key]
-            )
-        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            data_key = "ac_chargers"
-            identifier = self._device_id # Use ID for AC chargers
-            device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
-            base_available = (
-                self.coordinator.data is not None
-                and data_key in self.coordinator.data
-                and identifier in self.coordinator.data[data_key]
-            )
-        else:
-            return False # Unknown device type
-
-        if not base_available:
-            return False
-
-        # Check specific availability function if defined
-        if hasattr(self.entity_description, "available_fn"):
-            try:
-                # Pass the main coordinator data and the specific identifier
-                return self.entity_description.available_fn(self.coordinator.data, identifier)
-            except Exception as e:
-                _LOGGER.error(f"Error in available_fn for {self.entity_id}: {e}")
-                return False # Treat errors in availability check as unavailable
-
-        return True # Default to available if base checks pass and no specific function
+    # The 'available' property is now inherited from SigenergyEntity
+    # We might need to override it here if the available_fn logic needs specific handling
+    # for number entities, but for now, let's rely on the base implementation.
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the value of the number."""
         try:
-            # Pass device_name for inverters, device_id otherwise
-            identifier = self._device_name # Use device_name for both Inverter and AC Charger now
+            # Use device_name as the primary identifier passed to the lambda/function
+            identifier = self._device_name
             await self.entity_description.set_value_fn(self.hub, identifier, value)
             await self.coordinator.async_request_refresh()
         except SigenergyModbusError as error:

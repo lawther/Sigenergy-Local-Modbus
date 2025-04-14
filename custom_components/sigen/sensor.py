@@ -21,9 +21,6 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import (  # pylint: disable=syntax-error
-    CoordinatorEntity,
-)
 
 from .const import (
     CONF_SLAVE_ID,
@@ -43,6 +40,7 @@ from .calculated_sensor import (
 )
 from .static_sensor import StaticSensors as SS
 from .common import *
+from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,17 +54,10 @@ async def async_setup_entry(
     coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][
         config_entry.entry_id]["coordinator"]
     plant_name = config_entry.data[CONF_NAME]
-    _LOGGER.debug("Starting to add %s", SigenergySensor)
 
     entities: list[SigenergySensor] = []
 
-    _LOGGER.debug("Setting up sensors for %s", config_entry.data[CONF_NAME])
-    _LOGGER.debug("Inverters: %s", coordinator.hub.inverter_connections)
-
     # Add plant sensors
-    _LOGGER.debug(
-        "[CS][Setup] Adding plant sensors from SS.PLANT_SENSORS + SCS.PLANT_SENSORS"
-    )
     # Static Sensors:
     async_add_entities(
         generate_sigen_entity(
@@ -213,15 +204,9 @@ async def async_setup_entry(
         if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
             dc_charger_name = f"{device_name} DC Charger"
 
-            _LOGGER.debug(
-                "Adding sensors for DC charger: %s", dc_charger_name
-            )
-
             dc_name = f"{device_name} DC Charger"
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
             dc_id = f"{parent_inverter_id}_dc_charger"
-            _LOGGER.debug("[sensor] Adding DC Charger with dc_name: %s, parent_inverter_id: %s, dc_id: %s",
-                          dc_name, parent_inverter_id, dc_id)
 
             # Create device info
             dc_device_info = DeviceInfo(
@@ -258,9 +243,6 @@ async def async_setup_entry(
             )
             continue  # Skip this charger if slave_id is missing
 
-        _LOGGER.debug(
-            "Adding sensors for AC charger '%s' (ID: %s)", ac_charger_name, slave_id
-        )
         for description in SS.AC_CHARGER_SENSORS + SCS.AC_CHARGER_SENSORS:
             # Use the ac_charger_name directly from the dictionary key
             sensor_name = f"{ac_charger_name} {description.name}"
@@ -277,26 +259,19 @@ async def async_setup_entry(
                 )
             )
 
-    _LOGGER.debug("[Setup Entry] Final entity list count before add: %d", len(entities))
     # Log first 5 entities to see if they look valid
-    _LOGGER.debug("[Setup Entry] Sample entities before add: %s", entities[:5])
     if entities:  # Only call if list is not empty
         try:
             async_add_entities(entities)
-            _LOGGER.debug(
-                "[Setup Entry] Successfully called async_add_entities for all %d entities.",
-                len(entities),
-            )
         except Exception as ex:
             _LOGGER.exception(
                 "[Setup Entry] Error during final async_add_entities call: %s", ex
             )
     else:
         _LOGGER.debug("[Setup Entry] No entities collected to add.")
-    _LOGGER.debug("[Setup Entry] Finished async_setup_entry for %s", config_entry.title)
 
 
-class SigenergySensor(CoordinatorEntity, SensorEntity):
+class SigenergySensor(SigenergyEntity, SensorEntity):
     """Representation of a Sigenergy sensor."""
 
     entity_description: SigenergySensorEntityDescription
@@ -314,146 +289,31 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         try:
-
-            super().__init__(coordinator)
-            self.entity_description = description  # type: ignore[assignment]
-            self._attr_name = name
-            self._device_type = device_type
-            self._device_id = device_id
-            self._device_name = device_name  # Store device name
-            self._pv_string_idx = pv_string_idx
-            self._device_info_override = device_info
-            self._round_digits = None
-
-            if hasattr(description, "round_digits") and description.round_digits is not None:  # type: ignore
-                self._round_digits = description.round_digits  # type: ignore
-
-            _LOGGER.debug("Initializing SigenergySensor: %s", name)
-            _LOGGER.debug(
-                "Device type: %s, Device ID: %s, Device name: %s",
-                device_type,
-                device_id,
-                device_name,
-            )
-            _LOGGER.debug("Sensor description: %s", description)
-            _LOGGER.debug("Sensor key: %s", description.key)
-            _LOGGER.debug(
-                "Sensor unit of measurement: %s", description.native_unit_of_measurement
-            )
-            _LOGGER.debug("Sensor state class: %s", description.state_class)
-            _LOGGER.debug("Sensor device class: %s", description.device_class)
-            _LOGGER.debug("Sensor round digits: %s", self._round_digits)
-
-            # Get the device number if any as a string for use in names
-            device_number_str = ""
-            if device_name:
-                parts = device_name.split()
-                if parts and parts[-1].isdigit():
-                    device_number_str = f" {parts[-1]}".strip()
-            _LOGGER.debug(
-                "Device number string for %s: %s", device_name, device_number_str
+        # Call the base class __init__
+            super().__init__(
+                coordinator=coordinator,
+                description=description,
+                name=name,
+                device_type=device_type,
+                device_id=device_id,
+                device_name=device_name,
+                device_info=device_info,
+                pv_string_idx=pv_string_idx,
             )
 
-            # Set unique ID
-            self._attr_unique_id = generate_unique_entity_id(
-                device_type, device_name, coordinator, description.key, pv_string_idx
-            )
-
-            # Set device info (use provided device_info if available)
-            if self._device_info_override:
-                self._attr_device_info = self._device_info_override
-                return
-
-            # Plant device info
-            if device_type == DEVICE_TYPE_PLANT:
-                self._attr_device_info = DeviceInfo(
-                    identifiers={
-                        (DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")
-                    },
-                    name=device_name,
-                    manufacturer="Sigenergy",
-                    model="Energy Storage System",
-                )
-            # Inverter Device info
-            elif device_type == DEVICE_TYPE_INVERTER:
-                _LOGGER.debug(
-                    "[Sensor Init] Setting up INVERTER device info for name: '%s', ID: '%s'",
-                    device_name,
-                    self._device_id,
-                )
-                # Get model and serial number if available
-                model = None
-                serial_number = None
-                sw_version = None
-                if coordinator.data and "inverters" in coordinator.data:
-                    # Data should be keyed by device_name (inverter_name) now
-                    inverter_data = coordinator.data["inverters"].get(device_name, {})
-                    model = inverter_data.get("inverter_model_type")
-                    serial_number = inverter_data.get("inverter_serial_number")
-                    sw_version = inverter_data.get("inverter_machine_firmware_version")
-
-                self._attr_device_info = DeviceInfo(
-                    identifiers={
-                        (
-                            DOMAIN,
-                            f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}",
-                        )
-                    },
-                    name=device_name,
-                    manufacturer="Sigenergy",
-                    model=model,
-                    serial_number=serial_number,
-                    sw_version=sw_version,
-                    via_device=(
-                        DOMAIN,
-                        f"{coordinator.hub.config_entry.entry_id}_plant",
-                    ),
-                )
-            # AC Charger device info
-            elif device_type == DEVICE_TYPE_AC_CHARGER:
-                self._attr_device_info = DeviceInfo(
-                    identifiers={
-                        (
-                            DOMAIN,
-                            f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}",
-                        )
-                    },
-                    name=device_name,
-                    manufacturer="Sigenergy",
-                    model="AC Charger",
-                    via_device=(
-                        DOMAIN,
-                        f"{coordinator.hub.config_entry.entry_id}_plant",
-                    ),
-                )
-            # DC Charger device info
-            elif device_type == DEVICE_TYPE_DC_CHARGER:
-                self._attr_device_info = DeviceInfo(
-                    identifiers={
-                        (
-                            DOMAIN,
-                            f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}",
-                        )
-                    },
-                    name=device_name,
-                    manufacturer="Sigenergy",
-                    model="DC Charger",
-                    via_device=(
-                        DOMAIN,
-                        f"{coordinator.hub.config_entry.entry_id}_plant",
-                    ),
-                )
+            # Sensor-specific initialization
+            if (
+                isinstance(description, SigenergySensorEntityDescription)
+                and description.round_digits is not None
+            ):
+                self._round_digits = description.round_digits
             else:
-                _LOGGER.error("Unknown device type for sensor: %s", device_type)
+                self._round_digits = None
+
         except Exception as ex:
             _LOGGER.exception(
                 "[Sensor Init] Error initializing SigenergySensor '%s': %s", name, ex
             )  # Use exception
-        _LOGGER.debug(
-            "[Sensor Init] Completed initialization for SigenergySensor: %s (Unique ID: %s)",
-            self._attr_name,
-            self._attr_unique_id,
-        )
 
     @property
     def native_value(self) -> Any:
@@ -480,6 +340,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     transformed_value = self.entity_description.value_fn(
                         None, self.coordinator.data, None
                     )
+                    # _LOGGER.debug("[SigenergySensor][%s] Reporting state: %s", self.entity_id, transformed_value)
                     return transformed_value
                 except Exception as ex:
                     _LOGGER.error(
@@ -503,14 +364,16 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             # Use the key directly with inverter_ prefix already included
             # Access inverter data using device_name (inverter_name)
             value = (
-                self.coordinator.data["inverters"]
+                self.coordinator.data.get("inverters", {})
                 .get(self._device_name, {})
                 .get(self.entity_description.key)
             )
         elif self._device_type == DEVICE_TYPE_AC_CHARGER:
             # Use the key directly with ac_charger_ prefix already included
+            # Assuming data is keyed by device_name now, consistent with base class
             value = (
-                self.coordinator.data["ac_chargers"]
+                self.coordinator.data.get("ac_chargers", {})
+                #.get(self._device_name, {}) # Use device_name if data is keyed by name
                 .get(self._device_id, {})
                 .get(self.entity_description.key)
             )
@@ -540,8 +403,6 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
 
                 # Use epoch_to_datetime for timestamp conversion
                 converted_timestamp = SC.epoch_to_datetime(value, self.coordinator.data)
-                # _LOGGER.debug("Timestamp conversion for %s: %s -> %s",
-                #             self.entity_id, value, converted_timestamp)
                 return converted_timestamp
             except Exception as ex:
                 _LOGGER.error(
@@ -564,18 +425,17 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     extra_params = getattr(
                         self.entity_description, "extra_params", None
                     )
-                    # _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     transformed_value = self.entity_description.value_fn(
                         value, self.coordinator.data, extra_params
                     )
                 else:
-                    # _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     # Pass coordinator data and None for extra_params for consistency
                     transformed_value = self.entity_description.value_fn(
                         value, self.coordinator.data, None
                     )
 
                 if transformed_value is not None:
+                    # _LOGGER.debug("[SigenergySensor][%s] Reporting state: %s", self.entity_id, transformed_value)
                     return transformed_value
             except Exception as ex:
                 _LOGGER.error(
@@ -602,7 +462,6 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                 RunningState.SHUTDOWN: "Shutdown",
             }.get(value, STATE_UNKNOWN)
         if self.entity_description.key == "inverter_running_state":
-            # _LOGGER.debug("inverter_running_state value: %s", value)
             return {
                 RunningState.STANDBY: "Standby",
                 RunningState.RUNNING: "Running",
@@ -636,53 +495,11 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             else value
         )
 
+        # _LOGGER.debug("[SigenergySensor][%s] Reporting state: %s", self.entity_id, value)
         return value
 
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        if not self.coordinator.last_update_success:
-            return False
-
-        if self._device_type == DEVICE_TYPE_PLANT:
-            # _LOGGER.debug("Checking availability for plant %s", self._device_name)
-            # _LOGGER.debug("Plant data: %s", self.coordinator.data["plant"])
-            return (
-                self.coordinator.data is not None and "plant" in self.coordinator.data
-            )
-        elif self._device_type == DEVICE_TYPE_INVERTER:
-            # _LOGGER.debug("Checking availability for inverter '%s' (ID: '%s')", self._device_name, self._device_id)
-            if not self.coordinator.data or "inverters" not in self.coordinator.data:
-                _LOGGER.warning(
-                    "Inverter availability check: No coordinator data or 'inverters' key missing."
-                )
-                return False
-
-            # Log the keys available in coordinator data for comparison
-            # available_inverter_keys = list(self.coordinator.data["inverters"].keys())
-            # _LOGGER.debug("Inverter availability check: Available inverter keys in coordinator data: %s", available_inverter_keys)
-
-            # Recommended check using device_name
-            final_availability = self._device_name in self.coordinator.data["inverters"]
-            if not final_availability:
-                _LOGGER.debug(
-                    "Inverter availability check: Device name '%s' not found in inverter keys.",
-                    self._device_name,
-                )
-
-            return final_availability
-        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            return (
-                self.coordinator.data is not None
-                and "ac_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["ac_chargers"]
-            )
-        else:
-            _LOGGER.warning(
-                "Unknown device type for availability check: %s", self._device_type
-            )
-
-        return False
+    # The 'available' property is now inherited from SigenergyEntity
+    # If specific availability logic is needed for SigenergySensor beyond the base class, uncomment and modify this.
 
 
 class PVStringSensor(SigenergySensor):
@@ -700,7 +517,7 @@ class PVStringSensor(SigenergySensor):
         pv_string_idx: Optional[int] = None,
     ) -> None:
 
-        super().__init__(
+        super().__init__( # Calls SigenergySensor.__init__, which calls SigenergyEntity.__init__
             coordinator=coordinator,
             description=description,
             name=name,
@@ -714,7 +531,7 @@ class PVStringSensor(SigenergySensor):
     # Add this property to PVStringSensor to check its availability based on parent inverter
     @property
     def available(self) -> bool:
-        """Return if entity is available based on parent inverter."""
+        """Return if PV String entity is available based on parent inverter."""
         # Check coordinator status first
         if not self.coordinator.last_update_success:
             _LOGGER.warning(
@@ -733,7 +550,6 @@ class PVStringSensor(SigenergySensor):
         parent_inverter_available = (
             self._device_name in self.coordinator.data["inverters"]
         )
-        # _LOGGER.debug("PVStringSensor %s availability check: Parent inverter '%s' data exists: %s", self.entity_id, self._device_name, parent_inverter_available)
 
         return parent_inverter_available  # Base availability on parent inverter for now
 
@@ -744,7 +560,6 @@ class PVStringSensor(SigenergySensor):
             _LOGGER.warning("No coordinator data available for %s", self.entity_id)
             return STATE_UNKNOWN
 
-        # _LOGGER.debug("PVStringSensor %s native_value: Getting value for PV %d on inverter '%s'", self.entity_id, self._pv_string_idx, self._device_name)
         try:
             # Access inverter data using device_name (inverter_name)
             inverter_data = self.coordinator.data["inverters"].get(
@@ -797,9 +612,11 @@ class PVStringSensor(SigenergySensor):
             try:
                 # Check if it's already a number (int, float, Decimal)
                 if isinstance(value, (int, float, Decimal)):
-                    return float(value)  # Convert to float for HA consistency
+                    final_value = float(value)  # Convert to float for HA consistency
                 else:
-                    return value  # Return non-numeric values directly
+                    final_value = value  # Return non-numeric values directly
+                # _LOGGER.debug("[PVStringSensor][%s] Reporting state: %s", self.entity_id, final_value)
+                return final_value
             except (ValueError, TypeError) as conv_ex:
                 _LOGGER.warning(
                     "PVStringSensor %s native_value: Could not convert final value '%s' to float: %s",

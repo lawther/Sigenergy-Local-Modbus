@@ -13,7 +13,6 @@ from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity  #pylint: disable=no-name-in-module, syntax-error
 
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
@@ -24,7 +23,8 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
-from .common import generate_unique_entity_id, generate_sigen_entity
+from .common import generate_unique_entity_id, generate_sigen_entity, generate_device_id # Added generate_device_id
+from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -197,7 +197,7 @@ async def async_setup_entry(
     async_add_entities(entities)
     return
 
-class SigenergySelect(CoordinatorEntity, SelectEntity):
+class SigenergySelect(SigenergyEntity, SelectEntity):
     """Representation of a Sigenergy select."""
 
     entity_description: SigenergySelectEntityDescription
@@ -208,63 +208,27 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         description: SigenergySelectEntityDescription,
         name: str,
         device_type: str,
-        device_id: Optional[int],
+        device_id: Optional[str] = None, # Changed to Optional[str]
         device_name: Optional[str] = "",
+        device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the select."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        self.hub = coordinator.hub
-        self._attr_name = name
-        self._device_type = device_type
-        self._device_id = device_id # Keep slave ID if needed
-        self._device_name = device_name # Store device name
-        # Ensure options is a list, default to empty list if None
+        # Call the base class __init__
+        super().__init__(
+            coordinator=coordinator,
+            description=description,
+            name=name,
+            device_type=device_type,
+            device_id=device_id,
+            device_name=device_name,
+            device_info=device_info,
+            pv_string_idx=pv_string_idx,
+        )
+
+        # Select-specific initialization
+        # Used by SelectEntity to determine valid choices.
         self._attr_options = description.options if description.options is not None else []
-        self._pv_string_idx = pv_string_idx
-
-        # Set unique ID (already uses device_name)
-        self._attr_unique_id = generate_unique_entity_id(device_type, device_name, coordinator,
-                                                         description.key, pv_string_idx)
-
-        # Set device info
-        if device_type == DEVICE_TYPE_PLANT:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
-                name=device_name, # Should be plant_name
-                manufacturer="Sigenergy",
-                model="Energy Storage System",
-            )
-        elif device_type == DEVICE_TYPE_INVERTER:
-            # Get model and serial number if available
-            model = None
-            serial_number = None
-            sw_version = None
-            if coordinator.data and "inverters" in coordinator.data:
-                 # Use device_name (inverter_name) to fetch data
-                inverter_data = coordinator.data["inverters"].get(device_name, {})
-                model = inverter_data.get("inverter_model_type")
-                serial_number = inverter_data.get("inverter_serial_number")
-                sw_version = inverter_data.get("inverter_machine_firmware_version")
-
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model=model,
-                serial_number=serial_number,
-                sw_version=sw_version,
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_AC_CHARGER:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="AC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
 
     @property
     def current_option(self) -> str:
@@ -272,8 +236,8 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         if self.coordinator.data is None:
             return self.options[0] if self.options else ""
             
-        # Pass device_name for inverters, device_id otherwise
-        identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+        # Use device_name as the primary identifier passed to the lambda/function
+        identifier = self._device_name
         try:
             option = self.entity_description.current_option_fn(self.coordinator.data, identifier)
             return option if option is not None else ""
@@ -281,59 +245,11 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
             _LOGGER.error(f"Error getting current_option for {self.entity_id} (identifier: {identifier}): {e}")
             return ""
 
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        if not self.coordinator.last_update_success:
-            return False
-            
-        # Determine the correct identifier and data key based on device type
-        if self._device_type == DEVICE_TYPE_PLANT:
-            data_key = "plant"
-            identifier = None # Plant entities don't use a specific identifier in the data dict
-            device_data = self.coordinator.data.get(data_key, {}) if self.coordinator.data else {}
-            base_available = self.coordinator.data is not None and data_key in self.coordinator.data
-        elif self._device_type == DEVICE_TYPE_INVERTER:
-            data_key = "inverters"
-            identifier = self._device_name # Use name for inverters
-            device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
-            base_available = (
-                self.coordinator.data is not None
-                and data_key in self.coordinator.data
-                and identifier in self.coordinator.data[data_key]
-            )
-        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            data_key = "ac_chargers"
-            identifier = self._device_id # Use ID for AC chargers
-            device_data = self.coordinator.data.get(data_key, {}).get(identifier, {}) if self.coordinator.data else {}
-            base_available = (
-                self.coordinator.data is not None
-                and data_key in self.coordinator.data
-                and identifier in self.coordinator.data[data_key]
-            )
-        else:
-            return False # Unknown device type
-
-        if not base_available:
-            return False
-
-        # Check specific availability function if defined
-        if hasattr(self.entity_description, "available_fn"):
-            try:
-                # Pass the main coordinator data and the specific identifier
-                return self.entity_description.available_fn(self.coordinator.data, identifier)
-            except Exception as e:
-                _LOGGER.error(f"Error in available_fn for {self.entity_id}: {e}")
-                return False # Treat errors in availability check as unavailable
-
-        return True # Default to available if base checks pass and no specific function
-
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
         try:
-            # Pass device_name for inverters, device_id otherwise
-            identifier = self._device_name if self._device_type == DEVICE_TYPE_INVERTER else self._device_id
+            # Use device_name as the primary identifier passed to the lambda/function
+            identifier = self._device_name
             await self.entity_description.select_option_fn(self.hub, identifier, option)
             await self.coordinator.async_request_refresh()
         except SigenergyModbusError as error:
