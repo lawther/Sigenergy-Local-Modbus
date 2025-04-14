@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+import asyncio
+from pymodbus.client import AsyncModbusTcpClient
+from pymodbus.exceptions import ConnectionException, ModbusException
+from .modbus import _suppress_pymodbus_logging
 
 import re
 import voluptuous as vol
@@ -327,21 +331,12 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the plant configuration step when adding a new plant device."""
-        errors = {}
 
-        if self._discovered_ip:
-            # Test connecting trough Modbus to ip with DEFAULT_PORT and DEFAULT_INVERTER_SLAVE_ID
-            connection_succeded = False
-            if connection_succeded:
-                user_input = {
-                    CONF_HOST: self._discovered_ip,
-                    CONF_PORT: DEFAULT_PORT,
-                    CONF_INVERTER_SLAVE_ID: DEFAULT_INVERTER_SLAVE_ID,
-                    CONF_READ_ONLY: DEFAULT_READ_ONLY
-                }
+        errors = {}
+        dc_charger_error = {}
 
         if user_input is None:
-            # Dynamically create schema to pre-fill host if discovered via DHCP
+            # Dynamically create schema using the determined prefill_host
             schema = vol.Schema(
                 {
                     vol.Required(CONF_HOST, default=self._discovered_ip or ""): str,
@@ -362,6 +357,22 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 errors[CONF_INVERTER_SLAVE_ID] = "each_id_must_be_between_1_and_246"
         except (ValueError, TypeError):
             errors[CONF_INVERTER_SLAVE_ID] = "invalid_integer_value"
+
+        if not errors:
+            errors.update(await self.async_test_connection(user_input[CONF_HOST],
+                                                        user_input[CONF_PORT],
+                                                        user_input[CONF_INVERTER_SLAVE_ID],
+                                                        30578))  # inverter_running_state
+            _LOGGER.debug("errors is: %s , %s", str(True if errors else False), errors)
+
+            if not errors:
+                dc_charger_error.update(await self.async_test_connection(user_input[CONF_HOST],
+                                                            user_input[CONF_PORT],
+                                                            user_input[CONF_INVERTER_SLAVE_ID],
+                                                            31501))  # dc_charger_charging_current
+                if not dc_charger_error:
+                    _LOGGER.debug("DC charger connection successful for %s", user_input[CONF_HOST])
+
 
         if errors:
             return self.async_show_form(
@@ -385,7 +396,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 CONF_HOST: self._data[CONF_PLANT_CONNECTION][CONF_HOST],
                 CONF_PORT: self._data[CONF_PLANT_CONNECTION][CONF_PORT],
                 CONF_SLAVE_ID: inverter_id,
-                CONF_INVERTER_HAS_DCCHARGER: DEFAULT_INVERTER_HAS_DCCHARGER,
+                CONF_INVERTER_HAS_DCCHARGER: not dc_charger_error,
             }
         }
 
@@ -404,6 +415,51 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         # Create the configuration entry with the default name
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
+
+    async def async_test_connection(self, host, port, slave_id, register_address, register_count=1, timeout=1) -> dict[str, str]:
+        errors = {}
+        # Check the connection
+        _LOGGER.debug("DHCP discovery: Testing Modbus connection to %s:%s", host, port)
+        client = AsyncModbusTcpClient(host=host, port=port, timeout=timeout)
+        try:
+            with _suppress_pymodbus_logging(): # Suppress pymodbus logs for this check
+                if await client.connect():
+                    _LOGGER.debug("Modbus connected to %s. Reading register %s...", host, register_address)
+                    # Try reading a simple register (e.g., inverter_running_state)
+                    result = await client.read_input_registers(
+                        address=register_address,
+                        count=register_count,
+                        slave=slave_id
+                    )
+                    if result and not result.isError():
+                        _LOGGER.debug("Modbus read successful from %s on port %s and deviceID %s.", host, port, slave_id)
+                    elif result:
+                        err = "Modbus read error from %s on port %s and deviceID %s: %s. This probably means there is no AC Charger there but maybe another Modbus device." % (host, port, slave_id, result)
+                        errors[CONF_HOST] = err
+                        _LOGGER.debug(err)
+                    else:
+                        err = "Modbus read failed from %s on port %s and deviceID %s (no result)." % (host, port, slave_id)
+                        errors[CONF_HOST] = err
+                        _LOGGER.debug(err)
+                else:
+                    err = "Modbus connection failed to %s on port: %s" % (host, port)
+                    errors[CONF_HOST] = err
+                    _LOGGER.debug(err)
+        except (ConnectionException, ModbusException, asyncio.TimeoutError) as e:
+            err = "Modbus connection failed for %s: %s" % (host, e)
+            errors[CONF_HOST] = err
+            _LOGGER.debug(err)
+        except Exception as e:
+                err = f"Unexpected error during Modbus connection test for {host}: {e}"
+                errors[CONF_HOST] = err
+                _LOGGER.warning(err)
+        finally:
+            if client:
+                client.close()
+                _LOGGER.debug("Modbus test client closed for %s.", host)
+
+        return errors
+
 
     async def async_step_select_plant(
         self, user_input: dict[str, Any] | None = None
@@ -447,21 +503,51 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the inverter configuration step when adding a new inverter device."""
+        errors = {}
+
+        # Dynamically create schema to pre-fill host if discovered via DHCP
+        schema = vol.Schema({
+            vol.Required(CONF_HOST, default=self._discovered_ip or ""): str,
+            vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+            vol.Required(CONF_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
+            })
+
         if user_input is None:
-            # Dynamically create schema to pre-fill host if discovered via DHCP
-            schema = vol.Schema(
-                {
-                    vol.Required(CONF_HOST, default=self._discovered_ip or ""): str,
-                    vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                    vol.Required(CONF_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
-                }
-            )
             return self.async_show_form(
                 step_id=STEP_INVERTER_CONFIG,
                 data_schema=schema,
             )
 
-        # Check for duplicate IDs
+        # Check connection
+        try:
+            inverter_id = int(user_input[CONF_SLAVE_ID])
+            if not 1 <= inverter_id <= 246:
+                errors[CONF_SLAVE_ID] = "each_id_must_be_between_1_and_246"
+        except (ValueError, TypeError):
+            errors[CONF_SLAVE_ID] = "invalid_integer_value"
+
+        errors.update(await self.async_test_connection(user_input[CONF_HOST],
+                                                       user_input[CONF_PORT],
+                                                       user_input[CONF_SLAVE_ID],
+                                                       30578))  # inverter_running_state
+
+        if not errors:
+            dc_charger_error = {}
+            dc_charger_error.update(await self.async_test_connection(user_input[CONF_HOST],
+                                                        user_input[CONF_PORT],
+                                                        user_input[CONF_SLAVE_ID],
+                                                        31501))  # dc_charger_charging_current
+            if not dc_charger_error:
+                _LOGGER.debug("DC charger connection successful for %s", user_input[CONF_HOST])
+
+        if errors:
+            return self.async_show_form(
+                step_id=STEP_INVERTER_CONFIG,
+                data_schema=schema,
+                errors=errors,
+            )
+
+
         assert self._selected_plant_entry_id is not None  # Ensure ID is set before use
         plant_entry = self.hass.config_entries.async_get_entry(
             self._selected_plant_entry_id
@@ -471,21 +557,21 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             _LOGGER.debug("Plant entry data: %s", plant_entry.data)
             # Check against existing inverter slave IDs in the connections dictionary
             inverter_connections = plant_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
-            _LOGGER.debug("Existing inverter connections: %s", inverter_connections)
+            # _LOGGER.debug("Existing inverter connections: %s", inverter_connections)
 
             # Get the inverter name based on number of existing inverters
             inverter_no = get_highest_device_number(list(inverter_connections.keys()))
             inverter_name = (
                 f"Sigen Inverter{'' if inverter_no == 0 else f' {inverter_no + 1}'}"
             )
-            _LOGGER.debug("InverterName generated: %s", inverter_name)
+            # _LOGGER.debug("InverterName generated: %s", inverter_name)
 
             # Create the new connection
             new_inverter_connection = {
                 CONF_HOST: user_input[CONF_HOST],
                 CONF_PORT: user_input[CONF_PORT],
                 CONF_SLAVE_ID: user_input[CONF_SLAVE_ID],
-                CONF_INVERTER_HAS_DCCHARGER: DEFAULT_INVERTER_HAS_DCCHARGER,
+                CONF_INVERTER_HAS_DCCHARGER: not dc_charger_error,
             }
 
             # Create or update the inverter connections dictionary
@@ -546,6 +632,13 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             ac_charger_connections = plant_entry.data.get(
                 CONF_AC_CHARGER_CONNECTIONS, {}
             )
+
+            # Check connection if not already errors
+            if not errors:
+                errors.update(await self.async_test_connection(user_input[CONF_HOST],
+                                                            user_input[CONF_PORT],
+                                                            user_input[CONF_SLAVE_ID],
+                                                            32000))  # ac_charger_system_state
 
             if errors:
                 return self.async_show_form(
