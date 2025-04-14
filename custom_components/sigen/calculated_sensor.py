@@ -36,6 +36,12 @@ from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
 
+# Only log for these entities
+LOG_THIS_ENTITY = [
+    "sensor.sigen_plant_daily_consumed_energy",
+    "sensor.sigen_plant_daily_pv_energy",
+]
+
 
 class SigenergyCalculations:
     """Static class for Sigenergy calculated sensor functions."""
@@ -443,10 +449,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
     def _update_integral(self, area: Decimal) -> None:
         """Update the integral with the calculated area."""
-        log_this_entity = self.entity_id in [
-            "sensor.sigen_plant_daily_consumed_energy",
-            "sensor.sigen_plant_daily_grid_import_energy",
-        ]
+        log_this_entity = self.entity_id in LOG_THIS_ENTITY
         state_before = self._state
         # Convert seconds to hours
         area_scaled = area / Decimal(3600)
@@ -477,10 +480,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         @callback
         def _handle_midnight(current_time):
             """Handle midnight reset."""
-            log_this_entity = self.entity_id in [
-                "sensor.sigen_plant_daily_consumed_energy",
-                "sensor.sigen_plant_daily_grid_import_energy",
-            ]
+            log_this_entity = self.entity_id in LOG_THIS_ENTITY
             state_before = self._state
             self._state = Decimal(0)
             self._last_valid_state = self._state
@@ -503,10 +503,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
         await super().async_added_to_hass()
-        log_this_entity = self.entity_id in [
-            "sensor.sigen_plant_daily_consumed_energy",
-            "sensor.sigen_plant_daily_grid_import_energy",
-        ]
+        log_this_entity = self.entity_id in LOG_THIS_ENTITY
 
         # Restore previous state if available
         last_state = await self.async_get_last_state()
@@ -569,10 +566,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         # Cancel any scheduled timers
         if self._cancel_max_sub_interval_exceeded_callback is not None:
             # Only log for specific entities
-            if self.entity_id in [
-                "sensor.sigen_plant_daily_consumed_energy",
-                "sensor.sigen_plant_daily_grid_import_energy",
-            ]:
+            if self.entity_id in LOG_THIS_ENTITY:
                 _LOGGER.debug(
                     "[%s] Cancelling timer on entity removal", self.entity_id
                 )
@@ -596,10 +590,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         # Cancel existing timer safely
         if self._cancel_max_sub_interval_exceeded_callback is not None:
             # Only log for specific entities
-            if self.entity_id in [
-                "sensor.sigen_plant_daily_consumed_energy",
-                "sensor.sigen_plant_daily_grid_import_energy",
-            ]:
+            if self.entity_id in LOG_THIS_ENTITY:
                 _LOGGER.debug(
                     "[%s] Cancelling timer due to state change", self.entity_id
                 )
@@ -630,10 +621,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self, old_state: State | None, new_state: State | None
     ) -> None:
         """Perform integration based on state change."""
-        log_this_entity = self.entity_id in [
-            "sensor.sigen_plant_daily_consumed_energy",
-            "sensor.sigen_plant_daily_grid_import_energy",
-        ]
+        log_this_entity = self.entity_id in LOG_THIS_ENTITY
         if new_state is None:
             return
 
@@ -674,7 +662,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 self.entity_id,
                 self._state,
             )
-        self.async_write_ha_state())
+        self.async_write_ha_state()
 
     def _schedule_max_sub_interval_exceeded_if_state_is_numeric(
         self, source_state: State | None
@@ -687,18 +675,12 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             is not None
         ):
             # Only log scheduling for specific entities
-            log_this_entity = self.entity_id in [
-                "sensor.sigen_plant_daily_consumed_energy",
-                "sensor.sigen_plant_daily_grid_import_energy",
-            ]
+            log_this_entity = self.entity_id in LOG_THIS_ENTITY
 
             @callback
             def _integrate_on_max_sub_interval_exceeded_callback(now: datetime) -> None:
                 """Integrate based on time and reschedule."""
-                log_this_entity = self.entity_id in [
-                    "sensor.sigen_plant_daily_consumed_energy",
-                    "sensor.sigen_plant_daily_grid_import_energy",
-                ]
+                log_this_entity = self.entity_id in LOG_THIS_ENTITY
 
                 if log_this_entity:
                     _LOGGER.debug(
