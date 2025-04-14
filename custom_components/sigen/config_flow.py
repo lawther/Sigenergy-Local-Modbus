@@ -203,6 +203,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Store the discovered IP
         self._discovered_ip = discovery_info.ip
         _LOGGER.debug("Starting config for DHCP discovered with ip: %s", self._discovered_ip)
+        self.context["title_placeholders"] = {"name": str(discovery_info.ip)}
 
         # Set unique ID based on discovery info to allow ignoring/updates
         unique_id = f"dhcp_{self._discovered_ip}"
