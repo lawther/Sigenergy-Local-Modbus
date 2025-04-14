@@ -404,11 +404,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             else self._max_sub_interval
         )
 
-        self._max_sub_interval_exceeded_callback = lambda *args: None
-        self._cancel_max_sub_interval_exceeded_callback = (
-            self._max_sub_interval_exceeded_callback
-        )
-        self._last_integration_time = dt_util.utcnow()
+        self._max_sub_interval_exceeded_callback = lambda *args: None  # Just a placeholder
+        self._cancel_max_sub_interval_exceeded_callback = None  # Will store the actual cancel handle        self._last_integration_time = dt_util.utcnow()
         self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
 
         # Device info is now handled by SigenergyEntity's __init__
@@ -507,7 +504,6 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         if self._max_sub_interval is not None:
             source_state = self.hass.states.get(self._source_entity_id)
             self._schedule_max_sub_interval_exceeded_if_state_is_numeric(source_state)
-            self.async_on_remove(self._cancel_max_sub_interval_exceeded_callback)
             handle_state_change = self._integrate_on_state_change_with_max_sub_interval
         else:
             # _LOGGER.debug("No max_sub_interval set, using default state change handler for %s", self.name)
@@ -530,6 +526,22 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             )
         )
 
+    async def async_will_remove_from_hass(self) -> None:
+        """Handle entity removal."""
+        # Cancel any scheduled timers
+        if self._cancel_max_sub_interval_exceeded_callback is not None:
+            # Only log for specific entities
+            if self.entity_id in [
+                "sensor.sigen_plant_daily_consumed_energy",
+                "sensor.sigen_plant_daily_grid_import_energy",
+            ]:
+                _LOGGER.debug(
+                    "[%s] Cancelling timer on entity removal", self.entity_id
+                )
+            self._cancel_max_sub_interval_exceeded_callback()
+            self._cancel_max_sub_interval_exceeded_callback = None
+        await super().async_will_remove_from_hass()
+
     @callback
     def _integrate_on_state_change_callback(self, event) -> None:
         """Handle sensor state change without max_sub_interval."""
@@ -542,7 +554,19 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     def _integrate_on_state_change_with_max_sub_interval(self, event) -> None:
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
-        self._cancel_max_sub_interval_exceeded_callback()
+
+        # Cancel existing timer safely
+        if self._cancel_max_sub_interval_exceeded_callback is not None:
+            # Only log for specific entities
+            if self.entity_id in [
+                "sensor.sigen_plant_daily_consumed_energy",
+                "sensor.sigen_plant_daily_grid_import_energy",
+            ]:
+                _LOGGER.debug(
+                    "[%s] Cancelling timer due to state change", self.entity_id
+                )
+            self._cancel_max_sub_interval_exceeded_callback()
+            self._cancel_max_sub_interval_exceeded_callback = None
 
         now = dt_util.utcnow()
         # Compare coordinator update time and elapsed interval
@@ -561,6 +585,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             except Exception as ex:
                 _LOGGER.warning("Integration error: %s", ex)
             finally:
+                # Reschedule timer after processing state change
                 self._schedule_max_sub_interval_exceeded_if_state_is_numeric(new_state)
 
     def _integrate_on_state_change(
@@ -604,55 +629,103 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             and (source_state_dec := self._decimal_state(source_state.state))
             is not None
         ):
+            # Only log scheduling for specific entities
+            log_this_entity = self.entity_id in [
+                "sensor.sigen_plant_daily_consumed_energy",
+                "sensor.sigen_plant_daily_grid_import_energy",
+            ]
 
             @callback
             def _integrate_on_max_sub_interval_exceeded_callback(now: datetime) -> None:
                 """Integrate based on time and reschedule."""
-                if not self._source_entity_id:
-                    _LOGGER.error("Source entity ID is not set for %s", self.entity_id)
-                    return
-                
+                log_this_entity = self.entity_id in [
+                    "sensor.sigen_plant_daily_consumed_energy",
+                    "sensor.sigen_plant_daily_grid_import_energy",
+                ]
+
+                if log_this_entity:
+                    _LOGGER.debug(
+                        "[%s] Timer callback executed at %s", self.entity_id, now
+                    )
+                # ... existing checks ...
+
                 # Check if a state change happened very recently to avoid double updates
                 time_since_last = now - self._last_integration_time
-                # Use timedelta for comparison
-                if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT and time_since_last < timedelta(seconds=self.coordinator.largest_update_interval):
-                    _LOGGER.debug(
-                        "[%s] Skipping time-based integration; state change occurred %s ago",
-                        self.entity_id,
-                        time_since_last,
-                    )
+                # Use fixed buffer of 5 seconds
+                if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT and time_since_last < timedelta(seconds=5):
+                    if log_this_entity:
+                        _LOGGER.debug(
+                            "[%s] Skipping timer integration; state change occurred %s ago. Rescheduling only.",
+                            self.entity_id,
+                            time_since_last,
+                        )
                     # Only reschedule the next integration
-                    # Need the original source_state object here, which is captured by the closure
                     source_state_obj = self.hass.states.get(self._source_entity_id)
                     if source_state_obj: # Ensure state object exists before rescheduling
-                         self._schedule_max_sub_interval_exceeded_if_state_is_numeric(source_state_obj)
+                        self._schedule_max_sub_interval_exceeded_if_state_is_numeric(
+                            source_state_obj)
                     return
+
+                if log_this_entity:
+                    _LOGGER.debug("[%s] Performing timer-based integration", self.entity_id)
 
                 elapsed_seconds = Decimal(
                     (now - self._last_integration_time).total_seconds()
                 )
+                if log_this_entity:
+                    _LOGGER.debug(
+                        "[%s] Timer - Elapsed seconds: %s, Last state decimal: %s",
+                        self.entity_id,
+                        elapsed_seconds,
+                        source_state_dec, # Log the state value used
+                    )
 
                 # Calculate area with constant state
                 area = self._calculate_area_with_one_state(
                     elapsed_seconds, source_state_dec
                 )
+                if log_this_entity:
+                    _LOGGER.debug("[%s] Timer - Calculated area: %s", self.entity_id, area)
+
+                # Store state before update for logging
+                state_before = self._state
 
                 # Update the integral
                 self._update_integral(area)
-                # Calculate seconds since last update
+
+                if log_this_entity:
+                    _LOGGER.debug(
+                        "[%s] Timer - State before update: %s, State after update: %s",
+                        self.entity_id,
+                        state_before,
+                        self._state, # Log the state after update
+                    )
+
+                # Write state
                 self.async_write_ha_state()
+                if log_this_entity:
+                    _LOGGER.debug("[%s] Timer - Called async_write_ha_state()", self.entity_id)
+
 
                 # Update tracking variables
-                self._last_integration_time = dt_util.utcnow()
+                self._last_integration_time = dt_util.utcnow() # Use utcnow for consistency
                 self._last_integration_trigger = IntegrationTrigger.TIME_ELAPSED
 
                 # Schedule the next integration
+                if log_this_entity:
+                    _LOGGER.debug("[%s] Rescheduling timer after execution", self.entity_id)
                 self._schedule_max_sub_interval_exceeded_if_state_is_numeric(
-                    source_state
+                    source_state # Use the original source_state captured by closure
                 )
 
-            # Schedule the callback
-            self._max_sub_interval_exceeded_callback = async_call_later(
+            # Store the cancel handle correctly
+            if log_this_entity:
+                _LOGGER.debug(
+                    "[%s] Scheduling timer with interval %s",
+                    self.entity_id,
+                    self._max_sub_interval,
+                )
+            self._cancel_max_sub_interval_exceeded_callback = async_call_later(
                 self.hass,
                 self._max_sub_interval,
                 _integrate_on_max_sub_interval_exceeded_callback,
