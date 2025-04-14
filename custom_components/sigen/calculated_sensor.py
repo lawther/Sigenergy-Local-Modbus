@@ -358,6 +358,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
     _attr_state_class = SensorStateClass.TOTAL
     _attr_should_poll = False
+    _attr_force_update = True # Re-enable to force history updates
 
     def __init__(
         self,
@@ -443,6 +444,11 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
     def _update_integral(self, area: Decimal) -> None:
         """Update the integral with the calculated area."""
+        log_this_entity = self.entity_id in [
+            "sensor.sigen_plant_daily_consumed_energy",
+            "sensor.sigen_plant_daily_grid_import_energy",
+        ]
+        state_before = self._state
         # Convert seconds to hours
         area_scaled = area / Decimal(3600)
 
@@ -450,6 +456,15 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             self._state += area_scaled
         else:
             self._state = area_scaled
+
+        if log_this_entity:
+            _LOGGER.debug(
+                "[%s] _update_integral - Area: %s, State before: %s, State after: %s",
+                self.entity_id,
+                area_scaled,
+                state_before,
+                self._state,
+            )
 
         self._last_valid_state = self._state
 
@@ -463,9 +478,22 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         @callback
         def _handle_midnight(current_time):
             """Handle midnight reset."""
+            log_this_entity = self.entity_id in [
+                "sensor.sigen_plant_daily_consumed_energy",
+                "sensor.sigen_plant_daily_grid_import_energy",
+            ]
+            state_before = self._state
             self._state = Decimal(0)
             self._last_valid_state = self._state
+            if log_this_entity:
+                _LOGGER.debug(
+                    "[%s] _handle_midnight - Resetting state from %s to 0",
+                    self.entity_id,
+                    state_before,
+                )
             self.async_write_ha_state()
+            if log_this_entity:
+                 _LOGGER.debug("[%s] _handle_midnight - Called async_write_ha_state()", self.entity_id)
             self._setup_midnight_reset()  # Schedule next reset
 
         # Schedule the reset
@@ -476,6 +504,10 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
         await super().async_added_to_hass()
+        log_this_entity = self.entity_id in [
+            "sensor.sigen_plant_daily_consumed_energy",
+            "sensor.sigen_plant_daily_grid_import_energy",
+        ]
 
         # Restore previous state if available
         last_state = await self.async_get_last_state()
@@ -485,7 +517,14 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             STATE_UNAVAILABLE,
         ):
             try:
-                self._state = Decimal(last_state.state)
+                restored_state = Decimal(last_state.state)
+                if log_this_entity:
+                    _LOGGER.debug(
+                        "[%s] async_added_to_hass - Restoring state to %s",
+                        self.entity_id,
+                        restored_state,
+                    )
+                self._state = restored_state
                 self._last_valid_state = self._state
                 self._last_integration_time = dt_util.utcnow()
             except (ValueError, TypeError, InvalidOperation):
@@ -592,16 +631,22 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self, old_state: State | None, new_state: State | None
     ) -> None:
         """Perform integration based on state change."""
+        log_this_entity = self.entity_id in [
+            "sensor.sigen_plant_daily_consumed_energy",
+            "sensor.sigen_plant_daily_grid_import_energy",
+        ]
         if new_state is None:
             return
 
         if old_state is None or old_state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            self.async_write_ha_state()
+            # Potentially log initial state write if needed
+            # self.async_write_ha_state()
             return
 
         # Validate states
         if not (states := self._validate_states(old_state.state, new_state.state)):
-            self.async_write_ha_state()
+            # Potentially log invalid state write if needed
+            # self.async_write_ha_state()
             return
 
         # Calculate elapsed time
@@ -613,10 +658,23 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         # Calculate area
         area = self._calculate_trapezoidal(elapsed_seconds, *states)
+        if log_this_entity:
+            _LOGGER.debug(
+                "[%s] _integrate_on_state_change - Calculated area: %s",
+                self.entity_id,
+                area,
+            )
 
         # Update the integral
-        self._update_integral(area)
-        # _LOGGER.debug("[on_state_change][%s] Updated state to: %s", self.entity_id, self._state)
+        self._update_integral(area) # Logging is now inside _update_integral
+
+        # Write state
+        if log_this_entity:
+            _LOGGER.debug(
+                "[%s] _integrate_on_state_change - Calling async_write_ha_state() with state: %s",
+                self.entity_id,
+                self._state,
+            )
         self.async_write_ha_state()
 
     def _schedule_max_sub_interval_exceeded_if_state_is_numeric(
@@ -691,7 +749,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 state_before = self._state
 
                 # Update the integral
-                self._update_integral(area)
+                self._update_integral(area) # Logging is now inside _update_integral
 
                 if log_this_entity:
                     _LOGGER.debug(
@@ -702,6 +760,12 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                     )
 
                 # Write state
+                if log_this_entity:
+                    _LOGGER.debug(
+                        "[%s] Timer - Calling async_write_ha_state() with state: %s",
+                        self.entity_id,
+                        self._state,
+                    )
                 self.async_write_ha_state()
                 if log_this_entity:
                     _LOGGER.debug("[%s] Timer - Called async_write_ha_state()", self.entity_id)
