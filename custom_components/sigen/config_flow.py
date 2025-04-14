@@ -211,6 +211,14 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Abort if this discovery (IP) is already configured OR ignored
         self._abort_if_unique_id_configured(updates={CONF_HOST: self._discovered_ip})
 
+        await self._async_load_plants()
+
+        # If no plants exist, configure as new plant (and primary inverter)
+        if not self._plants:
+            self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_NEW_PLANT
+            # Unique ID for the discovery was set above.
+            return await self.async_step_plant_config()
+
         # Check if this IP is already configured in any *active* config entry
         # This prevents offering configuration for an already integrated device part
         for entry in self.hass.config_entries.async_entries(DOMAIN):
@@ -246,15 +254,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                     )
                     return self.async_abort(reason="already_configured_device") # Use generic reason
 
-        await self._async_load_plants()
-        _LOGGER.debug("Loaded plants: %s", self._plants)
-
-        # If no plants exist, configure as new plant (DHCP implies it might be the primary inverter)
-        if not self._plants:
-            self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_NEW_PLANT
-            # Unique ID for the discovery was set above.
-            return await self.async_step_plant_config()
-
         # Otherwise, let user choose configuration type or ignore
         return await self.async_step_dhcp_select_plant()
 
@@ -266,8 +265,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             options = {
                 DEVICE_TYPE_NEW_PLANT: "Configure as New Plant",
                 DEVICE_TYPE_INVERTER: "Add as Inverter to Existing Plant",
-                ACTION_IGNORE: "Ignore this device",  # Add ignore option
-            }
+                DEVICE_TYPE_AC_CHARGER: "Add as AC Charger to Existing Plant",}
             return self.async_show_form(
                 step_id=STEP_DHCP_SELECT_PLANT,
                 data_schema=vol.Schema({
@@ -281,15 +279,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Use 'action' key instead of 'device_type'
         selected_action = user_input["action"]
 
-        # Handle ignore action
-        if selected_action == ACTION_IGNORE:
-            _LOGGER.info("User chose to ignore discovered device at %s", self._discovered_ip)
-            # Unique ID was already set in async_step_dhcp.
-            # Aborting with ignored_device tells HA this discovery is ignored.
-            # No need to create an entry with SOURCE_IGNORE manually here.
-            return self.async_abort(reason="ignored_device")
-
-        # Existing logic for new plant or adding inverter
+        # Existing logic for new plant or adding inverter or AC charger
         self._data[CONF_DEVICE_TYPE] = selected_action # Store the selected device type
 
         if selected_action == DEVICE_TYPE_NEW_PLANT:
@@ -299,13 +289,14 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             await self.async_set_unique_id(f"plant_{self._discovered_ip}", raise_on_progress=False)
             self._abort_if_unique_id_configured(updates={CONF_HOST: self._discovered_ip})
             return await self.async_step_plant_config()
-        # Assuming DEVICE_TYPE_INVERTER is the only other non-ignore option here
-        else: # DEVICE_TYPE_INVERTER
+        # Assuming DEVICE_TYPE_INVERTER or DEVICE_TYPE_AC_CHARGER are the only other non-ignore options here
+        else:
             # Ensure plants are loaded if we jump directly here via DHCP with existing plants
             if not self._plants:
                 await self._async_load_plants()
             # No unique ID needed here as we are adding to an existing plant entry
             return await self.async_step_select_plant()
+
 
     async def async_step_device_type(
         self, user_input: dict[str, Any] | None = None
