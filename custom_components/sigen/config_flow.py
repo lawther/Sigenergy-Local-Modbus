@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List, Optional
 
 import re
 import voluptuous as vol
+import logging
 
 from homeassistant import (
     config_entries,
@@ -50,11 +50,15 @@ from .const import (
     STEP_AC_CHARGER_CONFIG,
     STEP_SELECT_PLANT,
     STEP_SELECT_INVERTER,
+    STEP_DHCP_SELECT_PLANT,
     DEFAULT_READ_ONLY,
     CONF_INVERTER_HAS_DCCHARGER,
     DEFAULT_INVERTER_HAS_DCCHARGER,
     CONF_PLANT_CONNECTION,
 )
+
+# Define a constant for the ignore action (can also be added to const.py)
+ACTION_IGNORE = "ignore"
 
 # Define constants that might not be in the .const module
 CONF_READ_ONLY = "read_only"
@@ -175,11 +179,13 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         self._inverters = {}
         self._devices = {}
         self._selected_plant_entry_id = None
+        self._discovered_ip = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the initial step when adding a new device."""
+        _LOGGER.debug("Starting config initiated by user.")
         # Load existing plants
         await self._async_load_plants()
 
@@ -190,6 +196,115 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         # Otherwise, show device type selection
         return await self.async_step_device_type()
+
+    async def async_step_dhcp(self, discovery_info) -> ConfigFlowResult:
+        """Handle DHCP discovery."""
+
+        # Store the discovered IP
+        self._discovered_ip = discovery_info.ip
+        _LOGGER.debug("Starting config for DHCP discovered with ip: %s", self._discovered_ip)
+
+        # Set unique ID based on discovery info to allow ignoring/updates
+        unique_id = f"dhcp_{self._discovered_ip}"
+        await self.async_set_unique_id(unique_id)
+        # Abort if this discovery (IP) is already configured OR ignored
+        self._abort_if_unique_id_configured(updates={CONF_HOST: self._discovered_ip})
+
+        # Check if this IP is already configured in any *active* config entry
+        # This prevents offering configuration for an already integrated device part
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.source == config_entries.SOURCE_IGNORE:
+                continue # Skip ignored entries
+
+            # Check Plant connection
+            plant_conn = entry.data.get(CONF_PLANT_CONNECTION, {})
+            if plant_conn.get(CONF_HOST) == self._discovered_ip:
+                _LOGGER.info(
+                    "DHCP discovered IP %s matches existing plant %s. Aborting.",
+                    self._discovered_ip, entry.title
+                )
+                return self.async_abort(reason="already_configured_device") # Use generic reason
+
+            # Check Inverter connections
+            inverter_conns = entry.data.get(CONF_INVERTER_CONNECTIONS, {})
+            for inv_name, inv_details in inverter_conns.items():
+                if inv_details.get(CONF_HOST) == self._discovered_ip:
+                    _LOGGER.info(
+                        "DHCP discovered IP %s matches existing inverter %s in plant %s. Aborting.",
+                        self._discovered_ip, inv_name, entry.title
+                    )
+                    return self.async_abort(reason="already_configured_device") # Use generic reason
+
+            # Check AC Charger connections
+            ac_charger_conns = entry.data.get(CONF_AC_CHARGER_CONNECTIONS, {})
+            for ac_name, ac_details in ac_charger_conns.items():
+                if ac_details.get(CONF_HOST) == self._discovered_ip:
+                    _LOGGER.info(
+                        "DHCP discovered IP %s matches existing AC charger %s in plant %s. Aborting.",
+                        self._discovered_ip, ac_name, entry.title
+                    )
+                    return self.async_abort(reason="already_configured_device") # Use generic reason
+
+        await self._async_load_plants()
+        _LOGGER.debug("Loaded plants: %s", self._plants)
+
+        # If no plants exist, configure as new plant (DHCP implies it might be the primary inverter)
+        if not self._plants:
+            self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_NEW_PLANT
+            # Unique ID for the discovery was set above.
+            return await self.async_step_plant_config()
+
+        # Otherwise, let user choose configuration type or ignore
+        return await self.async_step_dhcp_select_plant()
+
+    async def async_step_dhcp_select_plant(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle selection between new plant or adding to existing plant."""
+        if user_input is None:
+            options = {
+                DEVICE_TYPE_NEW_PLANT: "Configure as New Plant",
+                DEVICE_TYPE_INVERTER: "Add as Inverter to Existing Plant",
+                ACTION_IGNORE: "Ignore this device",  # Add ignore option
+            }
+            return self.async_show_form(
+                step_id=STEP_DHCP_SELECT_PLANT,
+                data_schema=vol.Schema({
+                    # Changed key to 'action' to reflect broader choices
+                    vol.Required("action"): vol.In(options)
+                }),
+                description_placeholders={"ip_address": self._discovered_ip or "unknown"},
+                # last_step=False # Indicate this isn't necessarily the final step
+            )
+
+        # Use 'action' key instead of 'device_type'
+        selected_action = user_input["action"]
+
+        # Handle ignore action
+        if selected_action == ACTION_IGNORE:
+            _LOGGER.info("User chose to ignore discovered device at %s", self._discovered_ip)
+            # Unique ID was already set in async_step_dhcp.
+            # Aborting with ignored_device tells HA this discovery is ignored.
+            # No need to create an entry with SOURCE_IGNORE manually here.
+            return self.async_abort(reason="ignored_device")
+
+        # Existing logic for new plant or adding inverter
+        self._data[CONF_DEVICE_TYPE] = selected_action # Store the selected device type
+
+        if selected_action == DEVICE_TYPE_NEW_PLANT:
+            # Unique ID for the discovery was set in async_step_dhcp.
+            # We might need a different unique ID if creating a full plant entry.
+            # Let's reset it here to be specific to the plant being created.
+            await self.async_set_unique_id(f"plant_{self._discovered_ip}", raise_on_progress=False)
+            self._abort_if_unique_id_configured(updates={CONF_HOST: self._discovered_ip})
+            return await self.async_step_plant_config()
+        # Assuming DEVICE_TYPE_INVERTER is the only other non-ignore option here
+        else: # DEVICE_TYPE_INVERTER
+            # Ensure plants are loaded if we jump directly here via DHCP with existing plants
+            if not self._plants:
+                await self._async_load_plants()
+            # No unique ID needed here as we are adding to an existing plant entry
+            return await self.async_step_select_plant()
 
     async def async_step_device_type(
         self, user_input: dict[str, Any] | None = None
@@ -222,9 +337,30 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         """Handle the plant configuration step when adding a new plant device."""
         errors = {}
 
+        if self._discovered_ip:
+            # Test connecting trough Modbus to ip with DEFAULT_PORT and DEFAULT_INVERTER_SLAVE_ID
+            connection_succeded = False
+            if connection_succeded:
+                user_input = {
+                    CONF_HOST: self._discovered_ip,
+                    CONF_PORT: DEFAULT_PORT,
+                    CONF_INVERTER_SLAVE_ID: DEFAULT_INVERTER_SLAVE_ID,
+                    CONF_READ_ONLY: DEFAULT_READ_ONLY
+                }
+
         if user_input is None:
+            # Dynamically create schema to pre-fill host if discovered via DHCP
+            schema = vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=self._discovered_ip or ""): str,
+                    vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+                    vol.Required(CONF_INVERTER_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
+                    vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool,
+                }
+            )
             return self.async_show_form(
-                step_id=STEP_PLANT_CONFIG, data_schema=STEP_PLANT_CONFIG_SCHEMA
+                step_id=STEP_PLANT_CONFIG,
+                data_schema=schema,
             )
 
         # Process and validate inverter ID
@@ -320,9 +456,17 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     ) -> ConfigFlowResult:
         """Handle the inverter configuration step when adding a new inverter device."""
         if user_input is None:
+            # Dynamically create schema to pre-fill host if discovered via DHCP
+            schema = vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=self._discovered_ip or ""): str,
+                    vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+                    vol.Required(CONF_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
+                }
+            )
             return self.async_show_form(
                 step_id=STEP_INVERTER_CONFIG,
-                data_schema=STEP_INVERTER_CONFIG_SCHEMA,
+                data_schema=schema,
             )
 
         # Check for duplicate IDs
@@ -746,7 +890,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # Fallback
         return self.async_abort(reason=f"unknown_device_type: {device_type}")
 
-    async def async_step_plant_config(self, user_input: dict[str, Any] | None = None):
+    async def async_step_plant_config(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle reconfiguration of an existing plant device."""
         errors = {}
 
@@ -767,7 +911,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
                 }
             )
-
 
         if user_input is None:
             return self.async_show_form(

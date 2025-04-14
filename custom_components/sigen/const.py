@@ -51,6 +51,7 @@ STEP_AC_CHARGER_CONFIG = "ac_charger_config"
 STEP_DC_CHARGER_CONFIG = "dc_charger_config"
 STEP_SELECT_PLANT = "select_plant"
 STEP_SELECT_INVERTER = "select_inverter"
+STEP_DHCP_SELECT_PLANT = "dhcp_select_plant"
 
 # Configuration constants
 CONF_PARENT_PLANT_ID = "parent_plant_id"
