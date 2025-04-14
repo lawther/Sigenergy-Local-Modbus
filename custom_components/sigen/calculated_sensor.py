@@ -358,7 +358,6 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
     _attr_state_class = SensorStateClass.TOTAL
     _attr_should_poll = False
-    _attr_force_update = True # Re-enable to force history updates
 
     def __init__(
         self,
@@ -675,7 +674,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 self.entity_id,
                 self._state,
             )
-        self.async_write_ha_state()
+        self.async_write_ha_state())
 
     def _schedule_max_sub_interval_exceeded_if_state_is_numeric(
         self, source_state: State | None
@@ -766,7 +765,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                         self.entity_id,
                         self._state,
                     )
-                self.async_write_ha_state()
+                self.async_schedule_update_ha_state(force_refresh=True)
                 if log_this_entity:
                     _LOGGER.debug("[%s] Timer - Called async_write_ha_state()", self.entity_id)
 
