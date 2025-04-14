@@ -743,13 +743,13 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 # Write state
                 if log_this_entity:
                     _LOGGER.debug(
-                        "[%s] Timer - Calling async_write_ha_state() with state: %s",
+                        "[%s] Timer - Calling async_schedule_update_ha_state(force_refresh=True) with state: %s",
                         self.entity_id,
                         self._state,
                     )
                 self.async_schedule_update_ha_state(force_refresh=True)
                 if log_this_entity:
-                    _LOGGER.debug("[%s] Timer - Called async_write_ha_state()", self.entity_id)
+                    _LOGGER.debug("[%s] Timer - Called async_schedule_update_ha_state(force_refresh=True)", self.entity_id)
 
 
                 # Update tracking variables
