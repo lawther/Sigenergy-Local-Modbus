@@ -374,7 +374,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         device_id: Optional[str] = None,
         device_name: Optional[str] = "",
         device_info: Optional[DeviceInfo] = None,
-        source_entity_id: Optional[str] = None,
+        source_entity_id: str = "",
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the integration sensor."""
@@ -528,7 +528,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         # Set up appropriate handlers based on max_sub_interval
         # Ensure source_entity_id is valid before proceeding
-        if not isinstance(self._source_entity_id, str):
+        if not self._source_entity_id:
             _LOGGER.error(
                 "Source entity ID is not a valid string for %s: %s",
                 self.entity_id,
