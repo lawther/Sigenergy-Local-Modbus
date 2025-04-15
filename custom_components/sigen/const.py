@@ -156,6 +156,15 @@ class ACChargerSystemState(IntEnum):
     F = 6
     E = 7
 
+class UpdateFrequencyType(IntEnum):
+    """Update frequency types for Modbus registers.
+    This is used in coordinator when fetching from Modbus."""
+
+    HIGH = 4
+    ALARM = 3
+    MEDIUM = 2
+    LOW = 1
+
 # Register definitions
 @dataclass
 class ModbusRegisterDefinition:
@@ -170,6 +179,7 @@ class ModbusRegisterDefinition:
     description: Optional[str] = None
     applicable_to: Optional[list[str]] = None
     is_supported: Optional[bool] = None  # Tracks whether register is supported by device
+    update_frequency: UpdateFrequencyType = UpdateFrequencyType.MEDIUM
 
 # Define register definitions based on PLANT_RUNNING_INFO_REGISTERS.csv
 PLANT_RUNNING_INFO_REGISTERS = {
@@ -215,6 +225,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Grid Active Power (>0 buy from grid; <0 sell to grid)",
+        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_grid_sensor_reactive_power": ModbusRegisterDefinition(
         address=30007,

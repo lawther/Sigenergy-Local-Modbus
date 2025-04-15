@@ -146,15 +146,15 @@ def get_source_entity_id(device_type, device_name, source_key, coordinator, hass
             attr_key=source_key
         )
 
-        _LOGGER.debug("Looking for entity with unique ID pattern: %s", unique_id_pattern)
+        # _LOGGER.debug("Looking for entity with unique ID pattern: %s", unique_id_pattern)
         entity_id = ha_entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id_pattern)
 
         if entity_id is None:
             _LOGGER.warning("No entity found for unique ID pattern: %s", unique_id_pattern)
             _LOGGER.debug("unique ID pattern constructed from: \n config_entry_id: %s \n device_type: %s \n device_name: %s \n source_key: %s",
                             coordinator.hub.config_entry.entry_id, device_type, device_name, source_key)
-        else:
-            _LOGGER.debug("Found entity ID: %s", entity_id)
+        # else:
+        #     _LOGGER.debug("Found entity ID: %s", entity_id)
 
         return entity_id
     except Exception as ex: # pylint: disable=broad-exception-caught
@@ -177,7 +177,6 @@ def generate_unique_entity_id(
     else:
         unique_id = f"{coordinator.hub.config_entry.entry_id}_{unique_device_part}_{attr_key}"
 
-    _LOGGER.debug("Generated unique ID: %s", unique_id)
     return unique_id
 
 @staticmethod
@@ -201,6 +200,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
     source_key: Optional[str] = None  # Key of the source entity to use for integration
     max_sub_interval: Optional[timedelta] = None
     round_digits: Optional[int] = None
+    high_update_frequency: Optional[bool] = False
 
     @classmethod
     def from_entity_description(cls, description,
@@ -225,6 +225,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 				source_key=getattr(description, "source_key", None),
 				max_sub_interval=getattr(description, "max_sub_interval", None),
 				round_digits=getattr(description, "round_digits", None),
+                high_update_frequency=getattr(description, "high_update_frequency", False),
 			)
         else:
             # It's a regular SensorEntityDescription
@@ -238,9 +239,5 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
                 value_fn=value_fn,
                 extra_fn_data=extra_fn_data,
                 extra_params=extra_params,
-                source_entity_id=None,
-                source_key=None,
-                max_sub_interval=None,
-                round_digits=None,
             )
         return result

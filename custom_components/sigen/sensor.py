@@ -448,7 +448,15 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                 return None
 
         # Special handling for specific keys
+
         if self.entity_description.key == "plant_on_off_grid_status":
+            _LOGGER.debug(
+                "Entity %s (%s): Attempting dict lookup with value '%s' (type: %s)",
+                self.entity_id,
+                self.entity_description.key,
+                value,
+                type(value).__name__,
+            )
             return {
                 0: "On Grid",
                 1: "Off Grid (Auto)",
