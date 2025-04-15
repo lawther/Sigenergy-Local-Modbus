@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-import asyncio
+import asyncio, re, logging
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ConnectionException, ModbusException
-from .modbus import _suppress_pymodbus_logging
 
-import re
 import voluptuous as vol
-import logging
 
 from homeassistant import (
     config_entries,
@@ -28,6 +25,7 @@ from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
     async_entries_for_device,
 )
+from .modbus import _suppress_pymodbus_logging
 from .const import (
     CONF_AC_CHARGER_CONNECTIONS,
     CONF_DC_CHARGER_CONNECTIONS,
@@ -63,9 +61,10 @@ from .const import (
     STEP_DHCP_SELECT_PLANT,
     DEFAULT_READ_ONLY,
     CONF_INVERTER_HAS_DCCHARGER,
-    DEFAULT_INVERTER_HAS_DCCHARGER,
     CONF_PLANT_CONNECTION,
 )
+
+DEVICE_TYPE_UNKNOWN = "unknown"
 
 # Define a constant for the ignore action (can also be added to const.py)
 ACTION_IGNORE = "ignore"
@@ -260,7 +259,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             for ac_name, ac_details in ac_charger_conns.items():
                 if ac_details.get(CONF_HOST) == self._discovered_ip:
                     _LOGGER.info(
-                        "DHCP discovered IP %s matches existing AC charger %s in plant %s. Aborting.",
+                        "DHCP discovered IP %s matches existing AC charger %s in %s. Aborting.",
                         self._discovered_ip, ac_name, entry.title
                     )
                     return self.async_abort(reason="already_configured_device") # Use generic reason
@@ -300,7 +299,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             await self.async_set_unique_id(f"plant_{self._discovered_ip}", raise_on_progress=False)
             self._abort_if_unique_id_configured(updates={CONF_HOST: self._discovered_ip})
             return await self.async_step_plant_config()
-        # Assuming DEVICE_TYPE_INVERTER or DEVICE_TYPE_AC_CHARGER are the only other non-ignore options here
+        # Assuming DEVICE_TYPE_INVERTER or DEVICE_TYPE_AC_CHARGER 
+        # are the only other non-ignore options here
         else:
             # Ensure plants are loaded if we jump directly here via DHCP with existing plants
             if not self._plants:
@@ -423,7 +423,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Create the configuration entry with the default name
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
 
-    async def async_test_connection(self, host, port, slave_id, register_address, register_count=1, timeout=1) -> dict[str, str]:
+    async def async_test_connection(self, host, port, slave_id, register_address,
+                                    register_count=1, timeout=1) -> dict[str, str]:
         errors = {}
         # Check the connection
         _LOGGER.debug("DHCP discovery: Testing Modbus connection to %s:%s", host, port)
@@ -431,7 +432,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         try:
             with _suppress_pymodbus_logging(): # Suppress pymodbus logs for this check
                 if await client.connect():
-                    _LOGGER.debug("Modbus connected to %s. Reading register %s...", host, register_address)
+                    _LOGGER.debug("Modbus connected to %s. Reading register %s...",
+                                  host, register_address)
                     # Try reading a simple register (e.g., inverter_running_state)
                     result = await client.read_input_registers(
                         address=register_address,
@@ -439,13 +441,18 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                         slave=slave_id
                     )
                     if result and not result.isError():
-                        _LOGGER.debug("Modbus read successful from %s on port %s and deviceID %s.", host, port, slave_id)
+                        _LOGGER.debug("Modbus read successful from %s on port %s and deviceID %s.",
+                                      host, port, slave_id)
                     elif result:
-                        err = "Modbus read error from %s on port %s and deviceID %s: %s. This probably means there is no AC Charger there but maybe another Modbus device." % (host, port, slave_id, result)
+                        err = "Modbus read error from %s on port %s and deviceID %s: %s. " % (
+                            host, port, slave_id, result)
+                        err = err + "This probably means there is no AC Charger "
+                        err = err + "there but maybe another Modbus device."
                         errors[CONF_HOST] = err
                         _LOGGER.debug(err)
                     else:
-                        err = "Modbus read failed from %s on port %s and deviceID %s (no result)." % (host, port, slave_id)
+                        err = "Modbus read failed from %s on port %s and deviceID %s (no result)."\
+                            % (host, port, slave_id)
                         errors[CONF_HOST] = err
                         _LOGGER.debug(err)
                 else:
@@ -457,9 +464,9 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             errors[CONF_HOST] = err
             _LOGGER.debug(err)
         except Exception as e:
-                err = f"Unexpected error during Modbus connection test for {host}: {e}"
-                errors[CONF_HOST] = err
-                _LOGGER.warning(err)
+            err = f"Unexpected error during Modbus connection test for {host}: {e}"
+            errors[CONF_HOST] = err
+            _LOGGER.warning(err)
         finally:
             if client:
                 client.close()
@@ -467,6 +474,89 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         return errors
 
+    async def check_device_type(self, host, port, slave_id,
+                                    timeout=1) -> str:
+        inverter_register = 30578  # inverter_running_state
+        dc_register = 31501
+        ac_register = 32000
+        register_count = 1
+        found_device_type = DEVICE_TYPE_UNKNOWN
+
+        # Check the connection
+        _LOGGER.debug("Testing Modbus connection to %s:%s", host, port)
+        client = AsyncModbusTcpClient(host=host, port=port, timeout=timeout)
+        try:
+            with _suppress_pymodbus_logging(): # Suppress pymodbus logs for this check
+                if await client.connect():
+                    _LOGGER.debug("Modbus connected to %s.", host)
+
+                    # Try reading DC Charger register first
+                    result = await client.read_input_registers(
+                        address=dc_register,
+                        count=register_count,
+                        slave=slave_id
+                    )
+                    if result and not result.isError():
+                        _LOGGER.debug("Modbus read successful from %s on port %s and deviceID %s.",
+                                      host, port, slave_id)
+                        _LOGGER.debug("Identified as Inverter with DC Charger")
+                        found_device_type = DEVICE_TYPE_DC_CHARGER
+                    #  Check if Inverter next.
+                    elif result:
+                        result2 = await client.read_input_registers(
+                            address=inverter_register,
+                            count=register_count,
+                            slave=slave_id
+                        )
+                        if result2 and not result2.isError():
+                            _LOGGER.debug("Modbus read successful from %s on port %s and deviceID %s.",
+                                        host, port, slave_id)
+                            _LOGGER.debug("Identified as Inverter without DC Charger")
+                            found_device_type = DEVICE_TYPE_INVERTER
+                        #  Check if AC Charger next.
+                        elif result:
+                            result3 = await client.read_input_registers(
+                                address=ac_register,
+                                count=register_count,
+                                slave=slave_id
+                            )
+                            if result3 and not result3.isError():
+                                found_device_type = DEVICE_TYPE_AC_CHARGER
+                            elif result:
+                                err = "Modbus read error from %s on port %s and deviceID %s: %s. " % (
+                                    host, port, slave_id, result)
+                                err = err + "This probably means there is no AC Charger "
+                                err = err + "there but maybe another Modbus device."
+                                _LOGGER.debug(err)
+                            else:
+                                err = "Modbus read failed from %s on port %s and deviceID %s (no result)."\
+                                    % (host, port, slave_id)
+                                _LOGGER.debug(err)
+                        else:
+                            err = "Modbus read failed from %s on port %s and deviceID %s (no result)."\
+                                % (host, port, slave_id)
+                            _LOGGER.debug(err)
+                    else:
+                        err = "Modbus read failed from %s on port %s and deviceID %s (no result)."\
+                            % (host, port, slave_id)
+                        _LOGGER.debug(err)
+                else:
+                    err = "Modbus connection failed to %s on port: %s" % (host, port)
+                    _LOGGER.debug(err)
+
+        except (ConnectionException, ModbusException, asyncio.TimeoutError) as e:
+            err = "Modbus connection failed for %s: %s" % (host, e)
+            _LOGGER.debug(err)
+        except Exception as e:
+            err = f"Unexpected error during Modbus connection test for {host}: {e}"
+            _LOGGER.warning(err)
+        finally:
+            if client:
+                client.close()
+                _LOGGER.debug("Modbus test client closed for %s.", host)
+
+        _LOGGER.debug("Identified as %s", found_device_type)
+        return found_device_type
 
     async def async_step_select_plant(
         self, user_input: dict[str, Any] | None = None
@@ -1028,7 +1118,33 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         )
         errors.update(host_port_errors)
 
-        # Validate scan interval
+        # Validate scan intervals
+        high_interval = user_input.get(CONF_SCAN_INTERVAL_HIGH, DEFAULT_SCAN_INTERVAL_HIGH)
+        medium_interval = user_input.get(CONF_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_MEDIUM)
+        low_interval = user_input.get(CONF_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_LOW)
+        alarm_interval = user_input.get(CONF_SCAN_INTERVAL_ALARM, DEFAULT_SCAN_INTERVAL_ALARM)
+
+        if high_interval < 1:
+            errors[CONF_SCAN_INTERVAL_HIGH] = "must_be_at_least_1"
+
+        # Validate divisibility
+        for interv in [CONF_SCAN_INTERVAL_MEDIUM, CONF_SCAN_INTERVAL_LOW, CONF_SCAN_INTERVAL_ALARM]:
+            if high_interval > 0 and user_input[interv] % high_interval != 0:
+                errors[interv] = "must_be_divisible_by_high"
+            else:
+                user_input[interv] = user_input[interv] / high_interval
+
+        # Validate Medium Interval
+        if medium_interval < high_interval:
+            errors[CONF_SCAN_INTERVAL_MEDIUM] = "cannot_be_lower_than_high"
+
+        # Validate Low Interval
+        if low_interval < medium_interval:
+            errors[CONF_SCAN_INTERVAL_LOW] = "cannot_be_lower_than_medium"
+
+        # Validate Alarm Interval
+        if alarm_interval < medium_interval:
+            errors[CONF_SCAN_INTERVAL_ALARM] = "cannot_be_lower_than_medium"
 
         if errors:
             # Re-create schema with user input values for error display

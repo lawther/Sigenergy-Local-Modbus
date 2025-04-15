@@ -21,7 +21,7 @@
           "inverter_slave_id": "Inverter Device ID (Default is 1)",
           "ac_charger_slave_ids": "AC Charger Device IDs (comma-separated when multiple. Default is empty for no AC charger)",
           "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)",
-          "read_only": "Read-Only Mode (prevents any writes to the Sigenergy system)"
+          "read_only": "Read-Only Mode (prevents any changes being made to the Sigenergy system)"
         }
       },
       "select_plant": {
