@@ -37,11 +37,17 @@ from .const import (
     CONF_PARENT_INVERTER_ID,
     CONF_PARENT_PLANT_ID,
     CONF_SLAVE_ID,
-    CONF_SCAN_INTERVAL,  # Added
+    CONF_SCAN_INTERVAL_HIGH,
+    CONF_SCAN_INTERVAL_ALARM,
+    CONF_SCAN_INTERVAL_MEDIUM,
+    CONF_SCAN_INTERVAL_LOW,
     DEFAULT_PORT,
     DEFAULT_PLANT_SLAVE_ID,
     DEFAULT_INVERTER_SLAVE_ID,
-    DEFAULT_SCAN_INTERVAL,  # Added
+    DEFAULT_SCAN_INTERVAL_HIGH,
+    DEFAULT_SCAN_INTERVAL_ALARM,
+    DEFAULT_SCAN_INTERVAL_MEDIUM,
+    DEFAULT_SCAN_INTERVAL_LOW,
     DEVICE_TYPE_NEW_PLANT,
     DEVICE_TYPE_PLANT,
     DEVICE_TYPE_INVERTER,
@@ -174,7 +180,8 @@ def get_highest_device_number(names: List[str]) -> int:
 class SigenergyConfigFlow(config_entries.ConfigFlow):
     """Handle a config flow for Sigenergy ESS."""
 
-    VERSION = 1
+    VERSION = 2
+    MINOR_VERSION = 0
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -386,7 +393,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             CONF_HOST: user_input[CONF_HOST],
             CONF_PORT: user_input[CONF_PORT],
             CONF_SLAVE_ID: DEFAULT_PLANT_SLAVE_ID,
-            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+            CONF_SCAN_INTERVAL_HIGH: DEFAULT_SCAN_INTERVAL_HIGH,
+            CONF_SCAN_INTERVAL_ALARM: DEFAULT_SCAN_INTERVAL_ALARM, 
+            CONF_SCAN_INTERVAL_MEDIUM: DEFAULT_SCAN_INTERVAL_MEDIUM,
+            CONF_SCAN_INTERVAL_LOW: DEFAULT_SCAN_INTERVAL_LOW,
         }
 
         # Create the inverter connections dictionary for the implicit first inverter
@@ -409,9 +419,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         # Set the device type as plant
         self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_PLANT
-
-        # Set default scan interval silently
-        self._data[CONF_SCAN_INTERVAL] = DEFAULT_SCAN_INTERVAL
 
         # Create the configuration entry with the default name
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
@@ -991,9 +998,21 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                         default=data_source.get(CONF_READ_ONLY, DEFAULT_READ_ONLY),
                     ): bool,
                     vol.Required(
-                        CONF_SCAN_INTERVAL,
-                        default=data_source.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
+                        CONF_SCAN_INTERVAL_HIGH,
+                        default=data_source.get(CONF_SCAN_INTERVAL_HIGH, DEFAULT_SCAN_INTERVAL_HIGH)
+                    ): vol.All(vol.Coerce(int)),
+                    vol.Required(
+                        CONF_SCAN_INTERVAL_ALARM,
+                        default=data_source.get(CONF_SCAN_INTERVAL_ALARM, DEFAULT_SCAN_INTERVAL_ALARM)
+                    ): vol.All(vol.Coerce(int)),
+                    vol.Required(
+                        CONF_SCAN_INTERVAL_MEDIUM,
+                        default=data_source.get(CONF_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_MEDIUM)
+                    ): vol.All(vol.Coerce(int)),
+                    vol.Required(
+                        CONF_SCAN_INTERVAL_LOW,
+                        default=data_source.get(CONF_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_LOW)
+                    ): vol.All(vol.Coerce(int)),
                 }
             )
 
@@ -1024,7 +1043,10 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         new_data[CONF_PLANT_CONNECTION][CONF_HOST] = user_input[CONF_HOST]
         new_data[CONF_PLANT_CONNECTION][CONF_PORT] = user_input[CONF_PORT]
         new_data[CONF_PLANT_CONNECTION][CONF_READ_ONLY] = user_input[CONF_READ_ONLY]
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_HIGH] = user_input[CONF_SCAN_INTERVAL_HIGH]
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_ALARM] = user_input[CONF_SCAN_INTERVAL_ALARM]
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_MEDIUM] = user_input[CONF_SCAN_INTERVAL_MEDIUM]
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_LOW] = user_input[CONF_SCAN_INTERVAL_LOW]
 
         # Update data if changed (optional check, keeping existing behavior for now)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
