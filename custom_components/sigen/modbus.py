@@ -37,6 +37,7 @@ from .const import (
     DEFAULT_READ_ONLY,
     CONF_READ_ONLY,
     CONF_PLANT_CONNECTION,
+    UpdateFrequencyType,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -625,7 +626,7 @@ class SigenergyModbusHub:
                         register_def.is_supported = False
         return data
 
-    async def async_read_plant_data(self) -> Dict[str, Any]:
+    async def async_read_plant_data(self, update_frequency: UpdateFrequencyType=UpdateFrequencyType.LOW) -> Dict[str, Any]:
         """Read all supported plant data."""
         # Probe registers if not done yet
         if not self.plant_registers_probed:
@@ -642,13 +643,14 @@ class SigenergyModbusHub:
                 _LOGGER.error("Failed to probe plant registers: %s", ex)
                 # Continue with reading, some registers might still work
         
-        # Read registers from both running info and parameter registers
-        all_registers = {
-            **PLANT_RUNNING_INFO_REGISTERS,
-            **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
-               if reg.register_type != RegisterType.WRITE_ONLY}
+        registers_to_read = {}
+        registers_to_read ={
+        **PLANT_RUNNING_INFO_REGISTERS,
+        **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
+            if reg.register_type != RegisterType.WRITE_ONLY and
+            reg.update_frequency >= update_frequency }
         }
-        
+
         # Use the core reading logic
         plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {}) # Ensure plant_info is available
         plant_info.setdefault(CONF_SLAVE_ID, self.plant_id) # Ensure slave_id is in plant_info
@@ -656,7 +658,7 @@ class SigenergyModbusHub:
             device_info=plant_info,
             device_name="plant",
             device_type_log_prefix="plant",
-            registers_to_read=all_registers
+            registers_to_read=registers_to_read
         )
 
     async def async_read_inverter_data(self, inverter_name: str) -> Dict[str, Any]:
