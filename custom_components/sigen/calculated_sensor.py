@@ -38,8 +38,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # Only log for these entities
 LOG_THIS_ENTITY = [
-    "sensor.sigen_plant_daily_consumed_energy",
-    "sensor.sigen_plant_daily_pv_energy",
+    # "sensor.sigen_plant_accumulated_consumed_energy",
+    # "sensor.sigen_plant_accumulated_grid_import_energy",
 ]
 
 
