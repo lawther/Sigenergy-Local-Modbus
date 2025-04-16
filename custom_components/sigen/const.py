@@ -38,6 +38,7 @@ CONF_AC_CHARGER_CONNECTIONS = "ac_charger_connections"
 CONF_DC_CHARGER_CONNECTIONS = "dc_charger_connections"
 CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
+CONF_MIGRATE_YAML = "migrate_yaml"
 
 # Default names
 DEFAULT_INVERTER_NAME = "Sigen Inverter"
@@ -90,6 +91,9 @@ FUNCTION_READ_HOLDING_REGISTERS = 3
 FUNCTION_READ_INPUT_REGISTERS = 4
 FUNCTION_WRITE_REGISTER = 6
 FUNCTION_WRITE_REGISTERS = 16
+
+# Define a constant for the entity ID used to detect legacy YAML configuration
+LEGACY_YAML_TEST_ENTITY_ID = "sensor.sigen_accumulated_energy_consumption"
 
 # Modbus register types
 class RegisterType(Enum):

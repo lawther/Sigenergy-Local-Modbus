@@ -35,6 +35,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
                                     {}).get(CONF_SCAN_INTERVAL_HIGH, 
                                             DEFAULT_SCAN_INTERVAL_HIGH)
+    host = entry.data[CONF_PLANT_CONNECTION][CONF_HOST]
+    port = entry.data[CONF_PLANT_CONNECTION][CONF_PORT]
+
     _LOGGER.debug("async_setup_entry: Scan interval set to %s seconds", scan_interval)
     _LOGGER.debug("async_setup_entry: CONF_PLANT_CONNECTION: %s", entry.data[CONF_PLANT_CONNECTION])
 
@@ -48,8 +51,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as ex:
         _LOGGER.error(
             "async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s",
-            entry.data[CONF_PLANT_CONNECTION][CONF_HOST],
-            entry.data[CONF_PLANT_CONNECTION][CONF_PORT],
+            host,
+            port,
             ex
         )
         raise ConfigEntryNotReady(f"Error connecting to Sigenergy system: {ex}") from ex
@@ -58,7 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         _LOGGER,
         hub=hub,
-        name=f"{DOMAIN}_{entry.data[CONF_PLANT_CONNECTION][CONF_HOST]}_{entry.data[CONF_PLANT_CONNECTION][CONF_PORT]}",  # pylint: disable=line-too-long
+        name=f"{DOMAIN}_{host}_{port}",
         update_interval=timedelta(seconds=scan_interval),
     )
     _LOGGER.debug("async_setup_entry: SigenergyDataUpdateCoordinator created: %s", coordinator)
