@@ -428,7 +428,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         if user_input is None:
             schema = generate_plant_schema(DEFAULT_PLANT_CONNECTION,
                                            discovered_ip=self._discovered_ip or "",
-                                           legacy_yaml_present=bool(legacy_yaml_present),
+                                           migration_alternative=bool(legacy_yaml_present),
                                            use_inverter_device_id=True
             )
 
@@ -521,50 +521,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         if response not in [DEVICE_TYPE_UNKNOWN, DEVICE_TYPE_INVERTER, 
                                DEVICE_TYPE_DC_CHARGER, DEVICE_TYPE_AC_CHARGER]:
             errors[CONF_HOST] = response
-        # client = AsyncModbusTcpClient(host=host, port=port, timeout=timeout)
-        # try:
-        #     with _suppress_pymodbus_logging(): # Suppress pymodbus logs for this check
-        #         if await client.connect():
-        #             _LOGGER.debug("Modbus connected to %s. Reading register %s...",
-        #                           host, register_address)
-        #             # Try reading a simple register (e.g., inverter_running_state)
-        #             result = await client.read_input_registers(
-        #                 address=register_address,
-        #                 count=register_count,
-        #                 slave=slave_id
-        #             )
-        #             if result and not result.isError():
-        #                 _LOGGER.debug("Modbus read successful from %s on port %s and deviceID %s.",
-        #                               host, port, slave_id)
-        #             elif result:
-        #                 err = "Modbus read error from %s on port %s and deviceID %s: %s. " % (
-        #                     host, port, slave_id, result)
-        #                 err = err + "This probably means there is no AC Charger "
-        #                 err = err + "there but maybe another Modbus device."
-        #                 errors[CONF_HOST] = err
-        #                 _LOGGER.debug(err)
-        #             else:
-        #                 err = "Modbus read failed from %s on port %s and deviceID %s (no result)."\
-        #                     % (host, port, slave_id)
-        #                 errors[CONF_HOST] = err
-        #                 _LOGGER.debug(err)
-        #         else:
-        #             err = "Modbus connection failed to %s on port: %s" % (host, port)
-        #             errors[CONF_HOST] = err
-        #             _LOGGER.debug(err)
-        # except (ConnectionException, ModbusException, asyncio.TimeoutError) as e:
-        #     err = "Modbus connection failed for %s: %s" % (host, e)
-        #     errors[CONF_HOST] = err
-        #     _LOGGER.debug(err)
-        # except Exception as e:
-        #     err = f"Unexpected error during Modbus connection test for {host}: {e}"
-        #     errors[CONF_HOST] = err
-        #     _LOGGER.warning(err)
-        # finally:
-        #     if client:
-        #         client.close()
-        #         _LOGGER.debug("Modbus test client closed for %s.", host)
-
         return errors
 
     async def _async_try_read_register(self, client: AsyncModbusTcpClient, host: str, port: int, slave_id: int, register_address: int) -> str:
@@ -1237,9 +1193,17 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         _LOGGER.debug(f"High: {high_interval}, Medium: {medium_interval}, Low: {low_interval}, Alarm: {alarm_interval}")
         
 
-        # Check if to reset Accumulated values
+        # If chose to reset values, save sensor values to reset.
+        values_to_initialize = {}
         if user_input[CONF_RESET_VALUES]:
-            _LOGGER.debug("Reseting values")
+            _LOGGER.debug("Reseting option True")
+            for new_sensor in LEGACY_SENSOR_MIGRATION_MAP.keys():
+                _LOGGER.debug("Adding 0 as init value for %s", new_sensor)
+                values_to_initialize[new_sensor] = "0"
+
+        # Save choice if to migrate data at first run after plant being added.
+        new_data[CONF_VALUES_TO_INIT] = values_to_initialize
+        _LOGGER.debug("Values to init as 0: %s", values_to_initialize)
 
         # Update data if changed (optional check, keeping existing behavior for now)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)

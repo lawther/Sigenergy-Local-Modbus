@@ -520,6 +520,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         config_entry = self.hub.config_entry
         if config_entry:
             _resetting_sensors = config_entry.data.get(CONF_VALUES_TO_INIT, {})
+            if self.log_this_entity:
+                _LOGGER.debug("Will reset values: %s", _resetting_sensors)
 
             if self.entity_id in _resetting_sensors:
                 restore_value = _resetting_sensors[self.entity_id]
@@ -537,6 +539,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
                 _LOGGER.debug("Deleted the sensor %s resetable. New Dict: %s", self.entity_id,
                                 config_entry.data.get(CONF_VALUES_TO_INIT))
+        else:
+            _LOGGER.debug("No config entry")
 
         if not restore_value:
             # Restore previous state if available
