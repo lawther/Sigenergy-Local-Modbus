@@ -39,6 +39,7 @@ CONF_DC_CHARGER_CONNECTIONS = "dc_charger_connections"
 CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
 CONF_MIGRATE_YAML = "migrate_yaml"
+CONF_VALUES_TO_INIT = "values_to_initialize"
 
 # Default names
 DEFAULT_INVERTER_NAME = "Sigen Inverter"
@@ -94,6 +95,15 @@ FUNCTION_WRITE_REGISTERS = 16
 
 # Define a constant for the entity ID used to detect legacy YAML configuration
 LEGACY_YAML_TEST_ENTITY_ID = "sensor.sigen_accumulated_energy_consumption"
+
+
+# Map of new sensor keys to old legacy YAML entity IDs for migration
+LEGACY_SENSOR_MIGRATION_MAP = {
+    "sensor.sigen_plant_accumulated_pv_energy": "sensor.sigen_accumulated_pv_energy_production",
+    "sensor.sigen_plant_accumulated_consumed_energy": "sensor.sigen_accumulated_energy_consumption",
+    "sensor.sigen_plant_accumulated_grid_import_energy": "sensor.sigen_accumulated_grid_energy_import",
+    "sensor.sigen_plant_accumulated_grid_export_energy": "sensor.sigen_accumulated_grid_energy_export",
+}
 
 # Modbus register types
 class RegisterType(Enum):
