@@ -95,6 +95,9 @@ class SigenergyModbusHub:
         self._plant_port = self.plant_connection[CONF_PORT]
         self.plant_id = self.plant_connection.get(CONF_PLANT_ID, DEFAULT_PLANT_SLAVE_ID)
 
+        # Read-only mode setting
+        self.read_only = self.plant_connection.get(CONF_READ_ONLY, DEFAULT_READ_ONLY)
+
         # Get inverter connections
         self.inverter_connections = config_entry.data.get(CONF_INVERTER_CONNECTIONS, {})
         _LOGGER.debug("Inverter connections: %s", self.inverter_connections)
@@ -106,9 +109,6 @@ class SigenergyModbusHub:
         self.ac_charger_count = len(self.ac_charger_connections)
 
         # Other slave IDs and their connection details
-
-        # Read-only mode setting
-        self.read_only = config_entry.data.get(CONF_READ_ONLY, DEFAULT_READ_ONLY)
 
         # Initialize register support status
         self.plant_registers_probed = False
@@ -221,72 +221,136 @@ class SigenergyModbusHub:
         except Exception as ex:
             _LOGGER.debug("Register validation failed with exception: %s", ex)
             return False
-            
+
+    async def _probe_single_register(
+        self,
+        client: AsyncModbusTcpClient,
+        slave_id: int,
+        name: str,
+        register: ModbusRegisterDefinition,
+        device_info_log: str # Added for logging context
+    ) -> Tuple[str, bool, Optional[Exception]]:
+        """Probe a single register and return its name, support status, and any exception."""
+        try:
+            with _suppress_pymodbus_logging(really_suppress=True):
+                if register.register_type == RegisterType.READ_ONLY:
+                    result = await client.read_input_registers(
+                        address=register.address,
+                        count=register.count,
+                        slave=slave_id
+                    )
+                elif register.register_type == RegisterType.HOLDING:
+                    result = await client.read_holding_registers(
+                        address=register.address,
+                        count=register.count,
+                        slave=slave_id
+                    )
+                else:
+                    _LOGGER.debug(
+                        "Register %s (0x%04X) for slave %d (%s) has unsupported type: %s",
+                        name, register.address, slave_id, device_info_log, register.register_type
+                    )
+                    return name, False, None # Mark as unsupported, no exception
+
+            is_supported = self._validate_register_response(result, register)
+
+            if _LOGGER.isEnabledFor(logging.DEBUG) and not is_supported:
+                _LOGGER.debug(
+                    "Register %s (%s) for device %s is not supported. Result: %s, registers: %s",
+                    name, register.address, device_info_log, str(result), str(register)
+                )
+            return name, is_supported, None # Return name, support status, no exception
+
+        except Exception as ex:
+            if _LOGGER.isEnabledFor(logging.DEBUG):
+                _LOGGER.debug(
+                    "Register %s (0x%04X) for slave %d (%s) probe failed: %s",
+                    name, register.address, slave_id, device_info_log, str(ex)
+                )
+            # Return name, mark as unsupported, and the exception
+            return name, False, ex
+
     async def async_probe_registers(
         self,
         device_info: Dict[str, str | int],
         register_defs: Dict[str, ModbusRegisterDefinition]
     ) -> None:
-        """Probe registers to determine which ones are supported."""
+        """Probe registers concurrently to determine which ones are supported."""
         slave_id_value = device_info.get(CONF_SLAVE_ID)
         if slave_id_value is None:
             raise ValueError(f"Slave ID is missing in device info: {device_info}")
         slave_id = int(slave_id_value)
         client = await self._get_client(device_info)
         key = self._get_connection_key(device_info)
-            
+        device_info_log = f"{device_info.get('name', 'unknown')}/{slave_id}@{key[0]}:{key[1]}" # For logging
+
+        tasks = []
+        # Create tasks for probing each register
         for name, register in register_defs.items():
-            try:
-                # Get raw result from appropriate read method
-                async with self._locks[key]:
-                    with _suppress_pymodbus_logging(really_suppress=True):
-                        if register.register_type == RegisterType.READ_ONLY:
-                            result = await client.read_input_registers(
-                                address=register.address,
-                                count=register.count,
-                                slave=slave_id
-                            )
-                        elif register.register_type == RegisterType.HOLDING:
-                            result = await client.read_holding_registers(
-                                address=register.address,
-                                count=register.count,
-                                slave=slave_id
-                            )
-                        else:
-                            _LOGGER.debug(
-                                "Register %s (0x%04X) for slave %d has unsupported type: %s",
-                                name,
-                                register.address,
-                                slave_id,
-                                register.register_type
-                            )
-                            register.is_supported = False
-                            continue
+            # Only probe if support status is unknown (None)
+            if register.is_supported is None:
+                tasks.append(
+                    self._probe_single_register(client, slave_id, name, register, device_info_log)
+                )
 
-                # Validate the response without raising exceptions for expected error cases
-                register.is_supported = self._validate_register_response(result, register)
+        if not tasks:
+            _LOGGER.debug("No registers need probing for %s.", device_info_log)
+            return # Nothing to probe
 
-                if _LOGGER.isEnabledFor(logging.DEBUG) and not register.is_supported:
-                    _LOGGER.debug(
-                        "Register %s (%s) for device %s is not supported. Result: %s, registers: %s",
-                        name,
-                        register.address,
-                        device_info,
-                        str(result),
-                        str(register)
-                    )
-                
-            except Exception as ex:
-                if _LOGGER.isEnabledFor(logging.DEBUG):
-                    _LOGGER.debug(
-                        "Register %s (0x%04X) for slave %d is not supported: %s",
-                        name,
-                        register.address,
-                        slave_id,
-                        str(ex)
-                    )
-                register.is_supported = False
-                self._connected[key] = False
+        _LOGGER.debug("Probing %d registers concurrently for %s...", len(tasks), device_info_log)
+
+        # Run probing tasks concurrently within the lock for this connection
+        results = []
+        try:
+            async with self._locks[key]:
+                # Use return_exceptions=True to prevent one failure from stopping others
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+        except asyncio.CancelledError:
+            _LOGGER.warning("Register probing for %s was cancelled.", device_info_log)
+            # Mark remaining unknown registers as potentially unsupported due to cancellation
+            for name, register in register_defs.items():
+                if register.is_supported is None:
+                    register.is_supported = False # Assume unsupported if probe was cancelled
+            raise # Re-raise CancelledError
+        except Exception as ex:
+            _LOGGER.error("Unexpected error during concurrent register probing for %s: %s", device_info_log, ex)
+            # Mark all probed registers as potentially unsupported due to the gather error
+            for name, register in register_defs.items():
+                 if register.is_supported is None: # Only update those that were being probed
+                    register.is_supported = False
+            self._connected[key] = False # Assume connection issue
+            return # Exit probing on major error
+
+        _LOGGER.debug("Finished probing for %s. Processing %d results.", device_info_log, len(results))
+
+        # Process results
+        connection_error_occurred = False
+        for result in results:
+            if isinstance(result, Exception):
+                # Handle exceptions raised by gather itself or _probe_single_register
+                _LOGGER.error("Error during register probe task for %s: %s", device_info_log, result)
+                # If it's a connection error, mark the connection as potentially bad
+                if isinstance(result, (ConnectionException, asyncio.TimeoutError, SigenergyModbusError)):
+                     connection_error_occurred = True
+                # We don't know which register failed here, so we can't mark it specifically.
+                # The registers remain is_supported=None and will be retried on read.
+                continue # Skip to next result
+
+            # Unpack successful results
+            name, is_supported, probe_exception = result
+            if name in register_defs:
+                register_defs[name].is_supported = is_supported
+                if probe_exception:
+                    # Log the specific exception caught by _probe_single_register
+                    _LOGGER.debug("Probe failed for register %s on %s: %s", name, device_info_log, probe_exception)
+                    if isinstance(probe_exception, (ConnectionException, asyncio.TimeoutError, SigenergyModbusError)):
+                        connection_error_occurred = True
+
+        # If any connection-related error occurred during probing, mark the connection state
+        if connection_error_occurred:
+            _LOGGER.warning("Connection errors encountered during probing for %s. Marking connection as potentially disconnected.", device_info_log)
+            self._connected[key] = False
+
 
     async def async_read_registers(
         self,
@@ -784,6 +848,11 @@ class SigenergyModbusHub:
             parameter_registers = AC_CHARGER_PARAMETER_REGISTERS
         else:
             raise ValueError(f"Unknown device_type: {device_type}")
+        
+        _LOGGER.debug(
+            "Writing %s parameter '%s' with value %s to device '%s'",
+            device_type, register_name, value, device_identifier or 'plant'
+        )
 
         # Get slave_id for inverter/ac_charger from connection details
         if connection_dict is not None and device_identifier:
@@ -794,6 +863,10 @@ class SigenergyModbusHub:
             slave_id = device_info.get(CONF_SLAVE_ID)
             if slave_id is None:
                 raise SigenergyModbusError(f"Slave ID not configured for {device_type}: {device_identifier}")
+        else:
+            # For plant, use the plant_connection directly
+            device_info = connection_dict
+            slave_id = device_info.get(CONF_SLAVE_ID)
 
         # Safety check: Ensure slave_id was determined
         if slave_id is None:
