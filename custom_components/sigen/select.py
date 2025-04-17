@@ -50,23 +50,11 @@ GRID_CODE_MAP = {
 # Reverse mapping for looking up codes by country name
 COUNTRY_TO_CODE_MAP = {country: code for code, country in GRID_CODE_MAP.items()}
 # Debug log the grid code map
-_LOGGER.debug("GRID_CODE_MAP: %s", GRID_CODE_MAP)
 
 def _get_grid_code_display(data, device_name): # Changed inverter_id to device_name
     """Get the display value for grid code with debug logging."""
-    # Log the available inverter data for debugging
-    # Access using device_name
-    # if device_name in data.get("inverters", {}):
-    #     # _LOGGER.debug("Available inverter data keys for %s: %s", device_name, list(data["inverters"][device_name].keys()))
-    # else:
-    #     _LOGGER.debug("No data available for inverter %s", device_name)
-    #     return "Unknown"
-    
     # Get the raw grid code value using device_name
     grid_code = data["inverters"].get(device_name, {}).get("inverter_grid_code")
-    
-    # Debug log the value and type
-    # _LOGGER.debug("Grid code value for %s: %s, type: %s", device_name, grid_code, type(grid_code))
     
     # Handle None case
     if grid_code is None:
