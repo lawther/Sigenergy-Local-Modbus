@@ -153,7 +153,7 @@ def generate_plant_schema(
 
     _LOGGER.debug("slave_id_type: %s",slave_id_type)
     validation_schema[vol.Required(slave_id_type, default=user_input[slave_id_type])] = int
-    validation_schema[vol.Required(CONF_READ_ONLY, default=user_input.get(CONF_READ_ONLY, False))] = bool
+    validation_schema[vol.Required(CONF_READ_ONLY, default=user_input.get(CONF_READ_ONLY, True))] = bool
 
     if migration_alternative:
         validation_schema[vol.Required(CONF_MIGRATE_YAML,
