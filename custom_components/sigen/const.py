@@ -64,6 +64,7 @@ CONF_PARENT_INVERTER_ID = "parent_inverter_id"
 CONF_PLANT_ID = "plant_id"
 CONF_READ_ONLY = "read_only"
 CONF_SLAVE_ID = "slave_id"
+CONF_RESET_VALUES = "reset_values"
 
 # Default values
 DEFAULT_PORT = 502

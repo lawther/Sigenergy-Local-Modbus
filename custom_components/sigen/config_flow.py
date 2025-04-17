@@ -66,6 +66,7 @@ from .const import (
     CONF_MIGRATE_YAML,
     LEGACY_SENSOR_MIGRATION_MAP,
     CONF_VALUES_TO_INIT,
+    CONF_RESET_VALUES,
 )
 
 DEVICE_TYPE_UNKNOWN = "unknown"
@@ -84,6 +85,16 @@ STEP_RECONFIGURE = "reconfigure"
 
 _LOGGER = logging.getLogger(__name__)
 
+DEFAULT_PLANT_CONNECTION = {
+                CONF_HOST: "",
+                CONF_PORT: DEFAULT_PORT,
+                CONF_INVERTER_SLAVE_ID: DEFAULT_INVERTER_SLAVE_ID,
+                CONF_SCAN_INTERVAL_HIGH: DEFAULT_SCAN_INTERVAL_HIGH,
+                CONF_SCAN_INTERVAL_ALARM: DEFAULT_SCAN_INTERVAL_ALARM, 
+                CONF_SCAN_INTERVAL_MEDIUM: DEFAULT_SCAN_INTERVAL_MEDIUM,
+                CONF_SCAN_INTERVAL_LOW: DEFAULT_SCAN_INTERVAL_LOW,
+}
+
 # Schema definitions for each step
 STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
     {
@@ -95,15 +106,6 @@ STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
                 DEVICE_TYPE_DC_CHARGER: "DC Charger",
             }
         ),
-    }
-)
-
-STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_HOST): str,
-        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_INVERTER_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
-        vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool,
     }
 )
 
@@ -123,6 +125,55 @@ STEP_AC_CHARGER_CONFIG_SCHEMA = vol.Schema(
     }
 )
 
+def generate_plant_schema(
+        user_input,
+        discovered_ip = "",
+        migration_alternative = False,
+        use_inverter_device_id = False,
+        reset_state_alternative = False,
+        display_update_frq = False
+    ) -> vol.Schema:
+    """Dynamically create schema using the determined prefill_host
+
+    Args:
+        user_input (_type_, optional): _description_. Defaults to None.
+        discovered_ip (str, optional): _description_. Defaults to "".
+        migration_alternative (bool, optional): _description_. Defaults to False.
+        reset_state_alternative (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        vol.Schema: _description_
+    """
+    slave_id_type = CONF_INVERTER_SLAVE_ID if use_inverter_device_id else CONF_SLAVE_ID
+
+    validation_schema = {
+                vol.Required(CONF_HOST, default = user_input[CONF_HOST] or discovered_ip): str,
+                vol.Required(CONF_PORT, default = user_input[CONF_PORT]): int
+    }
+
+    _LOGGER.debug("slave_id_type: %s",slave_id_type)
+    validation_schema[vol.Required(slave_id_type, default=user_input[slave_id_type])] = int
+    validation_schema[vol.Required(CONF_READ_ONLY, default=user_input.get(CONF_READ_ONLY, False))] = bool
+
+    if migration_alternative:
+        validation_schema[vol.Required(CONF_MIGRATE_YAML,
+                                       default=user_input.get(CONF_MIGRATE_YAML, False))] = bool
+    elif reset_state_alternative:
+        validation_schema[vol.Required(CONF_RESET_VALUES,
+                                       default=user_input.get(CONF_RESET_VALUES, False))] = bool
+
+    # if display_update_frq:
+        validation_schema[vol.Required(CONF_SCAN_INTERVAL_HIGH,
+                                       default=user_input.get(CONF_SCAN_INTERVAL_HIGH,DEFAULT_SCAN_INTERVAL_HIGH))] = vol.All(vol.Coerce(int))
+        validation_schema[vol.Required(CONF_SCAN_INTERVAL_ALARM,
+                                       default=user_input.get(CONF_SCAN_INTERVAL_ALARM,DEFAULT_SCAN_INTERVAL_ALARM))] = vol.All(vol.Coerce(int))
+        validation_schema[vol.Required(CONF_SCAN_INTERVAL_MEDIUM,
+                                       default=user_input.get(CONF_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_MEDIUM))] = vol.All(vol.Coerce(int))
+        validation_schema[vol.Required(CONF_SCAN_INTERVAL_LOW,
+                                       default=user_input.get(CONF_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_LOW))] = vol.All(vol.Coerce(int))
+
+    schema = vol.Schema(validation_schema)
+    return schema
 
 def validate_host_port(host: str, port: int) -> Dict[str, str]:
     """Validate host and port combination.
@@ -375,26 +426,11 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
 
         if user_input is None:
-            # Dynamically create schema using the determined prefill_host
-            if legacy_yaml_present:
-                schema = vol.Schema(
-                    {
-                        vol.Required(CONF_HOST, default=self._discovered_ip or ""): str,
-                        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                        vol.Required(CONF_INVERTER_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
-                        vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool,
-                        vol.Required(CONF_MIGRATE_YAML, default=False): bool,
-                    }
-                )
-            else:
-                schema = vol.Schema(
-                    {
-                        vol.Required(CONF_HOST, default=self._discovered_ip or ""): str,
-                        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                        vol.Required(CONF_INVERTER_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
-                        vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool,
-                    }
-                )
+            schema = generate_plant_schema(DEFAULT_PLANT_CONNECTION,
+                                           discovered_ip=self._discovered_ip or "",
+                                           legacy_yaml_present=bool(legacy_yaml_present),
+                                           use_inverter_device_id=True
+            )
 
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
@@ -425,20 +461,18 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         if errors:
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
-                data_schema=STEP_PLANT_CONFIG_SCHEMA,
-                errors=errors,
+                data_schema=generate_plant_schema(user_input,
+                                                  discovered_ip=self._discovered_ip or "",
+                                                  migration_alternative=bool(legacy_yaml_present),
+                                                  use_inverter_device_id=True
+                                                  ),
+                                            errors=errors,
             )
 
         # Create the plant connection dictionary
-        self._data[CONF_PLANT_CONNECTION] = {
-            CONF_HOST: user_input[CONF_HOST],
-            CONF_PORT: user_input[CONF_PORT],
-            CONF_SLAVE_ID: DEFAULT_PLANT_SLAVE_ID,
-            CONF_SCAN_INTERVAL_HIGH: DEFAULT_SCAN_INTERVAL_HIGH,
-            CONF_SCAN_INTERVAL_ALARM: DEFAULT_SCAN_INTERVAL_ALARM, 
-            CONF_SCAN_INTERVAL_MEDIUM: DEFAULT_SCAN_INTERVAL_MEDIUM,
-            CONF_SCAN_INTERVAL_LOW: DEFAULT_SCAN_INTERVAL_LOW,
-        }
+        new_plant_connection = DEFAULT_PLANT_CONNECTION
+        new_plant_connection[CONF_HOST] = user_input[CONF_HOST]
+        new_plant_connection[CONF_PORT] = user_input[CONF_PORT]
 
         # Create the inverter connections dictionary for the implicit first inverter
         inverter_name = "Sigen Inverter"
@@ -1133,40 +1167,13 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         """Handle reconfiguration of an existing plant device."""
         errors = {}
 
-        def get_schema(data_source: Dict):
-            return vol.Schema(
-                {
-                    vol.Required(CONF_HOST, default=data_source.get(CONF_HOST, "")): str,
-                    vol.Required(
-                        CONF_PORT, default=data_source.get(CONF_PORT, DEFAULT_PORT)
-                    ): int,
-                    vol.Required(
-                        CONF_READ_ONLY,
-                        default=data_source.get(CONF_READ_ONLY, DEFAULT_READ_ONLY),
-                    ): bool,
-                    vol.Required(
-                        CONF_SCAN_INTERVAL_HIGH,
-                        default=data_source.get(CONF_SCAN_INTERVAL_HIGH, DEFAULT_SCAN_INTERVAL_HIGH)
-                    ): vol.All(vol.Coerce(int)),
-                    vol.Required(
-                        CONF_SCAN_INTERVAL_ALARM,
-                        default=data_source.get(CONF_SCAN_INTERVAL_ALARM, DEFAULT_SCAN_INTERVAL_ALARM)
-                    ): vol.All(vol.Coerce(int)),
-                    vol.Required(
-                        CONF_SCAN_INTERVAL_MEDIUM,
-                        default=data_source.get(CONF_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_MEDIUM)
-                    ): vol.All(vol.Coerce(int)),
-                    vol.Required(
-                        CONF_SCAN_INTERVAL_LOW,
-                        default=data_source.get(CONF_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_LOW)
-                    ): vol.All(vol.Coerce(int)),
-                }
-            )
-
         if user_input is None:
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
-                data_schema=get_schema(self._data[CONF_PLANT_CONNECTION])
+                data_schema=generate_plant_schema(self._data[CONF_PLANT_CONNECTION],
+                                                  reset_state_alternative= True,
+                                                  display_update_frq=True
+                                                  )
             )
 
         # Validate host and port
@@ -1174,6 +1181,10 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             user_input.get(CONF_HOST, ""), user_input.get(CONF_PORT, 0)
         )
         errors.update(host_port_errors)
+
+
+        _LOGGER.debug("Read user_input: %s", user_input)
+
 
         # Validate scan intervals
         high_interval = user_input.get(CONF_SCAN_INTERVAL_HIGH, DEFAULT_SCAN_INTERVAL_HIGH)
@@ -1188,26 +1199,27 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         for interv in [CONF_SCAN_INTERVAL_MEDIUM, CONF_SCAN_INTERVAL_LOW, CONF_SCAN_INTERVAL_ALARM]:
             if high_interval > 0 and user_input[interv] % high_interval != 0:
                 errors[interv] = "must_be_divisible_by_high"
-            else:
-                user_input[interv] = user_input[interv] / high_interval
 
         # Validate Medium Interval
-        if medium_interval < high_interval:
+        if not errors.get(CONF_SCAN_INTERVAL_MEDIUM) and medium_interval < high_interval:
             errors[CONF_SCAN_INTERVAL_MEDIUM] = "cannot_be_lower_than_high"
 
         # Validate Low Interval
-        if low_interval < medium_interval:
+        if not errors.get(CONF_SCAN_INTERVAL_LOW) and low_interval < medium_interval:
             errors[CONF_SCAN_INTERVAL_LOW] = "cannot_be_lower_than_medium"
 
         # Validate Alarm Interval
-        if alarm_interval < medium_interval:
-            errors[CONF_SCAN_INTERVAL_ALARM] = "cannot_be_lower_than_medium"
+        if not errors.get(CONF_SCAN_INTERVAL_ALARM) and alarm_interval < high_interval:
+            errors[CONF_SCAN_INTERVAL_ALARM] = "cannot_be_lower_than_high"
 
         if errors:
             # Re-create schema with user input values for error display
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
-                data_schema=get_schema(user_input),
+                data_schema=generate_plant_schema(user_input,
+                                                  reset_state_alternative= True,
+                                                  display_update_frq=True
+                                                  ),
                 errors=errors
             )
 
@@ -1216,10 +1228,18 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         new_data[CONF_PLANT_CONNECTION][CONF_HOST] = user_input[CONF_HOST]
         new_data[CONF_PLANT_CONNECTION][CONF_PORT] = user_input[CONF_PORT]
         new_data[CONF_PLANT_CONNECTION][CONF_READ_ONLY] = user_input[CONF_READ_ONLY]
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_HIGH] = user_input[CONF_SCAN_INTERVAL_HIGH]
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_ALARM] = user_input[CONF_SCAN_INTERVAL_ALARM]
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_MEDIUM] = user_input[CONF_SCAN_INTERVAL_MEDIUM]
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_LOW] = user_input[CONF_SCAN_INTERVAL_LOW]
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_HIGH] = high_interval
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_ALARM] = alarm_interval
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_MEDIUM] = medium_interval
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_LOW] = low_interval
+
+        _LOGGER.debug("Update intervals:")
+        _LOGGER.debug(f"High: {high_interval}, Medium: {medium_interval}, Low: {low_interval}, Alarm: {alarm_interval}")
+        
+
+        # Check if to reset Accumulated values
+        if user_input[CONF_RESET_VALUES]:
+            _LOGGER.debug("Reseting values")
 
         # Update data if changed (optional check, keeping existing behavior for now)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
