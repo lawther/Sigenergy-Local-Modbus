@@ -427,7 +427,23 @@ class SigenergyModbusHub:
                         "address": address,
                         "value": value
                     })
-                    
+
+                    # If address >= 40001, also try offset addressing
+                    if address >= 40001:
+                        offset_address = address - 40001
+                        approaches.append({
+                            "description": f"write_registers with offset addressing ({offset_address})",
+                            "function": "write_registers",
+                            "address": offset_address,
+                            "values": [value]
+                        })
+                        approaches.append({
+                            "description": f"write_register with offset addressing ({offset_address})",
+                            "function": "write_register",
+                            "address": offset_address,
+                            "value": value
+                        })
+
                     # Try each approach until one succeeds
                     last_error = None
                     success = False
@@ -828,13 +844,13 @@ class SigenergyModbusHub:
 
         slave_id: Optional[int] = None
         parameter_registers: Dict[str, ModbusRegisterDefinition] = {}
-        connection_dict: Optional[Dict] = None # To store inverter_connections or ac_charger_connections
+        connection_dict: Optional[Dict[str, Any]] = None # Type hint correction
 
         # Determine slave ID and parameter dictionary based on device type
         if device_type == "plant":
             connection_dict = self.plant_connection
-            assert isinstance(connection_dict, dict)
-            plant_info = self.plant_connection
+            # Ensure plant_connection is treated as a dict for type checking
+            plant_info = self.plant_connection if isinstance(self.plant_connection, dict) else {}
             parameter_registers = PLANT_PARAMETER_REGISTERS
         elif device_type == "inverter":
             if not device_identifier:
@@ -848,29 +864,42 @@ class SigenergyModbusHub:
             parameter_registers = AC_CHARGER_PARAMETER_REGISTERS
         else:
             raise ValueError(f"Unknown device_type: {device_type}")
-        
+
         _LOGGER.debug(
             "Writing %s parameter '%s' with value %s to device '%s'",
             device_type, register_name, value, device_identifier or 'plant'
         )
 
-        # Get slave_id for inverter/ac_charger from connection details
-        if connection_dict is not None and device_identifier:
-            if device_identifier not in connection_dict:
-                raise SigenergyModbusError(f"Unknown {device_type} name: {device_identifier}")
-            device_info = connection_dict[device_identifier]
-            assert isinstance(device_info, dict)
-            slave_id = device_info.get(CONF_SLAVE_ID)
-            if slave_id is None:
-                raise SigenergyModbusError(f"Slave ID not configured for {device_type}: {device_identifier}")
-        else:
-            # For plant, use the plant_connection directly
-            device_info = connection_dict
-            slave_id = device_info.get(CONF_SLAVE_ID)
+        # Get device_info and slave_id
+        device_info: Dict[str, Any] = {}
+        if connection_dict is not None:
+            if device_type == "plant":
+                # Plant uses the main connection dict directly
+                device_info = connection_dict
+            elif device_identifier:
+                # Inverter/AC Charger look up by identifier
+                if device_identifier not in connection_dict:
+                    raise SigenergyModbusError(f"Unknown {device_type} name: {device_identifier}")
+                # Ensure the looked-up value is a dict
+                potential_device_info = connection_dict.get(device_identifier)
+                if isinstance(potential_device_info, dict):
+                    device_info = potential_device_info
+                else:
+                    raise SigenergyModbusError(f"Configuration for {device_type} '{device_identifier}' is not a valid dictionary.")
+
+        slave_id = device_info.get(CONF_SLAVE_ID)
 
         # Safety check: Ensure slave_id was determined
         if slave_id is None:
-             raise SigenergyModbusError(f"Could not determine slave ID for {device_type} '{device_identifier}'")
+             # Try getting plant_id if it's the plant device
+             if device_type == "plant":
+                 slave_id = self.plant_id
+             if slave_id is None: # Still None after checking plant_id
+                raise SigenergyModbusError(f"Could not determine slave ID for {device_type} '{device_identifier or 'plant'}' from configuration: {device_info}")
+
+        # Ensure slave_id is added to device_info if missing (needed by write functions)
+        if CONF_SLAVE_ID not in device_info:
+            device_info[CONF_SLAVE_ID] = slave_id
 
         # Get register definition
         if register_name not in parameter_registers:
@@ -878,15 +907,15 @@ class SigenergyModbusHub:
         register_def = parameter_registers[register_name]
 
         _LOGGER.debug(
-            "Writing %s parameter '%s' (device: %s) with value %s to address %s (type: %s, data_type: %s, gain: %s)",
-            device_type, register_name, device_identifier or 'plant', value, register_def.address,
+            "Writing %s parameter '%s' (device: %s, slave: %s) with value %s to address %s (type: %s, data_type: %s, gain: %s)",
+            device_type, register_name, device_identifier or 'plant', slave_id, value, register_def.address,
             register_def.register_type, register_def.data_type, register_def.gain
         )
 
         # === Plant-Specific Handling ===
         # Certain plant registers require special handling due to Modbus quirks
         if device_type == "plant":
-            key = self._get_connection_key(plant_info) # Get connection key for client/lock
+            key = self._get_connection_key(device_info) # Get connection key for client/lock
             # plant_info is guaranteed to be a dict here
 
             # Special handling for plant_remote_ems_enable register
@@ -901,52 +930,29 @@ class SigenergyModbusHub:
                 last_error = None
                 success = False
                 try:
-                    client = await self._get_client(plant_info) # Ensure client is ready
                     async with self._locks[key]:
-                        for i, approach in enumerate(approaches):
+                        client = await self._get_client(device_info)
+                        for approach in approaches:
                             try:
-                                _LOGGER.debug(
-                                    "Attempt %d for plant_remote_ems_enable: Using %s with address %s and value %s",
-                                    i+1, approach["function"], approach["address"],
-                                    approach.get("value", approach.get("values"))
-                                )
+                                _LOGGER.debug("Plant write attempt: %s", approach['description'] if 'description' in approach else f"{approach['function']} @ {approach['address']}")
                                 if approach["function"] == "write_registers":
-                                    result = await client.write_registers(
-                                        address=approach["address"], values=approach["values"], slave=slave_id
-                                    )
-                                else: # write_register
-                                    result = await client.write_register(
-                                        address=approach["address"], value=approach["value"], slave=slave_id
-                                    )
-
-                                if not hasattr(result, 'isError') or not result.isError():
-                                    _LOGGER.debug("Success with approach %d for plant_remote_ems_enable", i+1)
+                                    result = await client.write_registers(address=approach["address"], values=approach["values"], slave=slave_id)
+                                else:
+                                    result = await client.write_register(address=approach["address"], value=approach["value"], slave=slave_id)
+                                if not result.isError():
                                     success = True
-                                    break # Success, exit loop
-
-                                _LOGGER.debug("Error with approach %d: %s", i+1, result)
+                                    break
                                 last_error = result
-                            except Exception as ex_inner: # Catch errors within the loop
-                                _LOGGER.debug("Exception with approach %d: %s", i+1, ex_inner)
+                            except Exception as ex_inner:
                                 last_error = ex_inner
-                                # Continue to next approach
-
-                    if success:
-                        return # Exit method after successful special handling
-
-                    # If loop finished without success
-                    if isinstance(last_error, Exception):
-                        raise SigenergyModbusError(f"Error writing plant_remote_ems_enable after multiple attempts: {last_error}") from last_error
-                    else:
-                        raise SigenergyModbusError(f"Error writing plant_remote_ems_enable after multiple attempts: {last_error}")
-
+                    if not success:
+                        raise SigenergyModbusError(f"Failed plant_remote_ems_enable write after all attempts. Last error: {last_error}")
+                    return # Success
                 except (ConnectionException, ModbusException, SigenergyModbusError) as ex_outer:
-                    self._connected[key] = False # Mark connection as potentially broken
-                    raise ex_outer # Re-raise known Modbus/Connection errors
-                except Exception as ex_outer: # Catch unexpected errors during client/lock handling
                     self._connected[key] = False
-                    raise SigenergyModbusError(f"Unexpected error writing plant_remote_ems_enable: {ex_outer}") from ex_outer
-
+                    raise SigenergyModbusError(f"Error during special plant write: {ex_outer}") from ex_outer
+                except Exception as ex_outer:
+                    raise SigenergyModbusError(f"Unexpected error during special plant write: {ex_outer}") from ex_outer
 
             # Special handling for U32/S32 registers
             elif register_def.data_type in [DataType.U32, DataType.S32]:
@@ -962,50 +968,26 @@ class SigenergyModbusHub:
                 last_error = None
                 success = False
                 try:
-                    client = await self._get_client(plant_info) # Ensure client is ready
                     async with self._locks[key]:
-                        for i, approach in enumerate(approaches):
-                            # Skip invalid addresses
-                            if approach["address"] < 0:
-                                _LOGGER.debug("Skipping attempt %d for %s: Invalid address %s", i+1, register_name, approach["address"])
-                                continue
+                        client = await self._get_client(device_info)
+                        for approach in approaches:
                             try:
-                                _LOGGER.debug(
-                                    "Attempt %d for %s: Using address %s with values %s",
-                                    i+1, register_name, approach["address"], encoded_values
-                                )
-                                result = await client.write_registers(
-                                    address=approach["address"], values=encoded_values, slave=slave_id
-                                )
-
+                                _LOGGER.debug("Plant U32/S32 write attempt: write_registers @ %s", approach['address'])
+                                result = await client.write_registers(address=approach["address"], values=encoded_values, slave=slave_id)
                                 if not result.isError():
-                                    _LOGGER.debug("Success with approach %d for %s at address %s",
-                                                i+1, register_name, approach["address"])
                                     success = True
-                                    break # Success, exit loop
-
-                                _LOGGER.debug("Error with approach %d: %s", i+1, result)
+                                    break
                                 last_error = result
-                            except Exception as ex_inner: # Catch errors within the loop
-                                _LOGGER.debug("Exception with approach %d: %s", i+1, ex_inner)
+                            except Exception as ex_inner:
                                 last_error = ex_inner
-                                # Continue to next approach
-
-                    if success:
-                        return # Exit method after successful special handling
-
-                    # If loop finished without success
-                    if isinstance(last_error, Exception):
-                         raise SigenergyModbusError(f"Error writing {register_name} after multiple attempts: {last_error}") from last_error
-                    else:
-                         raise SigenergyModbusError(f"Error writing {register_name} after multiple attempts: {last_error}")
-
+                    if not success:
+                        raise SigenergyModbusError(f"Failed U32/S32 write for {register_name} after all attempts. Last error: {last_error}")
+                    return # Success
                 except (ConnectionException, ModbusException, SigenergyModbusError) as ex_outer:
-                    self._connected[key] = False # Mark connection as potentially broken
-                    raise ex_outer # Re-raise known Modbus/Connection errors
-                except Exception as ex_outer: # Catch unexpected errors during client/lock handling
                     self._connected[key] = False
-                    raise SigenergyModbusError(f"Unexpected error writing {register_name}: {ex_outer}") from ex_outer
+                    raise SigenergyModbusError(f"Error during special plant U32/S32 write: {ex_outer}") from ex_outer
+                except Exception as ex_outer:
+                    raise SigenergyModbusError(f"Unexpected error during special plant U32/S32 write: {ex_outer}") from ex_outer
 
         # === General Write Logic ===
         # (Executes if device_type is not 'plant' or if it's a plant register without special handling)
@@ -1020,14 +1002,14 @@ class SigenergyModbusHub:
         try:
             if len(encoded_values) == 1:
                 await self.async_write_register(
-                    device_info=plant_info if device_type == "plant" else device_info,
+                    device_info=device_info, # Pass the correctly typed device_info
                     address=register_def.address,
                     value=encoded_values[0],
                     register_type=register_def.register_type,
                 )
             else:
                 await self.async_write_registers(
-                    device_info=plant_info if device_type == "plant" else device_info,
+                    device_info=device_info, # Pass the correctly typed device_info
                     address=register_def.address,
                     values=encoded_values,
                     register_type=register_def.register_type,
