@@ -26,7 +26,10 @@ CONF_PORT = "port"
 CONF_SLAVE_ID = "slave_id"
 CONF_PLANT_ID = "plant_id"
 CONF_PLANT_CONNECTION = "plant_connection"
-CONF_SCAN_INTERVAL = "scan_interval"
+CONF_SCAN_INTERVAL_HIGH = "scan_interval_high"
+CONF_SCAN_INTERVAL_MEDIUM = "scan_interval_medium"
+CONF_SCAN_INTERVAL_LOW = "scan_interval_low"
+CONF_SCAN_INTERVAL_ALARM = "scan_interval_alarm"
 CONF_INVERTER_COUNT = "inverter_count"
 CONF_INVERTER_SLAVE_ID = "inverter_slave_ids"
 CONF_INVERTER_CONNECTIONS = "inverter_connections"
@@ -35,6 +38,8 @@ CONF_AC_CHARGER_CONNECTIONS = "ac_charger_connections"
 CONF_DC_CHARGER_CONNECTIONS = "dc_charger_connections"
 CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
+CONF_MIGRATE_YAML = "migrate_yaml"
+CONF_VALUES_TO_INIT = "values_to_initialize"
 
 # Default names
 DEFAULT_INVERTER_NAME = "Sigen Inverter"
@@ -59,12 +64,16 @@ CONF_PARENT_INVERTER_ID = "parent_inverter_id"
 CONF_PLANT_ID = "plant_id"
 CONF_READ_ONLY = "read_only"
 CONF_SLAVE_ID = "slave_id"
+CONF_RESET_VALUES = "reset_values"
 
 # Default values
 DEFAULT_PORT = 502
 DEFAULT_PLANT_SLAVE_ID = 247  # Plant address
 DEFAULT_INVERTER_SLAVE_ID = 1  # Default Inverter address
-DEFAULT_SCAN_INTERVAL = 5
+DEFAULT_SCAN_INTERVAL_HIGH = 5
+DEFAULT_SCAN_INTERVAL_ALARM = 30
+DEFAULT_SCAN_INTERVAL_MEDIUM = 30
+DEFAULT_SCAN_INTERVAL_LOW = 600
 DEFAULT_INVERTER_COUNT = 1
 DEFAULT_READ_ONLY = True  # Default to read-only mode
 
@@ -84,6 +93,18 @@ FUNCTION_READ_HOLDING_REGISTERS = 3
 FUNCTION_READ_INPUT_REGISTERS = 4
 FUNCTION_WRITE_REGISTER = 6
 FUNCTION_WRITE_REGISTERS = 16
+
+# Define a constant for the entity ID used to detect legacy YAML configuration
+LEGACY_YAML_TEST_ENTITY_ID = "sensor.sigen_accumulated_energy_consumption"
+
+
+# Map of new sensor keys to old legacy YAML entity IDs for migration
+LEGACY_SENSOR_MIGRATION_MAP = {
+    "sensor.sigen_plant_accumulated_pv_energy": "sensor.sigen_accumulated_pv_energy_production",
+    "sensor.sigen_plant_accumulated_consumed_energy": "sensor.sigen_accumulated_energy_consumption",
+    "sensor.sigen_plant_accumulated_grid_import_energy": "sensor.sigen_accumulated_grid_energy_import",
+    "sensor.sigen_plant_accumulated_grid_export_energy": "sensor.sigen_accumulated_grid_energy_export",
+}
 
 # Modbus register types
 class RegisterType(Enum):
@@ -233,7 +254,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Grid Reactive Power",
     ),
     "plant_on_off_grid_status": ModbusRegisterDefinition(
@@ -259,7 +280,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.U32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Max apparent power",
     ),
     "plant_ess_soc": ModbusRegisterDefinition(
@@ -304,7 +325,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Plant phase A reactive power",
     ),
     "plant_phase_b_reactive_power": ModbusRegisterDefinition(
@@ -313,7 +334,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Plant phase B reactive power",
     ),
     "plant_phase_c_reactive_power": ModbusRegisterDefinition(
@@ -322,7 +343,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Plant phase C reactive power",
     ),
     "plant_general_alarm1": ModbusRegisterDefinition(
@@ -372,7 +393,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Plant reactive power",
     ),
     "plant_photovoltaic_power": ModbusRegisterDefinition(
@@ -417,7 +438,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.U32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Available max reactive power",
     ),
     "plant_available_min_reactive_power": ModbusRegisterDefinition(
@@ -426,7 +447,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.U32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Available min reactive power",
     ),
     "plant_ess_available_max_charging_power": ModbusRegisterDefinition(
@@ -488,7 +509,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Grid sensor Phase A reactive power",
     ),
     "plant_grid_sensor_phase_b_reactive_power": ModbusRegisterDefinition(
@@ -497,7 +518,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Grid sensor Phase B reactive power",
     ),
     "plant_grid_sensor_phase_c_reactive_power": ModbusRegisterDefinition(
@@ -506,7 +527,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Grid sensor Phase C reactive power",
     ),
     "plant_ess_available_max_charging_capacity": ModbusRegisterDefinition(
@@ -617,7 +638,7 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Reactive power fixed adjustment target value. Range: [-60.00 * base value, 60.00 * base value]. Takes effect globally regardless of the EMS operating mode.",
         applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
@@ -686,7 +707,7 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Phase A reactive power fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
     ),
@@ -696,7 +717,7 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Phase B reactive power fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
     ),
@@ -706,7 +727,7 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Phase C reactive power fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
     ),
@@ -1034,7 +1055,7 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.U32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Max. Reactive Power Adjustment Value Fed to AC Terminal",
     ),
     "inverter_max_reactive_power_adjustment_value_absorbed": ModbusRegisterDefinition(
@@ -1043,7 +1064,7 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.U32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Max. Reactive Power Adjustment Value Absorbed from AC Terminal",
     ),
     "inverter_active_power": ModbusRegisterDefinition(
@@ -1061,7 +1082,7 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Reactive Power",
     ),
     "inverter_ess_max_battery_charge_power": ModbusRegisterDefinition(
@@ -1764,7 +1785,7 @@ INVERTER_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.S32,
         gain=1000,
-        unit="kVar",
+        unit="kvar",
         description="Reactive power fixed value adjustment",
         applicable_to=["hybrid_inverter"],
     ),

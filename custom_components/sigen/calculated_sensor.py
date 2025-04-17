@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -27,19 +27,26 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 from homeassistant.util import dt as dt_util
 
-from .const import EMSWorkMode
+from .const import (
+    EMSWorkMode,
+    CONF_VALUES_TO_INIT,
+)
 
 from .common import (
     SigenergySensorEntityDescription,
 )
 from .sigen_entity import SigenergyEntity # Import the new base class
 
+if TYPE_CHECKING:
+    from .coordinator import SigenergyDataUpdateCoordinator
+
 _LOGGER = logging.getLogger(__name__)
 
 # Only log for these entities
 LOG_THIS_ENTITY = [
-    # "sensor.sigen_plant_accumulated_consumed_energy",
+    "sensor.sigen_plant_accumulated_consumed_energy",
     # "sensor.sigen_plant_accumulated_grid_import_energy",
+    # "sensor.sigen_plant_accumulated_pv_energy",
 ]
 
 
@@ -374,7 +381,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         device_id: Optional[str] = None,
         device_name: Optional[str] = "",
         device_info: Optional[DeviceInfo] = None,
-        source_entity_id: Optional[str] = None,
+        source_entity_id: str = "",
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the integration sensor."""
@@ -394,9 +401,9 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         # Sensor-specific initialization
         self._source_entity_id = source_entity_id
-        # self._pv_string_idx = pv_string_idx # Already handled by SigenergyEntity
         self._round_digits = getattr(description, "round_digits", None)
         self._max_sub_interval = getattr(description, "max_sub_interval", None)
+        self.log_this_entity = False
 
         # Initialize state variables
         self._state: Decimal | None = None
@@ -411,7 +418,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         )
 
         self._max_sub_interval_exceeded_callback = lambda *args: None  # Just a placeholder
-        self._cancel_max_sub_interval_exceeded_callback = None  # Will store the actual cancel handle        self._last_integration_time = dt_util.utcnow()
+        self._cancel_max_sub_interval_exceeded_callback = None  # Will store the cancel handle
+        self._last_integration_time = dt_util.utcnow()
         self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
 
         # Device info is now handled by SigenergyEntity's __init__
@@ -449,7 +457,6 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
     def _update_integral(self, area: Decimal) -> None:
         """Update the integral with the calculated area."""
-        log_this_entity = self.entity_id in LOG_THIS_ENTITY
         state_before = self._state
         # Convert seconds to hours
         area_scaled = area / Decimal(3600)
@@ -459,13 +466,17 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         else:
             self._state = area_scaled
 
-        if log_this_entity:
+        if self.log_this_entity:
             _LOGGER.debug(
                 "[%s] _update_integral - Area: %s, State before: %s, State after: %s",
                 self.entity_id,
                 area_scaled,
                 state_before,
                 self._state,
+            )
+            _LOGGER.debug(
+                "[%s] _update_integral - Area before scale: %s, Area after scale: %s",
+                self.entity_id, area, area_scaled
             )
 
         self._last_valid_state = self._state
@@ -480,18 +491,17 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         @callback
         def _handle_midnight(current_time):
             """Handle midnight reset."""
-            log_this_entity = self.entity_id in LOG_THIS_ENTITY
             state_before = self._state
             self._state = Decimal(0)
             self._last_valid_state = self._state
-            if log_this_entity:
+            if self.log_this_entity:
                 _LOGGER.debug(
                     "[%s] _handle_midnight - Resetting state from %s to 0",
                     self.entity_id,
                     state_before,
                 )
             self.async_write_ha_state()
-            if log_this_entity:
+            if self.log_this_entity:
                  _LOGGER.debug("[%s] _handle_midnight - Called async_write_ha_state()", self.entity_id)
             self._setup_midnight_reset()  # Schedule next reset
 
@@ -503,18 +513,49 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
         await super().async_added_to_hass()
-        log_this_entity = self.entity_id in LOG_THIS_ENTITY
+        self.log_this_entity = self.entity_id in LOG_THIS_ENTITY
+        restore_value = None
 
-        # Restore previous state if available
-        last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in (
-            None,
-            STATE_UNKNOWN,
-            STATE_UNAVAILABLE,
-        ):
+        # Check if there is qued restore for this value either migration or manual reset.
+        config_entry = self.hub.config_entry
+        if config_entry:
+            _resetting_sensors = config_entry.data.get(CONF_VALUES_TO_INIT, {})
+            if self.log_this_entity:
+                _LOGGER.debug("Will reset values: %s", _resetting_sensors)
+
+            if self.entity_id in _resetting_sensors:
+                restore_value = _resetting_sensors[self.entity_id]
+
+                # Remove the entity from list of restorable
+                _resetting_sensors.pop(self.entity_id)
+
+                # Make new Configuration data from original
+                new_config_data = dict(config_entry.data)
+                new_config_data[CONF_VALUES_TO_INIT] = _resetting_sensors
+
+                # Update the plant's configuration with the new data
+                self.hass.config_entries.async_update_entry(config_entry, data=new_config_data)
+                self.hass.config_entries._async_schedule_save()
+
+                _LOGGER.debug("Deleted the sensor %s resetable. New Dict: %s", self.entity_id,
+                                config_entry.data.get(CONF_VALUES_TO_INIT))
+        else:
+            _LOGGER.debug("No config entry")
+
+        if not restore_value:
+            # Restore previous state if available
+            last_state = await self.async_get_last_state()
+            if last_state and last_state.state not in (
+                None,
+                STATE_UNKNOWN,
+                STATE_UNAVAILABLE,
+            ):
+                restore_value = last_state.state
+
+        if restore_value:
             try:
-                restored_state = Decimal(last_state.state)
-                if log_this_entity:
+                restored_state = Decimal(restore_value)
+                if self.log_this_entity:
                     _LOGGER.debug(
                         "[%s] async_added_to_hass - Restoring state to %s",
                         self.entity_id,
@@ -528,7 +569,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         # Set up appropriate handlers based on max_sub_interval
         # Ensure source_entity_id is valid before proceeding
-        if not isinstance(self._source_entity_id, str):
+        if not self._source_entity_id:
             _LOGGER.error(
                 "Source entity ID is not a valid string for %s: %s",
                 self.entity_id,
@@ -541,11 +582,12 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             self._schedule_max_sub_interval_exceeded_if_state_is_numeric(source_state)
             handle_state_change = self._integrate_on_state_change_with_max_sub_interval
         else:
-            # _LOGGER.debug("No max_sub_interval set, using default state change handler for %s", self.name)
+            if self.log_this_entity:
+                _LOGGER.debug(
+                    "No max_sub_interval set, using default state change handler for %s",
+                    self.name
+                )
             handle_state_change = self._integrate_on_state_change_callback
-
-        # Check source entity and log potential alternatives
-        self._check_source_entity()
 
         # Set up midnight reset for daily sensors
         if "daily" in self.entity_description.key:
@@ -566,7 +608,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         # Cancel any scheduled timers
         if self._cancel_max_sub_interval_exceeded_callback is not None:
             # Only log for specific entities
-            if self.entity_id in LOG_THIS_ENTITY:
+            if self.log_this_entity:
                 _LOGGER.debug(
                     "[%s] Cancelling timer on entity removal", self.entity_id
                 )
@@ -590,7 +632,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         # Cancel existing timer safely
         if self._cancel_max_sub_interval_exceeded_callback is not None:
             # Only log for specific entities
-            if self.entity_id in LOG_THIS_ENTITY:
+            if self.log_this_entity:
                 _LOGGER.debug(
                     "[%s] Cancelling timer due to state change", self.entity_id
                 )
@@ -621,19 +663,14 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self, old_state: State | None, new_state: State | None
     ) -> None:
         """Perform integration based on state change."""
-        log_this_entity = self.entity_id in LOG_THIS_ENTITY
         if new_state is None:
             return
 
         if old_state is None or old_state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-            # Potentially log initial state write if needed
-            # self.async_write_ha_state()
             return
 
         # Validate states
         if not (states := self._validate_states(old_state.state, new_state.state)):
-            # Potentially log invalid state write if needed
-            # self.async_write_ha_state()
             return
 
         # Calculate elapsed time
@@ -645,7 +682,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         # Calculate area
         area = self._calculate_trapezoidal(elapsed_seconds, *states)
-        if log_this_entity:
+        if self.log_this_entity:
             _LOGGER.debug(
                 "[%s] _integrate_on_state_change - Calculated area: %s",
                 self.entity_id,
@@ -656,7 +693,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self._update_integral(area) # Logging is now inside _update_integral
 
         # Write state
-        if log_this_entity:
+        if self.log_this_entity:
             _LOGGER.debug(
                 "[%s] _integrate_on_state_change - Calling async_write_ha_state() with state: %s",
                 self.entity_id,
@@ -675,14 +712,11 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             is not None
         ):
             # Only log scheduling for specific entities
-            log_this_entity = self.entity_id in LOG_THIS_ENTITY
 
             @callback
             def _integrate_on_max_sub_interval_exceeded_callback(now: datetime) -> None:
                 """Integrate based on time and reschedule."""
-                log_this_entity = self.entity_id in LOG_THIS_ENTITY
-
-                if log_this_entity:
+                if self.log_this_entity:
                     _LOGGER.debug(
                         "[%s] Timer callback executed at %s", self.entity_id, now
                     )
@@ -692,7 +726,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 time_since_last = now - self._last_integration_time
                 # Use fixed buffer of 5 seconds
                 if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT and time_since_last < timedelta(seconds=5):
-                    if log_this_entity:
+                    if self.log_this_entity:
                         _LOGGER.debug(
                             "[%s] Skipping timer integration; state change occurred %s ago. Rescheduling only.",
                             self.entity_id,
@@ -705,13 +739,13 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                             source_state_obj)
                     return
 
-                if log_this_entity:
+                if self.log_this_entity:
                     _LOGGER.debug("[%s] Performing timer-based integration", self.entity_id)
 
                 elapsed_seconds = Decimal(
                     (now - self._last_integration_time).total_seconds()
                 )
-                if log_this_entity:
+                if self.log_this_entity:
                     _LOGGER.debug(
                         "[%s] Timer - Elapsed seconds: %s, Last state decimal: %s",
                         self.entity_id,
@@ -723,7 +757,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 area = self._calculate_area_with_one_state(
                     elapsed_seconds, source_state_dec
                 )
-                if log_this_entity:
+                if self.log_this_entity:
                     _LOGGER.debug("[%s] Timer - Calculated area: %s", self.entity_id, area)
 
                 # Store state before update for logging
@@ -732,7 +766,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 # Update the integral
                 self._update_integral(area) # Logging is now inside _update_integral
 
-                if log_this_entity:
+                if self.log_this_entity:
                     _LOGGER.debug(
                         "[%s] Timer - State before update: %s, State after update: %s",
                         self.entity_id,
@@ -741,7 +775,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                     )
 
                 # Write state
-                if log_this_entity:
+                if self.log_this_entity:
                     _LOGGER.debug(
                         "[%s] Timer - Calling _async_write_ha_state(force_refresh=True) with state: %s",
                         self.entity_id,
@@ -750,7 +784,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 self._attr_force_update = True  # Force update on state change
                 self._async_write_ha_state()
                 self._attr_force_update = False  # Force update on state change
-                if log_this_entity:
+                if self.log_this_entity:
                     _LOGGER.debug("[%s] Timer - Called _async_write_ha_state(force_refresh=True)", self.entity_id)
 
 
@@ -759,14 +793,14 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 self._last_integration_trigger = IntegrationTrigger.TIME_ELAPSED
 
                 # Schedule the next integration
-                if log_this_entity:
+                if self.log_this_entity:
                     _LOGGER.debug("[%s] Rescheduling timer after execution", self.entity_id)
                 self._schedule_max_sub_interval_exceeded_if_state_is_numeric(
                     source_state # Use the original source_state captured by closure
                 )
 
             # Store the cancel handle correctly
-            if log_this_entity:
+            if self.log_this_entity:
                 _LOGGER.debug(
                     "[%s] Scheduling timer with interval %s",
                     self.entity_id,
@@ -794,95 +828,6 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         return {
             "source_entity": self._source_entity_id,
         }
-
-    def _check_source_entity(self) -> None:
-        """Check if the source entity exists and log potential alternatives."""
-        source_entity = (
-            self.hass.states.get(self._source_entity_id)
-            if self._source_entity_id
-            else None
-        )  # Check for None
-        # If source doesn't exist, look for similar entities
-        if source_entity is None:
-            # Extract key parts from the entity description
-            source_key = getattr(self.entity_description, "source_key", "")
-            device_type = self._device_type.lower().replace("_", "")
-
-            # Look for entities with similar names
-            similar_entities = []
-            exact_match_entities = []
-            pattern_match_entities = []
-
-            for state in self.hass.states.async_all():
-                entity_id = state.entity_id.lower()
-
-                # Skip non-sensor entities
-                if not entity_id.startswith("sensor."):
-                    continue
-
-                # Skip self
-                if entity_id == self.entity_id.lower():
-                    continue
-
-                # Check for exact matches first
-                if source_key and source_key in entity_id and device_type in entity_id:
-                    exact_match_entities.append((state.entity_id, state.state))
-                    continue
-
-                # Check for pattern matches
-                if entity_id.startswith("sensor.sigen"):
-                    # For plant entities
-                    if device_type == "plant" and "plant" in entity_id:
-                        if source_key and source_key in entity_id:
-                            pattern_match_entities.append(
-                                (state.entity_id, state.state)
-                            )
-                        elif (
-                            "pv" in source_key
-                            and "pv" in entity_id
-                            and "power" in entity_id
-                        ):
-                            pattern_match_entities.append(
-                                (state.entity_id, state.state)
-                            )
-                        elif "grid" in source_key and "grid" in entity_id:
-                            if "import" in source_key and "import" in entity_id:
-                                pattern_match_entities.append(
-                                    (state.entity_id, state.state)
-                                )
-                            elif "export" in source_key and "export" in entity_id:
-                                pattern_match_entities.append(
-                                    (state.entity_id, state.state)
-                                )
-
-                    # For inverter entities
-                    elif device_type == "inverter" and "inverter" in entity_id:
-                        if source_key and source_key in entity_id:
-                            pattern_match_entities.append(
-                                (state.entity_id, state.state)
-                            )
-                        elif (
-                            "pv" in source_key
-                            and "pv" in entity_id
-                            and "power" in entity_id
-                        ):
-                            pattern_match_entities.append(
-                                (state.entity_id, state.state)
-                            )
-
-                    # Add any other sigen entities as general matches
-                    similar_entities.append((state.entity_id, state.state))
-
-            # Suggest the best alternative
-            if exact_match_entities:
-                _LOGGER.warning(
-                    "  - Suggested alternative: %s", exact_match_entities[0][0]
-                )
-            elif pattern_match_entities:
-                _LOGGER.warning(
-                    "  - Suggested alternative: %s", pattern_match_entities[0][0]
-                )
-
 
 class SigenergyCalculatedSensors:
     """Class for holding calculated sensor methods."""

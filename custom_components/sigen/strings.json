@@ -12,16 +12,31 @@
           "device_type": "Device Type"
         }
       },
+      "dhcp_select_plant": {
+        "title": "Discovered Device: Select Action",
+        "description": "A new Sigenergy device was discovered at {ip_address}. Choose how to add it.",
+        "data": {
+          "action_configure_new_plant": "Configure as New Plant",
+          "action_add_inverter": "Add as Inverter to Existing Plant",
+          "action_add_ac_charger": "Add as AC Charger to Existing Plant"
+        }
+      },
       "plant_config": {
         "title": "Configure Sigenergy Plant",
         "description": "Set up a new Sigenergy Plant to monitor and control it through Home Assistant. The Plant ID will be automatically set to 247.",
         "data": {
           "host": "Host (IP address of the main Sigenergy inverter)",
           "port": "Port (default is 502)",
-          "inverter_slave_ids": "Inverter Device ID (Default is 1)",
+          "inverter_slave_id": "Inverter Device ID (Default is 1)",
           "ac_charger_slave_ids": "AC Charger Device IDs (comma-separated when multiple. Default is empty for no AC charger)",
           "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)",
-          "read_only": "Read-Only Mode (prevents any writes to the Sigenergy system)"
+          "read_only": "Read-Only Mode (prevents any changes being made to the Sigenergy system)",
+          "scan_interval_high": "High Priority Scan Interval (seconds)",
+          "scan_interval_medium": "Medium Priority Scan Interval (seconds)",
+          "scan_interval_low": "Low Priority Scan Interval (seconds)",
+          "scan_interval_alarm": "Alarm Scan Interval (seconds)",
+          "migrate_yaml": "Migrate legacy YAML sensor values",
+          "migrate_yaml_description": "If enabled, initial sensor values will be imported from the legacy YAML configuration (if present)."
         }
       },
       "select_plant": {
@@ -40,7 +55,7 @@
       },
       "inverter_config": {
         "title": "Configure Sigenergy Inverter",
-        "description": "Set up an additional Sigenergy Inverter.",
+        "description": "Set up an additional Sigenergy Inverter that is connected to the same plant.",
         "data": {
           "host": "Host (IP address of this inverter)",
           "port": "Port (default is 502)",
@@ -64,7 +79,7 @@
         "title": "Reconfigure Sigenergy System",
         "description": "Update the list of device IDs for this Sigenergy system.",
         "data": {
-          "inverter_slave_ids": "Inverter Device ID (Default is 1)",
+          "inverter_slave_id": "Inverter Device ID (Default is 1)",
           "ac_charger_slave_ids": "AC Charger Device ID (Default is empty for no AC charger)",
           "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)"
         }
@@ -80,7 +95,12 @@
       "ac_charger_conflicts_inverter": "AC charger IDs must be different from inverter IDs.",
       "no_plants_available": "No plants are available. Please add a plant first.",
       "no_inverters_available": "No inverters are available on the selected plant. Please add an inverter first.",
-      "read_only_mode_error": "Cannot write to the Sigenergy system while in read-only mode."
+      "read_only_mode_error": "Cannot write to the Sigenergy system while in read-only mode.",
+      "must_be_divisible_by_high": "Must be divisible by the high interval.",
+      "cannot_be_lower_than_high": "Cannot be lower than the high interval.",
+      "cannot_be_lower_than_medium": "Cannot be lower than the medium interval.",
+      "invalid_host": "Invalid host address provided.",
+      "invalid_port": "Invalid port number. Must be between 1 and 65535."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured.",
@@ -89,7 +109,11 @@
       "device_added": "Device successfully added to the plant configuration.",
       "parent_plant_not_found": "The parent plant configuration could not be found.",
       "parent_inverter_not_found": "The parent inverter configuration could not be found.",
-      "parent_inverter_invalid": "The parent inverter configuration is invalid."
+      "parent_inverter_invalid": "The parent inverter configuration is invalid.",
+      "unknown_device_type": "Unknown device type encountered.",
+      "no_devices_available": "No devices found for reconfiguration.",
+      "invalid_device_selection": "Invalid device selection.",
+      "device_removed": "Device successfully removed."
     }
   },
   "options": {
@@ -98,11 +122,59 @@
         "title": "Sigenergy Options",
         "description": "Configure the options for the Sigenergy integration."
       },
+      "select_device": {
+        "title": "Select Device to Reconfigure",
+        "description": "Choose the Sigenergy device (Plant, Inverter, AC Charger, or DC Charger) you want to reconfigure or remove.",
+        "data": {
+          "selected_device": "Device"
+        }
+      },
+      "plant_config": {
+        "title": "Reconfigure Sigenergy Plant",
+        "description": "Update the connection details, scan intervals, or reset options for this Plant.",
+        "data": {
+          "host": "Host (IP address)",
+          "port": "Port",
+          "read_only": "Read-Only Mode",
+          "reset_values": "Reset accumulated sensor values (e.g., energy totals) on next restart",
+          "scan_interval_high": "High Priority Scan Interval (seconds)",
+          "scan_interval_alarm": "Alarm Scan Interval (seconds)",
+          "scan_interval_medium": "Medium Priority Scan Interval (seconds)",
+          "scan_interval_low": "Low Priority Scan Interval (seconds)"
+        }
+      },
+      "inverter_config": {
+        "title": "Reconfigure Sigenergy Inverter",
+        "description": "Update the connection details for this Inverter or remove it from the Plant.",
+        "data": {
+          "remove_device": "Remove this Inverter",
+          "host": "Host (IP address)",
+          "port": "Port",
+          "slave_id": "Device ID"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Reconfigure Sigenergy AC Charger",
+        "description": "Update the connection details for this AC Charger or remove it from the Plant.",
+        "data": {
+          "remove_device": "Remove this AC Charger",
+          "host": "Host (IP address)",
+          "port": "Port",
+          "slave_id": "Device ID"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Reconfigure Sigenergy DC Charger",
+        "description": "Remove this DC Charger from its associated Inverter.",
+        "data": {
+          "remove_device": "Remove this DC Charger"
+        }
+      },
       "reconfigure": {
         "title": "Reconfigure Sigenergy System",
         "description": "Update the list of device IDs for this Sigenergy system.",
         "data": {
-          "inverter_slave_ids": "Inverter Device ID (Default is 1)",
+          "inverter_slave_id": "Inverter Device ID (Default is 1)",
           "ac_charger_slave_ids": "AC Charger Device IDs ( comma-separated when multiple. Default is empty for no AC charger )",
           "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached ( comma-separated when multiple )"
         }
@@ -113,7 +185,12 @@
       "each_id_must_be_between_1_and_246": "Each ID must be between 1 and 246.",
       "duplicate_ids_found": "Duplicate IDs found.",
       "dc_charger_requires_inverter": "DC charger IDs must correspond to configured inverter IDs.",
-      "ac_charger_conflicts_inverter": "AC charger IDs must be different from inverter IDs."
+      "ac_charger_conflicts_inverter": "AC charger IDs must be different from inverter IDs.",
+      "invalid_host": "Invalid host address provided.",
+      "invalid_port": "Invalid port number. Must be between 1 and 65535.",
+      "must_be_divisible_by_high": "Must be divisible by the high interval.",
+      "cannot_be_lower_than_high": "Cannot be lower than the high interval.",
+      "cannot_be_lower_than_medium": "Cannot be lower than the medium interval."
     }
   }
 }

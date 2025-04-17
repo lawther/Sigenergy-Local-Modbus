@@ -57,7 +57,7 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_reactive_power",
             name="Grid Reactive Power",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
@@ -79,7 +79,7 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="plant_max_apparent_power",
             name="Max Apparent Power",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
@@ -119,21 +119,21 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="plant_phase_a_reactive_power",
             name="Phase A Reactive Power",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SigenergySensorEntityDescription(
             key="plant_phase_b_reactive_power",
             name="Phase B Reactive Power",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SigenergySensorEntityDescription(
             key="plant_phase_c_reactive_power",
             name="Phase C Reactive Power",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
@@ -179,7 +179,7 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="plant_reactive_power",
             name="Plant Reactive Power",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
@@ -249,21 +249,21 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_phase_a_reactive_power",
             name="Grid Phase A Reactive Power",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_phase_b_reactive_power",
             name="Grid Phase B Reactive Power",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_phase_c_reactive_power",
             name="Grid Phase C Reactive Power",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
@@ -445,13 +445,13 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="inverter_max_reactive_power_adjustment_value_fed",
             name="Max Reactive Power Fed",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SigenergySensorEntityDescription(
             key="inverter_max_reactive_power_adjustment_value_absorbed",
             name="Max Reactive Power Absorbed",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SigenergySensorEntityDescription(
@@ -464,7 +464,7 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="inverter_reactive_power",
             name="Reactive Power",
-            native_unit_of_measurement="kVar",
+            native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),

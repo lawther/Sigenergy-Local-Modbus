@@ -11,8 +11,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import (
-    CONF_SCAN_INTERVAL,
-    DEFAULT_SCAN_INTERVAL,
+    CONF_SCAN_INTERVAL_HIGH,
+    CONF_SCAN_INTERVAL_ALARM,
+    CONF_SCAN_INTERVAL_MEDIUM,
+    CONF_SCAN_INTERVAL_LOW,
+    DEFAULT_SCAN_INTERVAL_HIGH,
+    DEFAULT_SCAN_INTERVAL_ALARM,
+    DEFAULT_SCAN_INTERVAL_MEDIUM,
+    DEFAULT_SCAN_INTERVAL_LOW,
     DOMAIN,
     PLATFORMS,
 )
@@ -27,8 +33,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Sigenergy ESS from a config entry."""
     _LOGGER.debug("async_setup_entry: Starting setup for entry: %s", entry.title)
     scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
-                                    {}).get(CONF_SCAN_INTERVAL, 
-                                            DEFAULT_SCAN_INTERVAL)
+                                    {}).get(CONF_SCAN_INTERVAL_HIGH, 
+                                            DEFAULT_SCAN_INTERVAL_HIGH)
+    host = entry.data[CONF_PLANT_CONNECTION][CONF_HOST]
+    port = entry.data[CONF_PLANT_CONNECTION][CONF_PORT]
+
     _LOGGER.debug("async_setup_entry: Scan interval set to %s seconds", scan_interval)
     _LOGGER.debug("async_setup_entry: CONF_PLANT_CONNECTION: %s", entry.data[CONF_PLANT_CONNECTION])
 
@@ -42,8 +51,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as ex:
         _LOGGER.error(
             "async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s",
-            entry.data[CONF_PLANT_CONNECTION][CONF_HOST],
-            entry.data[CONF_PLANT_CONNECTION][CONF_PORT],
+            host,
+            port,
             ex
         )
         raise ConfigEntryNotReady(f"Error connecting to Sigenergy system: {ex}") from ex
@@ -52,7 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         _LOGGER,
         hub=hub,
-        name=f"{DOMAIN}_{entry.data[CONF_PLANT_CONNECTION][CONF_HOST]}_{entry.data[CONF_PLANT_CONNECTION][CONF_PORT]}",  # pylint: disable=line-too-long
+        name=f"{DOMAIN}_{host}_{port}",
         update_interval=timedelta(seconds=scan_interval),
     )
     _LOGGER.debug("async_setup_entry: SigenergyDataUpdateCoordinator created: %s", coordinator)
@@ -89,3 +98,34 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
+
+async def async_migrate_entry(hass, entry: ConfigEntry):
+    """Migrate old entry version."""
+    _LOGGER.debug("Migrating configuration from version %s.%s", entry.version, entry.minor_version)
+
+    if entry.version > 2 and entry.minor_version > 0:
+        # This means the user has downgraded from a future version
+        return False
+
+    if entry.version == 1:
+
+        scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
+                                        {}).get(CONF_SCAN_INTERVAL_HIGH, 
+                                                DEFAULT_SCAN_INTERVAL_HIGH)
+
+        # Add configuration changes for version 1.0
+        new_data = {**entry.data}
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_ALARM] = DEFAULT_SCAN_INTERVAL_ALARM \
+            if DEFAULT_SCAN_INTERVAL_ALARM > scan_interval else scan_interval
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_MEDIUM] = DEFAULT_SCAN_INTERVAL_MEDIUM \
+            if DEFAULT_SCAN_INTERVAL_MEDIUM > scan_interval else scan_interval
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_LOW] = DEFAULT_SCAN_INTERVAL_LOW \
+            if DEFAULT_SCAN_INTERVAL_LOW > scan_interval else scan_interval
+
+
+        hass.config_entries.async_update_entry(entry, data=new_data, minor_version=0, version=2)
+
+    _LOGGER.debug("Migration to configuration version %s.%s successful", \
+                  entry.version, entry.minor_version)
+
+    return True

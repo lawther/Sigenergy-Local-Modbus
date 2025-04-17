@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-import asyncio
+from decimal import Decimal
+import asyncio, re, logging
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ConnectionException, ModbusException
-from .modbus import _suppress_pymodbus_logging
 
-import re
 import voluptuous as vol
-import logging
 
 from homeassistant import (
     config_entries,
@@ -28,6 +26,7 @@ from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
     async_entries_for_device,
 )
+from .modbus import _suppress_pymodbus_logging
 from .const import (
     CONF_AC_CHARGER_CONNECTIONS,
     CONF_DC_CHARGER_CONNECTIONS,
@@ -37,11 +36,17 @@ from .const import (
     CONF_PARENT_INVERTER_ID,
     CONF_PARENT_PLANT_ID,
     CONF_SLAVE_ID,
-    CONF_SCAN_INTERVAL,  # Added
+    CONF_SCAN_INTERVAL_HIGH,
+    CONF_SCAN_INTERVAL_ALARM,
+    CONF_SCAN_INTERVAL_MEDIUM,
+    CONF_SCAN_INTERVAL_LOW,
     DEFAULT_PORT,
     DEFAULT_PLANT_SLAVE_ID,
     DEFAULT_INVERTER_SLAVE_ID,
-    DEFAULT_SCAN_INTERVAL,  # Added
+    DEFAULT_SCAN_INTERVAL_HIGH,
+    DEFAULT_SCAN_INTERVAL_ALARM,
+    DEFAULT_SCAN_INTERVAL_MEDIUM,
+    DEFAULT_SCAN_INTERVAL_LOW,
     DEVICE_TYPE_NEW_PLANT,
     DEVICE_TYPE_PLANT,
     DEVICE_TYPE_INVERTER,
@@ -57,9 +62,14 @@ from .const import (
     STEP_DHCP_SELECT_PLANT,
     DEFAULT_READ_ONLY,
     CONF_INVERTER_HAS_DCCHARGER,
-    DEFAULT_INVERTER_HAS_DCCHARGER,
     CONF_PLANT_CONNECTION,
+    CONF_MIGRATE_YAML,
+    LEGACY_SENSOR_MIGRATION_MAP,
+    CONF_VALUES_TO_INIT,
+    CONF_RESET_VALUES,
 )
+
+DEVICE_TYPE_UNKNOWN = "unknown"
 
 # Define a constant for the ignore action (can also be added to const.py)
 ACTION_IGNORE = "ignore"
@@ -75,6 +85,16 @@ STEP_RECONFIGURE = "reconfigure"
 
 _LOGGER = logging.getLogger(__name__)
 
+DEFAULT_PLANT_CONNECTION = {
+                CONF_HOST: "",
+                CONF_PORT: DEFAULT_PORT,
+                CONF_INVERTER_SLAVE_ID: DEFAULT_INVERTER_SLAVE_ID,
+                CONF_SCAN_INTERVAL_HIGH: DEFAULT_SCAN_INTERVAL_HIGH,
+                CONF_SCAN_INTERVAL_ALARM: DEFAULT_SCAN_INTERVAL_ALARM, 
+                CONF_SCAN_INTERVAL_MEDIUM: DEFAULT_SCAN_INTERVAL_MEDIUM,
+                CONF_SCAN_INTERVAL_LOW: DEFAULT_SCAN_INTERVAL_LOW,
+}
+
 # Schema definitions for each step
 STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
     {
@@ -86,15 +106,6 @@ STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
                 DEVICE_TYPE_DC_CHARGER: "DC Charger",
             }
         ),
-    }
-)
-
-STEP_PLANT_CONFIG_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_HOST): str,
-        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_INVERTER_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
-        vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool,
     }
 )
 
@@ -114,6 +125,55 @@ STEP_AC_CHARGER_CONFIG_SCHEMA = vol.Schema(
     }
 )
 
+def generate_plant_schema(
+        user_input,
+        discovered_ip = "",
+        migration_alternative = False,
+        use_inverter_device_id = False,
+        reset_state_alternative = False,
+        display_update_frq = False
+    ) -> vol.Schema:
+    """Dynamically create schema using the determined prefill_host
+
+    Args:
+        user_input (_type_, optional): _description_. Defaults to None.
+        discovered_ip (str, optional): _description_. Defaults to "".
+        migration_alternative (bool, optional): _description_. Defaults to False.
+        reset_state_alternative (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        vol.Schema: _description_
+    """
+    slave_id_type = CONF_INVERTER_SLAVE_ID if use_inverter_device_id else CONF_SLAVE_ID
+
+    validation_schema = {
+                vol.Required(CONF_HOST, default = user_input[CONF_HOST] or discovered_ip): str,
+                vol.Required(CONF_PORT, default = user_input[CONF_PORT]): int
+    }
+
+    _LOGGER.debug("slave_id_type: %s",slave_id_type)
+    validation_schema[vol.Required(slave_id_type, default=user_input[slave_id_type])] = int
+    validation_schema[vol.Required(CONF_READ_ONLY, default=user_input.get(CONF_READ_ONLY, True))] = bool
+
+    if migration_alternative:
+        validation_schema[vol.Required(CONF_MIGRATE_YAML,
+                                       default=user_input.get(CONF_MIGRATE_YAML, False))] = bool
+    elif reset_state_alternative:
+        validation_schema[vol.Required(CONF_RESET_VALUES,
+                                       default=user_input.get(CONF_RESET_VALUES, False))] = bool
+
+    # if display_update_frq:
+        validation_schema[vol.Required(CONF_SCAN_INTERVAL_HIGH,
+                                       default=user_input.get(CONF_SCAN_INTERVAL_HIGH,DEFAULT_SCAN_INTERVAL_HIGH))] = vol.All(vol.Coerce(int))
+        validation_schema[vol.Required(CONF_SCAN_INTERVAL_ALARM,
+                                       default=user_input.get(CONF_SCAN_INTERVAL_ALARM,DEFAULT_SCAN_INTERVAL_ALARM))] = vol.All(vol.Coerce(int))
+        validation_schema[vol.Required(CONF_SCAN_INTERVAL_MEDIUM,
+                                       default=user_input.get(CONF_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_MEDIUM))] = vol.All(vol.Coerce(int))
+        validation_schema[vol.Required(CONF_SCAN_INTERVAL_LOW,
+                                       default=user_input.get(CONF_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_LOW))] = vol.All(vol.Coerce(int))
+
+    schema = vol.Schema(validation_schema)
+    return schema
 
 def validate_host_port(host: str, port: int) -> Dict[str, str]:
     """Validate host and port combination.
@@ -174,7 +234,8 @@ def get_highest_device_number(names: List[str]) -> int:
 class SigenergyConfigFlow(config_entries.ConfigFlow):
     """Handle a config flow for Sigenergy ESS."""
 
-    VERSION = 1
+    VERSION = 2
+    MINOR_VERSION = 0
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -184,6 +245,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         self._devices = {}
         self._selected_plant_entry_id = None
         self._discovered_ip = None
+        self._discovered_device_type = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -214,6 +276,22 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         await self.async_set_unique_id(unique_id)
         # Abort if this discovery (IP) is already configured OR ignored
         self._abort_if_unique_id_configured(updates={CONF_HOST: self._discovered_ip})
+
+        device_type = await self.async_check_device_type(
+            self._discovered_ip, DEFAULT_PORT, DEFAULT_INVERTER_SLAVE_ID)
+
+        self._discovered_device_type = device_type
+        if device_type == DEVICE_TYPE_DC_CHARGER:
+            name = f"Inverter + DC ({str(discovery_info.ip)})"
+        elif device_type == DEVICE_TYPE_INVERTER:
+            name = "Inverter"
+        elif device_type == DEVICE_TYPE_AC_CHARGER:
+            name = "AC Charger"
+        else:
+            name = "Unknown"
+
+        self.context["title_placeholders"] = {"name": name}
+        _LOGGER.debug("[async_step_dhcp] Device Type %s for %s", device_type, name)
 
         await self._async_load_plants()
 
@@ -253,12 +331,12 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             for ac_name, ac_details in ac_charger_conns.items():
                 if ac_details.get(CONF_HOST) == self._discovered_ip:
                     _LOGGER.info(
-                        "DHCP discovered IP %s matches existing AC charger %s in plant %s. Aborting.",
+                        "DHCP discovered IP %s matches existing AC charger %s in %s. Aborting.",
                         self._discovered_ip, ac_name, entry.title
                     )
                     return self.async_abort(reason="already_configured_device") # Use generic reason
 
-        # Otherwise, let user choose configuration type or ignore
+        # Otherwise, let user choose configuration type
         return await self.async_step_dhcp_select_plant()
 
     async def async_step_dhcp_select_plant(
@@ -293,7 +371,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             await self.async_set_unique_id(f"plant_{self._discovered_ip}", raise_on_progress=False)
             self._abort_if_unique_id_configured(updates={CONF_HOST: self._discovered_ip})
             return await self.async_step_plant_config()
-        # Assuming DEVICE_TYPE_INVERTER or DEVICE_TYPE_AC_CHARGER are the only other non-ignore options here
+        # Assuming DEVICE_TYPE_INVERTER or DEVICE_TYPE_AC_CHARGER 
+        # are the only other non-ignore options here
         else:
             # Ensure plants are loaded if we jump directly here via DHCP with existing plants
             if not self._plants:
@@ -333,18 +412,26 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         """Handle the plant configuration step when adding a new plant device."""
 
         errors = {}
-        dc_charger_error = {}
+        has_dc_charger = False
+
+        # Check if the accumulated energy consumption sensor exists
+        legacy_yaml_present = self.hass.states.get(next(iter(LEGACY_SENSOR_MIGRATION_MAP.values())))
+        if legacy_yaml_present:
+            _LOGGER.debug(
+            "Found old yaml integration."
+            )
+            # Store or use accumulatedEnergyState.state if needed for setup logic
+        else:
+            _LOGGER.debug("Old yaml integration does not exist.")
+
 
         if user_input is None:
-            # Dynamically create schema using the determined prefill_host
-            schema = vol.Schema(
-                {
-                    vol.Required(CONF_HOST, default=self._discovered_ip or ""): str,
-                    vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                    vol.Required(CONF_INVERTER_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
-                    vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool,
-                }
+            schema = generate_plant_schema(DEFAULT_PLANT_CONNECTION,
+                                           discovered_ip=self._discovered_ip or "",
+                                           migration_alternative=bool(legacy_yaml_present),
+                                           use_inverter_device_id=True
             )
+
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
                 data_schema=schema,
@@ -359,44 +446,43 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             errors[CONF_INVERTER_SLAVE_ID] = "invalid_integer_value"
 
         if not errors:
-            errors.update(await self.async_test_connection(user_input[CONF_HOST],
+            device_type = await self.async_check_device_type(user_input[CONF_HOST],
                                                         user_input[CONF_PORT],
-                                                        user_input[CONF_INVERTER_SLAVE_ID],
-                                                        30578))  # inverter_running_state
+                                                        user_input[CONF_INVERTER_SLAVE_ID])
+            if device_type == DEVICE_TYPE_DC_CHARGER:
+                has_dc_charger = True
+            elif device_type == DEVICE_TYPE_INVERTER:
+                has_dc_charger = False
+            else:
+                errors[CONF_HOST] = "Couldn't connect."
+
             _LOGGER.debug("errors is: %s , %s", str(True if errors else False), errors)
-
-            if not errors:
-                dc_charger_error.update(await self.async_test_connection(user_input[CONF_HOST],
-                                                            user_input[CONF_PORT],
-                                                            user_input[CONF_INVERTER_SLAVE_ID],
-                                                            31501))  # dc_charger_charging_current
-                if not dc_charger_error:
-                    _LOGGER.debug("DC charger connection successful for %s", user_input[CONF_HOST])
-
 
         if errors:
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
-                data_schema=STEP_PLANT_CONFIG_SCHEMA,
-                errors=errors,
+                data_schema=generate_plant_schema(user_input,
+                                                  discovered_ip=self._discovered_ip or "",
+                                                  migration_alternative=bool(legacy_yaml_present),
+                                                  use_inverter_device_id=True
+                                                  ),
+                                            errors=errors,
             )
 
         # Create the plant connection dictionary
-        self._data[CONF_PLANT_CONNECTION] = {
-            CONF_HOST: user_input[CONF_HOST],
-            CONF_PORT: user_input[CONF_PORT],
-            CONF_SLAVE_ID: DEFAULT_PLANT_SLAVE_ID,
-            CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
-        }
+        new_plant_connection = DEFAULT_PLANT_CONNECTION
+        new_plant_connection[CONF_HOST] = user_input[CONF_HOST]
+        new_plant_connection[CONF_PORT] = user_input[CONF_PORT]
+        self._data[CONF_PLANT_CONNECTION] = new_plant_connection
 
         # Create the inverter connections dictionary for the implicit first inverter
         inverter_name = "Sigen Inverter"
         self._data[CONF_INVERTER_CONNECTIONS] = {
             inverter_name: {
-                CONF_HOST: self._data[CONF_PLANT_CONNECTION][CONF_HOST],
-                CONF_PORT: self._data[CONF_PLANT_CONNECTION][CONF_PORT],
+                CONF_HOST: user_input[CONF_HOST],
+                CONF_PORT: user_input[CONF_PORT],
                 CONF_SLAVE_ID: inverter_id,
-                CONF_INVERTER_HAS_DCCHARGER: not dc_charger_error,
+                CONF_INVERTER_HAS_DCCHARGER: has_dc_charger,
             }
         }
 
@@ -410,56 +496,115 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Set the device type as plant
         self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_PLANT
 
-        # Set default scan interval silently
-        self._data[CONF_SCAN_INTERVAL] = DEFAULT_SCAN_INTERVAL
+        # If chose to migrate, save sensor values to migrate to.
+        values_to_initialize = {}
+        if user_input.get(CONF_MIGRATE_YAML, False):
+            _LOGGER.debug("Migration option True")
+            for new_sensor, old_sensor in LEGACY_SENSOR_MIGRATION_MAP.items():
+                value = self.hass.states.get(old_sensor)
+                if value:
+                    _LOGGER.debug("Adding migrating values %s for %s", value.state, new_sensor)
+                    values_to_initialize[new_sensor] = str(value.state)
+
+        # Save choice if to migrate data at first run after plant being added.
+        self._data[CONF_VALUES_TO_INIT] = values_to_initialize
+        _LOGGER.debug("Values to migrate: %s", values_to_initialize)
 
         # Create the configuration entry with the default name
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
 
-    async def async_test_connection(self, host, port, slave_id, register_address, register_count=1, timeout=1) -> dict[str, str]:
+    async def async_test_connection(self, host, port, slave_id, register_address,
+                                    register_count=1, timeout=1) -> dict[str, str]:
         errors = {}
         # Check the connection
         _LOGGER.debug("DHCP discovery: Testing Modbus connection to %s:%s", host, port)
-        client = AsyncModbusTcpClient(host=host, port=port, timeout=timeout)
+        response = await self.async_check_device_type(host, port, slave_id, timeout)
+        if response not in [DEVICE_TYPE_UNKNOWN, DEVICE_TYPE_INVERTER, 
+                               DEVICE_TYPE_DC_CHARGER, DEVICE_TYPE_AC_CHARGER]:
+            errors[CONF_HOST] = response
+        return errors
+
+    async def _async_try_read_register(self, client: AsyncModbusTcpClient, host: str, port: int, slave_id: int, register_address: int) -> str:
+        """Helper to attempt reading a single Modbus register."""
         try:
-            with _suppress_pymodbus_logging(): # Suppress pymodbus logs for this check
-                if await client.connect():
-                    _LOGGER.debug("Modbus connected to %s. Reading register %s...", host, register_address)
-                    # Try reading a simple register (e.g., inverter_running_state)
-                    result = await client.read_input_registers(
-                        address=register_address,
-                        count=register_count,
-                        slave=slave_id
-                    )
-                    if result and not result.isError():
-                        _LOGGER.debug("Modbus read successful from %s on port %s and deviceID %s.", host, port, slave_id)
-                    elif result:
-                        err = "Modbus read error from %s on port %s and deviceID %s: %s. This probably means there is no AC Charger there but maybe another Modbus device." % (host, port, slave_id, result)
-                        errors[CONF_HOST] = err
-                        _LOGGER.debug(err)
+            result = await client.read_input_registers(
+                address=register_address,
+                count=1,
+                slave=slave_id
+            )
+            if result and not result.isError():
+                _LOGGER.debug("Modbus read successful for register %s on %s:%s, slave %s.",
+                              register_address, host, port, slave_id)
+                return ""
+            else:
+                err = f"Modbus read failed or returned error for register " +\
+                    f"{register_address} on {host}:{port}, slave {slave_id}."
+                _LOGGER.debug(err)
+                return err
+        except (ModbusException, asyncio.TimeoutError) as e:
+            err = "Modbus exception during read for register %s on %s: %s" % \
+                (register_address, host, e)
+            _LOGGER.debug(err)
+            return err
+        except Exception as e:
+            err = "Unexpected error during Modbus read for register %s on %s: %s" % \
+                (register_address, host, e)
+            _LOGGER.warning(err)
+            return err
+
+    async def async_check_device_type(self, host, port, slave_id, timeout=1) -> str:
+        """Check the device type by attempting to read specific Modbus registers."""
+        # Define checks: (Device Type Constant, Register Address)
+        # Order matters: Check DC Charger first as it's part of the inverter.
+        device_checks = [
+            (DEVICE_TYPE_DC_CHARGER, 31501),  # dc_charger_charging_current (inverter *with* DC)
+            (DEVICE_TYPE_INVERTER, 30578),    # inverter_running_state (inverter *without* DC)
+            (DEVICE_TYPE_AC_CHARGER, 32000),  # ac_charger_system_state
+        ]
+
+        err = None
+        found_device_type = DEVICE_TYPE_UNKNOWN
+        client = AsyncModbusTcpClient(host=host, port=port, timeout=timeout)
+
+        try:
+            with _suppress_pymodbus_logging():
+                if not await client.connect():
+                    _LOGGER.debug("Modbus connection failed to %s:%s", host, port)
+                    return DEVICE_TYPE_UNKNOWN # Cannot determine type if connection fails
+
+                _LOGGER.debug("Modbus connected to %s:%s. Checking device type...", host, port)
+
+                for device_type, register_address in device_checks:
+                    # Returns error message if failed.
+                    if not await self._async_try_read_register(
+                        client, host, port, slave_id, register_address):
+                    # Special case: If DC Charger register read succeeds, it's an Inverter *with* DC.
+                    # The loop structure handles this implicitly by checking DC first.
+                    # If the DC check passes, we return DEVICE_TYPE_DC_CHARGER.
+                    # If it fails, the next iteration checks the standard inverter register.
+                        found_device_type = device_type
+                        _LOGGER.debug("Identified as %s based on register %s", device_type, register_address)
+                        err = None # Clear any previous error
+                        break # Stop checking once a type is identified
                     else:
-                        err = "Modbus read failed from %s on port %s and deviceID %s (no result)." % (host, port, slave_id)
-                        errors[CONF_HOST] = err
-                        _LOGGER.debug(err)
-                else:
-                    err = "Modbus connection failed to %s on port: %s" % (host, port)
-                    errors[CONF_HOST] = err
-                    _LOGGER.debug(err)
-        except (ConnectionException, ModbusException, asyncio.TimeoutError) as e:
-            err = "Modbus connection failed for %s: %s" % (host, e)
-            errors[CONF_HOST] = err
+                         err = f"Check failed for {device_type} (register {register_address})"
+                         _LOGGER.debug(err)
+
+
+        except (ConnectionException, asyncio.TimeoutError) as e:
+            err = f"Modbus connection failed for {host}: {e}"
             _LOGGER.debug(err)
         except Exception as e:
-                err = f"Unexpected error during Modbus connection test for {host}: {e}"
-                errors[CONF_HOST] = err
-                _LOGGER.warning(err)
+            err = f"Unexpected error during device type check for {host}: {e}"
+            _LOGGER.warning(err)
         finally:
             if client:
                 client.close()
                 _LOGGER.debug("Modbus test client closed for %s.", host)
 
-        return errors
-
+        _LOGGER.debug("Final identified type for %s:%s (Slave %s): %s", 
+                      host, port, slave_id, found_device_type)
+        return found_device_type if not err else err
 
     async def async_step_select_plant(
         self, user_input: dict[str, Any] | None = None
@@ -979,28 +1124,13 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         """Handle reconfiguration of an existing plant device."""
         errors = {}
 
-        def get_schema(data_source: Dict):
-            return vol.Schema(
-                {
-                    vol.Required(CONF_HOST, default=data_source.get(CONF_HOST, "")): str,
-                    vol.Required(
-                        CONF_PORT, default=data_source.get(CONF_PORT, DEFAULT_PORT)
-                    ): int,
-                    vol.Required(
-                        CONF_READ_ONLY,
-                        default=data_source.get(CONF_READ_ONLY, DEFAULT_READ_ONLY),
-                    ): bool,
-                    vol.Required(
-                        CONF_SCAN_INTERVAL,
-                        default=data_source.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
-                }
-            )
-
         if user_input is None:
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
-                data_schema=get_schema(self._data[CONF_PLANT_CONNECTION])
+                data_schema=generate_plant_schema(self._data[CONF_PLANT_CONNECTION],
+                                                  reset_state_alternative= True,
+                                                  display_update_frq=True
+                                                  )
             )
 
         # Validate host and port
@@ -1009,13 +1139,44 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         )
         errors.update(host_port_errors)
 
-        # Validate scan interval
+
+        _LOGGER.debug("Read user_input: %s", user_input)
+
+
+        # Validate scan intervals
+        high_interval = user_input.get(CONF_SCAN_INTERVAL_HIGH, DEFAULT_SCAN_INTERVAL_HIGH)
+        medium_interval = user_input.get(CONF_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_MEDIUM)
+        low_interval = user_input.get(CONF_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_LOW)
+        alarm_interval = user_input.get(CONF_SCAN_INTERVAL_ALARM, DEFAULT_SCAN_INTERVAL_ALARM)
+
+        if high_interval < 1:
+            errors[CONF_SCAN_INTERVAL_HIGH] = "must_be_at_least_1"
+
+        # Validate divisibility
+        for interv in [CONF_SCAN_INTERVAL_MEDIUM, CONF_SCAN_INTERVAL_LOW, CONF_SCAN_INTERVAL_ALARM]:
+            if high_interval > 0 and user_input[interv] % high_interval != 0:
+                errors[interv] = "must_be_divisible_by_high"
+
+        # Validate Medium Interval
+        if not errors.get(CONF_SCAN_INTERVAL_MEDIUM) and medium_interval < high_interval:
+            errors[CONF_SCAN_INTERVAL_MEDIUM] = "cannot_be_lower_than_high"
+
+        # Validate Low Interval
+        if not errors.get(CONF_SCAN_INTERVAL_LOW) and low_interval < medium_interval:
+            errors[CONF_SCAN_INTERVAL_LOW] = "cannot_be_lower_than_medium"
+
+        # Validate Alarm Interval
+        if not errors.get(CONF_SCAN_INTERVAL_ALARM) and alarm_interval < high_interval:
+            errors[CONF_SCAN_INTERVAL_ALARM] = "cannot_be_lower_than_high"
 
         if errors:
             # Re-create schema with user input values for error display
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
-                data_schema=get_schema(user_input),
+                data_schema=generate_plant_schema(user_input,
+                                                  reset_state_alternative= True,
+                                                  display_update_frq=True
+                                                  ),
                 errors=errors
             )
 
@@ -1024,7 +1185,26 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         new_data[CONF_PLANT_CONNECTION][CONF_HOST] = user_input[CONF_HOST]
         new_data[CONF_PLANT_CONNECTION][CONF_PORT] = user_input[CONF_PORT]
         new_data[CONF_PLANT_CONNECTION][CONF_READ_ONLY] = user_input[CONF_READ_ONLY]
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_HIGH] = high_interval
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_ALARM] = alarm_interval
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_MEDIUM] = medium_interval
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_LOW] = low_interval
+
+        _LOGGER.debug("Update intervals:")
+        _LOGGER.debug(f"High: {high_interval}, Medium: {medium_interval}, Low: {low_interval}, Alarm: {alarm_interval}")
+        
+
+        # If chose to reset values, save sensor values to reset.
+        values_to_initialize = {}
+        if user_input[CONF_RESET_VALUES]:
+            _LOGGER.debug("Reseting option True")
+            for new_sensor in LEGACY_SENSOR_MIGRATION_MAP.keys():
+                _LOGGER.debug("Adding 0 as init value for %s", new_sensor)
+                values_to_initialize[new_sensor] = "0"
+
+        # Save choice if to migrate data at first run after plant being added.
+        new_data[CONF_VALUES_TO_INIT] = values_to_initialize
+        _LOGGER.debug("Values to init as 0: %s", values_to_initialize)
 
         # Update data if changed (optional check, keeping existing behavior for now)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)

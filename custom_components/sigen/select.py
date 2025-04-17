@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import logging
 import asyncio
-from typing import Coroutine
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Coroutine
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
@@ -23,7 +22,7 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
-from .common import generate_unique_entity_id, generate_sigen_entity, generate_device_id # Added generate_device_id
+from .common import generate_sigen_entity # Added generate_device_id
 from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,29 +43,18 @@ GRID_CODE_MAP = {
     12: "Finland",
     13: "Denmark",
     26: "Austria",
+    36: "Ireland",
     # Add more mappings as they are discovered
 }
 
 # Reverse mapping for looking up codes by country name
 COUNTRY_TO_CODE_MAP = {country: code for code, country in GRID_CODE_MAP.items()}
 # Debug log the grid code map
-_LOGGER.debug("GRID_CODE_MAP: %s", GRID_CODE_MAP)
 
 def _get_grid_code_display(data, device_name): # Changed inverter_id to device_name
     """Get the display value for grid code with debug logging."""
-    # Log the available inverter data for debugging
-    # Access using device_name
-    # if device_name in data.get("inverters", {}):
-    #     # _LOGGER.debug("Available inverter data keys for %s: %s", device_name, list(data["inverters"][device_name].keys()))
-    # else:
-    #     _LOGGER.debug("No data available for inverter %s", device_name)
-    #     return "Unknown"
-    
     # Get the raw grid code value using device_name
     grid_code = data["inverters"].get(device_name, {}).get("inverter_grid_code")
-    
-    # Debug log the value and type
-    # _LOGGER.debug("Grid code value for %s: %s, type: %s", device_name, grid_code, type(grid_code))
     
     # Handle None case
     if grid_code is None:
