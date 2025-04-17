@@ -44,6 +44,7 @@ GRID_CODE_MAP = {
     12: "Finland",
     13: "Denmark",
     26: "Austria",
+    36: "Ireland",
     # Add more mappings as they are discovered
 }
 
