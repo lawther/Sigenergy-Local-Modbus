@@ -473,13 +473,14 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         new_plant_connection = DEFAULT_PLANT_CONNECTION
         new_plant_connection[CONF_HOST] = user_input[CONF_HOST]
         new_plant_connection[CONF_PORT] = user_input[CONF_PORT]
+        self._data[CONF_PLANT_CONNECTION] = new_plant_connection
 
         # Create the inverter connections dictionary for the implicit first inverter
         inverter_name = "Sigen Inverter"
         self._data[CONF_INVERTER_CONNECTIONS] = {
             inverter_name: {
-                CONF_HOST: self._data[CONF_PLANT_CONNECTION][CONF_HOST],
-                CONF_PORT: self._data[CONF_PLANT_CONNECTION][CONF_PORT],
+                CONF_HOST: user_input[CONF_HOST],
+                CONF_PORT: user_input[CONF_PORT],
                 CONF_SLAVE_ID: inverter_id,
                 CONF_INVERTER_HAS_DCCHARGER: has_dc_charger,
             }
