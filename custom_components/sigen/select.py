@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import logging
 import asyncio
-from typing import Coroutine
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Coroutine
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
@@ -23,7 +22,7 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
-from .common import generate_unique_entity_id, generate_sigen_entity, generate_device_id # Added generate_device_id
+from .common import generate_sigen_entity # Added generate_device_id
 from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
