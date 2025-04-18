@@ -131,7 +131,20 @@ async def async_setup_entry(
         )
 
         # PV strings
-        inverter_data = coordinator.data["inverters"][device_name]
+        inverter_data = None
+        if (
+            coordinator.data is not None
+            and "inverters" in coordinator.data
+            and device_name in coordinator.data["inverters"]
+        ):
+            inverter_data = coordinator.data["inverters"][device_name]
+        else:
+            _LOGGER.warning(
+                "No inverter data found for device '%s'. Skipping PV string sensor creation.",
+                device_name,
+            )
+            continue
+
         pv_string_count = inverter_data.get("inverter_pv_string_count", 0)
 
         if (

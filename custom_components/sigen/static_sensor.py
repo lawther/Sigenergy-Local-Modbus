@@ -771,41 +771,40 @@ class StaticSensors:
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
-
-
-
-        SigenergySensorEntityDescription(
-            key="accumulated_export_energy",
-            name="Accumulated Export Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-        ),
-        SigenergySensorEntityDescription(
-            key="accumulated_import_energy",
-            name="Accumulated Import Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-        ),
-        SigenergySensorEntityDescription(
-            key="daily_export_energy",
-            name="Daily Export Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-        ),
-        SigenergySensorEntityDescription(
-            key="daily_import_energy",
-            name="Daily Import Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-        ),
+        # This sensors are quite unkonown in what they do. The import kind of follows the PV production but it's a bit higher and begins earlier.
+        # They are undocumented.
+        # SigenergySensorEntityDescription(
+        #     key="accumulated_export_energy",
+        #     name="Accumulated Export Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="accumulated_import_energy",
+        #     name="Accumulated Import Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="daily_export_energy",
+        #     name="Daily Export Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL_INCREASING,
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="daily_import_energy",
+        #     name="Daily Import Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL_INCREASING,
+        # ),
 
     ]
     AC_CHARGER_SENSORS = [
