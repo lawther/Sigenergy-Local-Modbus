@@ -27,7 +27,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
+
         ),
         SigenergySensorEntityDescription(
             key="current",
@@ -35,7 +35,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
+
         ),
     ]
 
@@ -52,7 +52,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
+
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_reactive_power",
@@ -174,7 +174,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
+
         ),
         SigenergySensorEntityDescription(
             key="plant_reactive_power",
@@ -189,7 +189,6 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_power",
@@ -197,7 +196,34 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_available_max_active_power",
+            name="Available Max Active Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_available_min_active_power",
+            name="Available Min Active Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_available_max_reactive_power",
+            name="Available Max Reactive Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_available_min_reactive_power",
+            name="Available Min Reactive Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_available_max_charging_power",
@@ -474,7 +500,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
+
         ),
         # Battery power metrics
         SigenergySensorEntityDescription(
@@ -737,7 +763,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
+
         ),
         SigenergySensorEntityDescription(
             key="inverter_insulation_resistance",
@@ -752,7 +778,7 @@ class StaticSensors:
             key="ac_charger_system_state",
             name="System State",
             entity_category=EntityCategory.DIAGNOSTIC,
-            high_update_frequency=True,
+
         ),
         SigenergySensorEntityDescription(
             key="ac_charger_total_energy_consumed",
@@ -767,7 +793,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
+
         ),
         SigenergySensorEntityDescription(
             key="ac_charger_rated_power",
@@ -833,7 +859,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
+
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_output_power",
@@ -841,7 +867,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            high_update_frequency=True,
+
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_vehicle_soc",

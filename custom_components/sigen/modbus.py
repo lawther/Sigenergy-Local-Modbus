@@ -288,7 +288,7 @@ class SigenergyModbusHub:
         slave_id = int(slave_id_value)
         client = await self._get_client(device_info)
         key = self._get_connection_key(device_info)
-        device_info_log = f"{device_info.get('name', 'unknown')}/{slave_id}@{key[0]}:{key[1]}" # For logging
+        device_info_log = f"{key[0]}:{key[1]}@{slave_id}" # For logging
 
         tasks = []
         # Create tasks for probing each register
@@ -729,14 +729,21 @@ class SigenergyModbusHub:
             except Exception as ex:
                 _LOGGER.error("Failed to probe plant registers: %s", ex)
                 # Continue with reading, some registers might still work
-        
-        registers_to_read = {}
-        registers_to_read ={
-        **PLANT_RUNNING_INFO_REGISTERS,
-        **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency }
+
+        # Filter running info registers
+        running_regs = {
+            name: reg for name, reg in PLANT_RUNNING_INFO_REGISTERS.items()
+            if reg.update_frequency >= update_frequency
         }
+        # Filter parameter registers
+        param_regs = {
+            name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
+            if reg.register_type != RegisterType.WRITE_ONLY and
+               reg.update_frequency >= update_frequency
+        }
+        # Merge the dictionaries
+        registers_to_read = {**running_regs, **param_regs}
+        _LOGGER.debug("Reading %s Plant registers. update_frequency is %s", len(registers_to_read), update_frequency)
 
         # Use the core reading logic
         plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {}) # Ensure plant_info is available
@@ -748,7 +755,7 @@ class SigenergyModbusHub:
             registers_to_read=registers_to_read
         )
 
-    async def async_read_inverter_data(self, inverter_name: str) -> Dict[str, Any]:
+    async def async_read_inverter_data(self, inverter_name: str, update_frequency: UpdateFrequencyType=UpdateFrequencyType.LOW) -> Dict[str, Any]:
         """Read all supported inverter data."""
         # Look up inverter details by name
         if inverter_name not in self.inverter_connections:
@@ -771,24 +778,32 @@ class SigenergyModbusHub:
                 # Continue with reading, some registers might still work
 
         # Read registers from both running info and parameter registers
-        all_registers = {
-            **INVERTER_RUNNING_INFO_REGISTERS,
+        registers_to_read = {}
+        registers_to_read = {
+            **{name: reg for name, reg in INVERTER_RUNNING_INFO_REGISTERS.items()
+            if reg.register_type != RegisterType.WRITE_ONLY and
+            reg.update_frequency >= update_frequency },
             **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY},
-            **DC_CHARGER_RUNNING_INFO_REGISTERS,
+            if reg.register_type != RegisterType.WRITE_ONLY and
+            reg.update_frequency >= update_frequency },
+            **{name: reg for name, reg in DC_CHARGER_RUNNING_INFO_REGISTERS.items()
+            if reg.register_type != RegisterType.WRITE_ONLY and
+            reg.update_frequency >= update_frequency },
             **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY},
+            if reg.register_type != RegisterType.WRITE_ONLY and
+            reg.update_frequency >= update_frequency },
         }
+        _LOGGER.debug("Reading %s Inverter registers. update_frequency is %s", len(registers_to_read), update_frequency)
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
             device_info=inverter_info,
             device_name=inverter_name,
             device_type_log_prefix="inverter",
-            registers_to_read=all_registers
+            registers_to_read=registers_to_read
         )
 
-    async def async_read_ac_charger_data(self, ac_charger_name: str) -> Dict[str, Any]:
+    async def async_read_ac_charger_data(self, ac_charger_name: str, update_frequency: UpdateFrequencyType=UpdateFrequencyType.LOW) -> Dict[str, Any]:
         """Read all supported AC charger data."""
         # Look up AC charger details by name
         if ac_charger_name not in self.ac_charger_connections:
@@ -812,18 +827,23 @@ class SigenergyModbusHub:
                 # Continue with reading, some registers might still work
 
         # Read registers from both running info and parameter registers
-        all_registers = {
-            **AC_CHARGER_RUNNING_INFO_REGISTERS,
+        registers_to_read = {}
+        registers_to_read = {
+            **{name: reg for name, reg in AC_CHARGER_RUNNING_INFO_REGISTERS.items()
+               if reg.register_type != RegisterType.WRITE_ONLY and
+               reg.update_frequency >= update_frequency},
             **{name: reg for name, reg in AC_CHARGER_PARAMETER_REGISTERS.items()
-               if reg.register_type != RegisterType.WRITE_ONLY}
+               if reg.register_type != RegisterType.WRITE_ONLY and
+               reg.update_frequency >= update_frequency}
         }
+        _LOGGER.debug("Reading %s AC charger registers. update_frequency is %s", len(registers_to_read), update_frequency)
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
             device_info=ac_charger_info,
             device_name=ac_charger_name,
             device_type_log_prefix="AC charger",
-            registers_to_read=all_registers
+            registers_to_read=registers_to_read
         )
 
     async def async_write_parameter(

@@ -110,7 +110,7 @@ def generate_plant_schema(
         validation_schema[vol.Required(CONF_RESET_VALUES,
                                        default=user_input.get(CONF_RESET_VALUES, False))] = bool
 
-    # if display_update_frq:
+    if display_update_frq:
         validation_schema[vol.Required(CONF_SCAN_INTERVAL_HIGH,
                                        default=user_input.get(CONF_SCAN_INTERVAL_HIGH,DEFAULT_SCAN_INTERVAL_HIGH))] = vol.All(vol.Coerce(int))
         validation_schema[vol.Required(CONF_SCAN_INTERVAL_ALARM,
@@ -1101,9 +1101,9 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             errors[CONF_SCAN_INTERVAL_HIGH] = "must_be_at_least_1"
 
         # Validate divisibility
-        for interv in [CONF_SCAN_INTERVAL_MEDIUM, CONF_SCAN_INTERVAL_LOW, CONF_SCAN_INTERVAL_ALARM]:
-            if high_interval > 0 and user_input[interv] % high_interval != 0:
-                errors[interv] = "must_be_divisible_by_high"
+        for interval in [CONF_SCAN_INTERVAL_MEDIUM, CONF_SCAN_INTERVAL_LOW, CONF_SCAN_INTERVAL_ALARM]:
+            if high_interval > 0 and user_input[interval] % high_interval != 0:
+                errors[interval] = "must_be_divisible_by_high"
 
         # Validate Medium Interval
         if not errors.get(CONF_SCAN_INTERVAL_MEDIUM) and medium_interval < high_interval:
