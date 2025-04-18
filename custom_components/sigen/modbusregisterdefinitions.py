@@ -44,6 +44,90 @@ class RunningState(IntEnum):
     FAULT = 2
     SHUTDOWN = 3
 
+# Alarm code mappings based on Sigenergy Modbus Protocol appendices
+ALARM_CODES = {
+    "PCS_ALARM_CODES": {
+        0: "1001: Software version mismatch",
+        1: "1002: Low insulation resistance",
+        2: "1003: Over-temperature",
+        3: "1004: Equipment fault",
+        4: "1005: System grounding fault",
+        5: "1006: PV string over-voltage",
+        6: "1007: PV string reversely connected",
+        7: "1008: PV string back-filling",
+        8: "1009: AFCI fault",
+        9: "1010: Grid power outage",
+        10: "1011: Grid over-voltage",
+        11: "1012: Grid under-voltage",
+        12: "1013: Grid over-frequency",
+        13: "1014: Grid under-frequency",
+        14: "1015: Grid voltage imbalance",
+        15: "1016: DC component of output current out of limit",
+    },
+    "PCS_ALARM_CODES2": {
+        0: "1017: Leak current out of limit",
+        1: "1018: Communication abnormal",
+        2: "1019: System internal protection",
+        3: "1020: AFCI self-checking circuit fault",
+        4: "1021: Off-grid protection",
+        5: "1022: Manual operation protection",
+        7: "1024: Abnormal phase sequence",
+        8: "1025: Short circuit to PE",
+        9: "1026: Soft start failure",
+    },
+    "ESS_ALARM_CODES": {
+        0: "2001: Software version mismatch",
+        1: "2002: Low insulation resistance to ground",
+        2: "2003: Temperature too high",
+        3: "2004: Equipment fault",
+        4: "2005: Under-temperature",
+        5: "2008: Internal protection",
+        6: "2009: Thermal runaway",
+    },
+    "GATEWAY_ALARM_CODES": {
+        0: "3001: Software version mismatch",
+        1: "3002: Temperature too high",
+        2: "3003: Equipment fault",
+        3: "3004: Excessive leakage current in off-grid output",
+        4: "3005: N line grounding fault",
+        5: "3006: Abnormal phase sequence of grid wiring",
+        6: "3007: Abnormal phase sequence of inverter wiring",
+        7: "3008: Grid phase loss",
+    },
+    "AC_CHARGER_ALARM_CODES1": {
+        0: "5001_1: Grid overvoltage",
+        1: "5001_2: Grid undervoltage",
+        2: "5001_3: Overload",
+        3: "5001_4: Short circuit",
+        4: "5001_5: Charging output overcurrent",
+        5: "5001_6: Leak current out of limit",
+        6: "5001_7: Grounding fault",
+        7: "5001_8: Abnormal phase sequence of grid wiring",
+        8: "5001_9: PEN Fault",
+    },
+    "AC_CHARGER_ALARM_CODES2": {
+        0: "5002_1: Leak current detection circuit fault",
+        1: "5002_2: Relay stuck",
+        2: "5002_3: Pilot circuit fault",
+        3: "5002_4: Auxiliary power supply module fault",
+        4: "5002_5: Electric lock fault",
+        5: "5002_6: Lamp panel communication fault",
+    },
+    "AC_CHARGER_ALARM_CODES3": {
+        0: "5003: Too high internal temperature",
+        1: "5004: Charging cable fault",
+        2: "5005: Meter communication fault",
+    },
+    "DC_CHARGER_ALARM_CODES": {
+        0: "5101: Software version mismatch",
+        1: "5102: Low insulation resistance to ground",
+        2: "5103: Over-temperature",
+        3: "5104: Equipment fault",
+        4: "5105: Charging fault",
+        5: "5106: Equipment protection",
+    },
+}
+
 # EMS work modes
 class EMSWorkMode(IntEnum):
     """EMS work modes."""

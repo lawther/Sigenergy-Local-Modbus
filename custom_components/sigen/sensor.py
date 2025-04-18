@@ -23,7 +23,10 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import *
-from .modbusregisterdefinitions import RunningState
+from .modbusregisterdefinitions import (
+    RunningState,
+    ALARM_CODES,
+)
 from .coordinator import SigenergyDataUpdateCoordinator
 from .calculated_sensor import (
     SigenergyCalculations as SC,
@@ -309,7 +312,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         try:
-        # Call the base class __init__
+            # Call the base class __init__
             super().__init__(
                 coordinator=coordinator,
                 description=description,
@@ -334,6 +337,33 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             _LOGGER.exception(
                 "[Sensor Init] Error initializing SigenergySensor '%s': %s", name, ex
             )  # Use exception
+
+    def _decode_alarm_bits(self, value: int, alarm_mapping: dict) -> str:
+        """Decode alarm bits into human-readable text.
+        
+        Args:
+            value: The integer value of the alarm register
+            alarm_mapping: Dictionary mapping bit positions to alarm descriptions
+            
+        Returns:
+            A comma-separated string of active alarms, or "No Alarms" if no bits are set
+        """
+        if value is None or value == 0:
+            return "No Alarms"
+            
+        active_alarms = []
+        
+        # Check each bit that's set in the value
+        for bit_position in range(16):  # Most registers use 16 bits
+            if value & (1 << bit_position):
+                # If this bit is set, look up its meaning in the mapping
+                if bit_position in alarm_mapping:
+                    active_alarms.append(alarm_mapping[bit_position])
+        
+        if not active_alarms:
+            return "Unknown Alarm"
+            
+        return ", ".join(active_alarms)
 
     @property
     def native_value(self) -> Any:
@@ -465,11 +495,32 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     type(value),
                     ex,
                 )
-                return None
-
-        # Special handling for specific keys
+                return None        # Special handling for specific keys
 
         try:
+            # Handle alarm codes
+            if "alarm" in self.entity_description.key.lower():
+                # Check which alarm register this is and use appropriate mapping
+                if self.entity_description.key == "plant_general_alarm1" or self.entity_description.key == "inverter_alarm1" or self.entity_description.key == "inverter_pcs_alarm1":
+                    return self._decode_alarm_bits(value, ALARM_CODES["PCS_ALARM_CODES"])
+                elif self.entity_description.key == "plant_general_alarm2" or self.entity_description.key == "inverter_alarm2" or self.entity_description.key == "inverter_pcs_alarm2":
+                    return self._decode_alarm_bits(value, ALARM_CODES["PCS_ALARM_CODES2"])
+                elif self.entity_description.key == "plant_general_alarm3" or self.entity_description.key == "inverter_alarm3" or self.entity_description.key == "inverter_ess_alarm":
+                    return self._decode_alarm_bits(value, ALARM_CODES["ESS_ALARM_CODES"])
+                elif self.entity_description.key == "plant_general_alarm4" or self.entity_description.key == "inverter_alarm4" or self.entity_description.key == "inverter_gateway_alarm":
+                    return self._decode_alarm_bits(value, ALARM_CODES["GATEWAY_ALARM_CODES"])
+                elif self.entity_description.key == "plant_general_alarm5" or self.entity_description.key == "inverter_alarm5" or self.entity_description.key == "inverter_dc_charger_alarm":
+                    return self._decode_alarm_bits(value, ALARM_CODES["DC_CHARGER_ALARM_CODES"])
+                elif self.entity_description.key == "ac_charger_alarm1":
+                    return self._decode_alarm_bits(value, ALARM_CODES["AC_CHARGER_ALARM_CODES1"])
+                elif self.entity_description.key == "ac_charger_alarm2":
+                    return self._decode_alarm_bits(value, ALARM_CODES["AC_CHARGER_ALARM_CODES2"])
+                elif self.entity_description.key == "ac_charger_alarm3":
+                    return self._decode_alarm_bits(value, ALARM_CODES["AC_CHARGER_ALARM_CODES3"])
+                # If alarm key doesn't match specific patterns, return raw value
+                return value
+
+            # Other special cases
             if self.entity_description.key == "plant_on_off_grid_status":
                 return {
                     0: "On Grid",
