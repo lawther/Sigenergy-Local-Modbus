@@ -89,14 +89,13 @@ def generate_sigen_entity(
         }
 
         if hasattr(description, 'source_key') and description.source_key:
-            # Pass pv_string_idx if available
             source_entity_id = get_source_entity_id(
                 device_type,
                 device_name,
                 description.source_key,
                 coordinator,
                 hass,
-                pv_string_idx, # Pass pv_string_idx here
+                pv_string_idx,
             )
             if source_entity_id:
                 entity_kwargs["source_entity_id"] = source_entity_id
