@@ -500,7 +500,6 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-
         ),
         # Battery power metrics
         SigenergySensorEntityDescription(
@@ -772,6 +771,42 @@ class StaticSensors:
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
+
+
+
+        SigenergySensorEntityDescription(
+            key="accumulated_export_energy",
+            name="Accumulated Export Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+        ),
+        SigenergySensorEntityDescription(
+            key="accumulated_import_energy",
+            name="Accumulated Import Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+        ),
+        SigenergySensorEntityDescription(
+            key="daily_export_energy",
+            name="Daily Export Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+        ),
+        SigenergySensorEntityDescription(
+            key="daily_import_energy",
+            name="Daily Import Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+        ),
+
     ]
     AC_CHARGER_SENSORS = [
         SigenergySensorEntityDescription(

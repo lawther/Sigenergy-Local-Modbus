@@ -559,6 +559,18 @@ PLANT_RUNNING_INFO_REGISTERS = {
         description="Battery State of Health (weighted average of all ESS devices)",
         update_frequency=UpdateFrequencyType.HIGH,
     ),
+    "inverter_ess_daily_charge_energy": ModbusRegisterDefinition(
+        address=30566,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="ESS Daily Charge Energy",
+        applicable_to=["hybrid_inverter"],
+    ),
+
+
 }
 
 PLANT_PARAMETER_REGISTERS = {
@@ -1777,6 +1789,42 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV16 Current",
         update_frequency=UpdateFrequencyType.HIGH,
+    ),
+    "daily_export_energy": ModbusRegisterDefinition(
+        address=30554,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Daily Export Energy",
+    ),
+    "accumulated_export_energy": ModbusRegisterDefinition(
+        address=30556,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Accumulated Export Energy",
+    ),
+    "daily_import_energy": ModbusRegisterDefinition(
+        address=30560,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Daily Import Energy",
+    ),
+    "accumulated_import_energy": ModbusRegisterDefinition(
+        address=30562,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Accumulated Import Energy",
     ),
 }
 

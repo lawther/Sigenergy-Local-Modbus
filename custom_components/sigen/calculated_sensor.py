@@ -960,6 +960,17 @@ class SigenergyCalculatedSensors:
             max_sub_interval=timedelta(seconds=30),
         ),
         SigenergySensorEntityDescription(
+            key="plant_daily_pv_energy",
+            name="Daily PV Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
+            round_digits=6,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergySensorEntityDescription(
             key="plant_accumulated_grid_export_energy",
             name="Accumulated Grid Export Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -1000,17 +1011,6 @@ class SigenergyCalculatedSensors:
             suggested_display_precision=2,
             state_class=SensorStateClass.TOTAL_INCREASING,
             source_key="plant_grid_import_power",  # Key matches the grid import power sensor
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_daily_pv_energy",
-            name="Daily PV Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
         ),
