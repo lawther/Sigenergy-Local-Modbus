@@ -200,6 +200,22 @@ async def async_setup_entry(
                         )
                     )
 
+                    # Add PV String Integration Sensors
+                    async_add_entities(
+                        generate_sigen_entity(
+                            plant_name,
+                            device_name,
+                            device_conn,
+                            coordinator,
+                            SigenergyIntegrationSensor, # Use the integration sensor class
+                            SCS.PV_INTEGRATION_SENSORS, # Use the PV integration descriptions
+                            DEVICE_TYPE_INVERTER, # Still associated with the inverter device type contextually
+                            hass=hass,
+                            device_info=pv_device_info, # Use the specific PV string device info
+                            pv_string_idx=pv_idx,
+                        )
+                    )
+
                 except Exception as ex:
                     _LOGGER.exception(
                         "Error creating device/sensors for PV string %d: %s", pv_idx, ex
@@ -207,7 +223,6 @@ async def async_setup_entry(
 
         # Add DC charger sensors
         if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
-            dc_charger_name = f"{device_name} DC Charger"
 
             dc_name = f"{device_name} DC Charger"
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"

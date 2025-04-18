@@ -1063,3 +1063,33 @@ class SigenergyCalculatedSensors:
             max_sub_interval=timedelta(seconds=30),
         ),
     ]
+    # Integration sensors for individual PV strings (dynamically created)
+    PV_INTEGRATION_SENSORS = [
+        SigenergySensorEntityDescription(
+            key="pv_string_accumulated_energy", # Template key
+            name="Accumulated Energy", # Template name
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            # Source entity ID (e.g., sensor.sigen_inverter_XYZ_pv1_power)
+            # will be dynamically constructed in sensor.py using device_name and pv_idx.
+            # This source_key identifies the *type* of source.
+            source_key="pv_string_power",
+            round_digits=6,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergySensorEntityDescription(
+            key="pv_string_daily_energy", # Template key
+            name="Daily Energy", # Template name
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL_INCREASING, # Resets daily
+            # Source entity ID constructed dynamically in sensor.py
+            source_key="pv_string_power",
+            round_digits=6,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+    ]
+
