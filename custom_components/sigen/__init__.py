@@ -35,10 +35,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
                                     {}).get(CONF_SCAN_INTERVAL_HIGH, 
                                             DEFAULT_SCAN_INTERVAL_HIGH)
+    alarm_scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
+                                    {}).get(CONF_SCAN_INTERVAL_ALARM, 
+                                            DEFAULT_SCAN_INTERVAL_ALARM)
+    medium_scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
+                                    {}).get(CONF_SCAN_INTERVAL_MEDIUM, 
+                                            DEFAULT_SCAN_INTERVAL_MEDIUM)
+    low_scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
+                                    {}).get(CONF_SCAN_INTERVAL_LOW, 
+                                            DEFAULT_SCAN_INTERVAL_LOW)
     host = entry.data[CONF_PLANT_CONNECTION][CONF_HOST]
     port = entry.data[CONF_PLANT_CONNECTION][CONF_PORT]
 
     _LOGGER.debug("async_setup_entry: Scan interval set to %s seconds", scan_interval)
+    _LOGGER.debug("async_setup_entry: Alarm scan interval set to %s seconds", alarm_scan_interval)
+    _LOGGER.debug("async_setup_entry: Medium scan interval set to %s seconds", medium_scan_interval)
+    _LOGGER.debug("async_setup_entry: Low scan interval set to %s seconds", low_scan_interval)
     _LOGGER.debug("async_setup_entry: CONF_PLANT_CONNECTION: %s", entry.data[CONF_PLANT_CONNECTION])
 
     hub = SigenergyModbusHub(hass, entry)
@@ -63,6 +75,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hub=hub,
         name=f"{DOMAIN}_{host}_{port}",
         update_interval=timedelta(seconds=scan_interval),
+        high_scan_interval=scan_interval,
+        alarm_scan_interval=alarm_scan_interval,
+        medium_scan_interval=medium_scan_interval,
+        low_scan_interval=low_scan_interval,
     )
     _LOGGER.debug("async_setup_entry: SigenergyDataUpdateCoordinator created: %s", coordinator)
 

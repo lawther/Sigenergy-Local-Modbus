@@ -27,10 +27,8 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 from homeassistant.util import dt as dt_util
 
-from .const import (
-    EMSWorkMode,
-    CONF_VALUES_TO_INIT,
-)
+from .const import CONF_VALUES_TO_INIT
+from .modbusregisterdefinitions import EMSWorkMode
 
 from .common import (
     SigenergySensorEntityDescription,
@@ -44,7 +42,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Only log for these entities
 LOG_THIS_ENTITY = [
-    "sensor.sigen_plant_accumulated_consumed_energy",
+    # "sensor.sigen_plant_accumulated_consumed_energy",
     # "sensor.sigen_plant_accumulated_grid_import_energy",
     # "sensor.sigen_plant_accumulated_pv_energy",
 ]
@@ -962,6 +960,17 @@ class SigenergyCalculatedSensors:
             max_sub_interval=timedelta(seconds=30),
         ),
         SigenergySensorEntityDescription(
+            key="plant_daily_pv_energy",
+            name="Daily PV Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
+            round_digits=6,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergySensorEntityDescription(
             key="plant_accumulated_grid_export_energy",
             name="Accumulated Grid Export Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -1006,17 +1015,6 @@ class SigenergyCalculatedSensors:
             max_sub_interval=timedelta(seconds=30),
         ),
         SigenergySensorEntityDescription(
-            key="plant_daily_pv_energy",
-            name="Daily PV Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-        ),
-        SigenergySensorEntityDescription(
             key="plant_accumulated_consumed_energy",
             name="Accumulated Consumed Energy",
             device_class=SensorDeviceClass.ENERGY,
@@ -1053,4 +1051,45 @@ class SigenergyCalculatedSensors:
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
         ),
+        SigenergySensorEntityDescription(
+            key="inverter_daily_pv_energy",
+            name="Daily PV Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
+            round_digits=6,
+            max_sub_interval=timedelta(seconds=30),
+        ),
     ]
+    # Integration sensors for individual PV strings (dynamically created)
+    PV_INTEGRATION_SENSORS = [
+        SigenergySensorEntityDescription(
+            key="pv_string_accumulated_energy", # Template key
+            name="Accumulated Energy", # Template name
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            # Source entity ID (e.g., sensor.sigen_inverter_XYZ_pv1_power)
+            # will be dynamically constructed in sensor.py using device_name and pv_idx.
+            # This source_key identifies the *type* of source.
+            source_key="pv_string_power",
+            round_digits=6,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+        SigenergySensorEntityDescription(
+            key="pv_string_daily_energy", # Template key
+            name="Daily Energy", # Template name
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL_INCREASING, # Resets daily
+            # Source entity ID constructed dynamically in sensor.py
+            source_key="pv_string_power",
+            round_digits=6,
+            max_sub_interval=timedelta(seconds=30),
+        ),
+    ]
+

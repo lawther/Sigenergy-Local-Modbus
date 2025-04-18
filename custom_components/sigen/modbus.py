@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 
 from homeassistant.config_entries import ConfigEntry  # pylint: disable=no-name-in-module, syntax-error
-from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from pymodbus.client import AsyncModbusTcpClient
@@ -17,14 +16,23 @@ from pymodbus.exceptions import ConnectionException, ModbusException
 from pymodbus.payload import BinaryPayloadBuilder
 from pymodbus.client.mixin import ModbusClientMixin
 
-from .const import ModbusRegisterDefinition
 from .const import (
     CONF_INVERTER_CONNECTIONS,
     CONF_AC_CHARGER_CONNECTIONS,
     CONF_PLANT_ID,
     CONF_SLAVE_ID,
+    CONF_HOST,
+    CONF_PORT,
+    CONF_READ_ONLY,
+    CONF_PLANT_CONNECTION,
     DEFAULT_PLANT_SLAVE_ID,
+    DEFAULT_READ_ONLY,
+)
+from .modbusregisterdefinitions import (
     DataType,
+    RegisterType,
+    UpdateFrequencyType,
+    ModbusRegisterDefinition,
     PLANT_RUNNING_INFO_REGISTERS,
     PLANT_PARAMETER_REGISTERS,
     INVERTER_RUNNING_INFO_REGISTERS,
@@ -33,11 +41,6 @@ from .const import (
     AC_CHARGER_PARAMETER_REGISTERS,
     DC_CHARGER_RUNNING_INFO_REGISTERS,
     DC_CHARGER_PARAMETER_REGISTERS,
-    RegisterType,
-    DEFAULT_READ_ONLY,
-    CONF_READ_ONLY,
-    CONF_PLANT_CONNECTION,
-    UpdateFrequencyType,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -176,12 +179,15 @@ class SigenergyModbusHub:
             
         registers = getattr(result, 'registers', [])
         if not registers:
-            _LOGGER.debug(f"Register validation failed for address {register_def.address}: empty response")
+            _LOGGER.debug("Register validation failed for address %s: empty response", register_def.address)
             return False
             
         # For string type registers, check if all values are 0 (indicating no support)
         if register_def.data_type == DataType.STRING:
-            _LOGGER.debug(f"Register validation failed for address {register_def.address}: string type (not all string registers have to be filled)")
+            _LOGGER.debug(
+                "Register validation failed for address %s: string type (not all string registers have to be filled)",
+                register_def.address
+            )
             return not all(reg == 0 for reg in registers)
             
         # For numeric registers, check if values are within reasonable bounds
@@ -282,7 +288,7 @@ class SigenergyModbusHub:
         slave_id = int(slave_id_value)
         client = await self._get_client(device_info)
         key = self._get_connection_key(device_info)
-        device_info_log = f"{device_info.get('name', 'unknown')}/{slave_id}@{key[0]}:{key[1]}" # For logging
+        device_info_log = f"{key[0]}:{key[1]}@{slave_id}" # For logging
 
         tasks = []
         # Create tasks for probing each register
@@ -316,7 +322,7 @@ class SigenergyModbusHub:
             _LOGGER.error("Unexpected error during concurrent register probing for %s: %s", device_info_log, ex)
             # Mark all probed registers as potentially unsupported due to the gather error
             for name, register in register_defs.items():
-                 if register.is_supported is None: # Only update those that were being probed
+                if register.is_supported is None: # Only update those that were being probed
                     register.is_supported = False
             self._connected[key] = False # Assume connection issue
             return # Exit probing on major error
@@ -331,20 +337,21 @@ class SigenergyModbusHub:
                 _LOGGER.error("Error during register probe task for %s: %s", device_info_log, result)
                 # If it's a connection error, mark the connection as potentially bad
                 if isinstance(result, (ConnectionException, asyncio.TimeoutError, SigenergyModbusError)):
-                     connection_error_occurred = True
+                    connection_error_occurred = True
                 # We don't know which register failed here, so we can't mark it specifically.
                 # The registers remain is_supported=None and will be retried on read.
                 continue # Skip to next result
 
             # Unpack successful results
-            name, is_supported, probe_exception = result
-            if name in register_defs:
-                register_defs[name].is_supported = is_supported
-                if probe_exception:
-                    # Log the specific exception caught by _probe_single_register
-                    _LOGGER.debug("Probe failed for register %s on %s: %s", name, device_info_log, probe_exception)
-                    if isinstance(probe_exception, (ConnectionException, asyncio.TimeoutError, SigenergyModbusError)):
-                        connection_error_occurred = True
+            if isinstance(result, tuple) and len(result) == 3:
+                name, is_supported, probe_exception = result
+                if name in register_defs:
+                    register_defs[name].is_supported = is_supported
+                    if probe_exception:
+                        # Log the specific exception caught by _probe_single_register
+                        _LOGGER.debug("Probe failed for register %s on %s: %s", name, device_info_log, probe_exception)
+                        if isinstance(probe_exception, (ConnectionException, asyncio.TimeoutError, SigenergyModbusError)):
+                            connection_error_occurred = True
 
         # If any connection-related error occurred during probing, mark the connection state
         if connection_error_occurred:
@@ -722,14 +729,21 @@ class SigenergyModbusHub:
             except Exception as ex:
                 _LOGGER.error("Failed to probe plant registers: %s", ex)
                 # Continue with reading, some registers might still work
-        
-        registers_to_read = {}
-        registers_to_read ={
-        **PLANT_RUNNING_INFO_REGISTERS,
-        **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency }
+
+        # Filter running info registers
+        running_regs = {
+            name: reg for name, reg in PLANT_RUNNING_INFO_REGISTERS.items()
+            if reg.update_frequency >= update_frequency
         }
+        # Filter parameter registers
+        param_regs = {
+            name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
+            if reg.register_type != RegisterType.WRITE_ONLY and
+               reg.update_frequency >= update_frequency
+        }
+        # Merge the dictionaries
+        registers_to_read = {**running_regs, **param_regs}
+        _LOGGER.debug("Reading %s Plant registers. update_frequency is %s", len(registers_to_read), update_frequency)
 
         # Use the core reading logic
         plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {}) # Ensure plant_info is available
@@ -741,7 +755,7 @@ class SigenergyModbusHub:
             registers_to_read=registers_to_read
         )
 
-    async def async_read_inverter_data(self, inverter_name: str) -> Dict[str, Any]:
+    async def async_read_inverter_data(self, inverter_name: str, update_frequency: UpdateFrequencyType=UpdateFrequencyType.LOW) -> Dict[str, Any]:
         """Read all supported inverter data."""
         # Look up inverter details by name
         if inverter_name not in self.inverter_connections:
@@ -764,24 +778,32 @@ class SigenergyModbusHub:
                 # Continue with reading, some registers might still work
 
         # Read registers from both running info and parameter registers
-        all_registers = {
-            **INVERTER_RUNNING_INFO_REGISTERS,
+        registers_to_read = {}
+        registers_to_read = {
+            **{name: reg for name, reg in INVERTER_RUNNING_INFO_REGISTERS.items()
+            if reg.register_type != RegisterType.WRITE_ONLY and
+            reg.update_frequency >= update_frequency },
             **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY},
-            **DC_CHARGER_RUNNING_INFO_REGISTERS,
+            if reg.register_type != RegisterType.WRITE_ONLY and
+            reg.update_frequency >= update_frequency },
+            **{name: reg for name, reg in DC_CHARGER_RUNNING_INFO_REGISTERS.items()
+            if reg.register_type != RegisterType.WRITE_ONLY and
+            reg.update_frequency >= update_frequency },
             **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY},
+            if reg.register_type != RegisterType.WRITE_ONLY and
+            reg.update_frequency >= update_frequency },
         }
+        _LOGGER.debug("Reading %s Inverter registers. update_frequency is %s", len(registers_to_read), update_frequency)
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
             device_info=inverter_info,
             device_name=inverter_name,
             device_type_log_prefix="inverter",
-            registers_to_read=all_registers
+            registers_to_read=registers_to_read
         )
 
-    async def async_read_ac_charger_data(self, ac_charger_name: str) -> Dict[str, Any]:
+    async def async_read_ac_charger_data(self, ac_charger_name: str, update_frequency: UpdateFrequencyType=UpdateFrequencyType.LOW) -> Dict[str, Any]:
         """Read all supported AC charger data."""
         # Look up AC charger details by name
         if ac_charger_name not in self.ac_charger_connections:
@@ -805,18 +827,23 @@ class SigenergyModbusHub:
                 # Continue with reading, some registers might still work
 
         # Read registers from both running info and parameter registers
-        all_registers = {
-            **AC_CHARGER_RUNNING_INFO_REGISTERS,
+        registers_to_read = {}
+        registers_to_read = {
+            **{name: reg for name, reg in AC_CHARGER_RUNNING_INFO_REGISTERS.items()
+               if reg.register_type != RegisterType.WRITE_ONLY and
+               reg.update_frequency >= update_frequency},
             **{name: reg for name, reg in AC_CHARGER_PARAMETER_REGISTERS.items()
-               if reg.register_type != RegisterType.WRITE_ONLY}
+               if reg.register_type != RegisterType.WRITE_ONLY and
+               reg.update_frequency >= update_frequency}
         }
+        _LOGGER.debug("Reading %s AC charger registers. update_frequency is %s", len(registers_to_read), update_frequency)
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
             device_info=ac_charger_info,
             device_name=ac_charger_name,
             device_type_log_prefix="AC charger",
-            registers_to_read=all_registers
+            registers_to_read=registers_to_read
         )
 
     async def async_write_parameter(
@@ -850,7 +877,6 @@ class SigenergyModbusHub:
         if device_type == "plant":
             connection_dict = self.plant_connection
             # Ensure plant_connection is treated as a dict for type checking
-            plant_info = self.plant_connection if isinstance(self.plant_connection, dict) else {}
             parameter_registers = PLANT_PARAMETER_REGISTERS
         elif device_type == "inverter":
             if not device_identifier:
@@ -892,10 +918,12 @@ class SigenergyModbusHub:
         # Safety check: Ensure slave_id was determined
         if slave_id is None:
              # Try getting plant_id if it's the plant device
-             if device_type == "plant":
-                 slave_id = self.plant_id
-             if slave_id is None: # Still None after checking plant_id
-                raise SigenergyModbusError(f"Could not determine slave ID for {device_type} '{device_identifier or 'plant'}' from configuration: {device_info}")
+            if device_type == "plant":
+                slave_id = self.plant_id
+            if slave_id is None: # Still None after checking plant_id
+                raise SigenergyModbusError("Could not determine slave ID for " +\
+                                           f"{device_type} '{device_identifier or 'plant'}' " +\
+                                            f"from configuration: {device_info}")
 
         # Ensure slave_id is added to device_info if missing (needed by write functions)
         if CONF_SLAVE_ID not in device_info:

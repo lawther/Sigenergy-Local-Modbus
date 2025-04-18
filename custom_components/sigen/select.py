@@ -18,8 +18,8 @@ from .const import (
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
-    RemoteEMSControlMode,
 )
+from .modbusregisterdefinitions import (RemoteEMSControlMode)
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
 from .common import generate_sigen_entity # Added generate_device_id
