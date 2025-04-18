@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 
 from homeassistant.config_entries import ConfigEntry  # pylint: disable=no-name-in-module, syntax-error
-from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from pymodbus.client import AsyncModbusTcpClient
@@ -17,14 +16,23 @@ from pymodbus.exceptions import ConnectionException, ModbusException
 from pymodbus.payload import BinaryPayloadBuilder
 from pymodbus.client.mixin import ModbusClientMixin
 
-from .const import ModbusRegisterDefinition
 from .const import (
     CONF_INVERTER_CONNECTIONS,
     CONF_AC_CHARGER_CONNECTIONS,
     CONF_PLANT_ID,
     CONF_SLAVE_ID,
+    CONF_HOST,
+    CONF_PORT,
+    CONF_READ_ONLY,
+    CONF_PLANT_CONNECTION,
     DEFAULT_PLANT_SLAVE_ID,
+    DEFAULT_READ_ONLY,
+)
+from .modbusregisterdefinitions import (
     DataType,
+    RegisterType,
+    UpdateFrequencyType,
+    ModbusRegisterDefinition,
     PLANT_RUNNING_INFO_REGISTERS,
     PLANT_PARAMETER_REGISTERS,
     INVERTER_RUNNING_INFO_REGISTERS,
@@ -33,11 +41,6 @@ from .const import (
     AC_CHARGER_PARAMETER_REGISTERS,
     DC_CHARGER_RUNNING_INFO_REGISTERS,
     DC_CHARGER_PARAMETER_REGISTERS,
-    RegisterType,
-    DEFAULT_READ_ONLY,
-    CONF_READ_ONLY,
-    CONF_PLANT_CONNECTION,
-    UpdateFrequencyType,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -176,12 +179,15 @@ class SigenergyModbusHub:
             
         registers = getattr(result, 'registers', [])
         if not registers:
-            _LOGGER.debug(f"Register validation failed for address {register_def.address}: empty response")
+            _LOGGER.debug("Register validation failed for address %s: empty response", register_def.address)
             return False
             
         # For string type registers, check if all values are 0 (indicating no support)
         if register_def.data_type == DataType.STRING:
-            _LOGGER.debug(f"Register validation failed for address {register_def.address}: string type (not all string registers have to be filled)")
+            _LOGGER.debug(
+                "Register validation failed for address %s: string type (not all string registers have to be filled)",
+                register_def.address
+            )
             return not all(reg == 0 for reg in registers)
             
         # For numeric registers, check if values are within reasonable bounds
@@ -316,7 +322,7 @@ class SigenergyModbusHub:
             _LOGGER.error("Unexpected error during concurrent register probing for %s: %s", device_info_log, ex)
             # Mark all probed registers as potentially unsupported due to the gather error
             for name, register in register_defs.items():
-                 if register.is_supported is None: # Only update those that were being probed
+                if register.is_supported is None: # Only update those that were being probed
                     register.is_supported = False
             self._connected[key] = False # Assume connection issue
             return # Exit probing on major error
@@ -331,20 +337,21 @@ class SigenergyModbusHub:
                 _LOGGER.error("Error during register probe task for %s: %s", device_info_log, result)
                 # If it's a connection error, mark the connection as potentially bad
                 if isinstance(result, (ConnectionException, asyncio.TimeoutError, SigenergyModbusError)):
-                     connection_error_occurred = True
+                    connection_error_occurred = True
                 # We don't know which register failed here, so we can't mark it specifically.
                 # The registers remain is_supported=None and will be retried on read.
                 continue # Skip to next result
 
             # Unpack successful results
-            name, is_supported, probe_exception = result
-            if name in register_defs:
-                register_defs[name].is_supported = is_supported
-                if probe_exception:
-                    # Log the specific exception caught by _probe_single_register
-                    _LOGGER.debug("Probe failed for register %s on %s: %s", name, device_info_log, probe_exception)
-                    if isinstance(probe_exception, (ConnectionException, asyncio.TimeoutError, SigenergyModbusError)):
-                        connection_error_occurred = True
+            if isinstance(result, tuple) and len(result) == 3:
+                name, is_supported, probe_exception = result
+                if name in register_defs:
+                    register_defs[name].is_supported = is_supported
+                    if probe_exception:
+                        # Log the specific exception caught by _probe_single_register
+                        _LOGGER.debug("Probe failed for register %s on %s: %s", name, device_info_log, probe_exception)
+                        if isinstance(probe_exception, (ConnectionException, asyncio.TimeoutError, SigenergyModbusError)):
+                            connection_error_occurred = True
 
         # If any connection-related error occurred during probing, mark the connection state
         if connection_error_occurred:
@@ -850,7 +857,6 @@ class SigenergyModbusHub:
         if device_type == "plant":
             connection_dict = self.plant_connection
             # Ensure plant_connection is treated as a dict for type checking
-            plant_info = self.plant_connection if isinstance(self.plant_connection, dict) else {}
             parameter_registers = PLANT_PARAMETER_REGISTERS
         elif device_type == "inverter":
             if not device_identifier:
@@ -892,10 +898,12 @@ class SigenergyModbusHub:
         # Safety check: Ensure slave_id was determined
         if slave_id is None:
              # Try getting plant_id if it's the plant device
-             if device_type == "plant":
-                 slave_id = self.plant_id
-             if slave_id is None: # Still None after checking plant_id
-                raise SigenergyModbusError(f"Could not determine slave ID for {device_type} '{device_identifier or 'plant'}' from configuration: {device_info}")
+            if device_type == "plant":
+                slave_id = self.plant_id
+            if slave_id is None: # Still None after checking plant_id
+                raise SigenergyModbusError("Could not determine slave ID for " +\
+                                           f"{device_type} '{device_identifier or 'plant'}' " +\
+                                            f"from configuration: {device_info}")
 
         # Ensure slave_id is added to device_info if missing (needed by write functions)
         if CONF_SLAVE_ID not in device_info:

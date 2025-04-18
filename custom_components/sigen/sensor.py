@@ -22,16 +22,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    CONF_SLAVE_ID,
-    CONF_INVERTER_HAS_DCCHARGER,
-    DEVICE_TYPE_AC_CHARGER,
-    DEVICE_TYPE_DC_CHARGER,
-    DEVICE_TYPE_INVERTER,
-    DEVICE_TYPE_PLANT,
-    DOMAIN,
-    RunningState,
-)
+from .const import *
+from .modbusregisterdefinitions import RunningState
 from .coordinator import SigenergyDataUpdateCoordinator
 from .calculated_sensor import (
     SigenergyCalculations as SC,

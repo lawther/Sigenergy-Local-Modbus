@@ -27,10 +27,8 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 from homeassistant.util import dt as dt_util
 
-from .const import (
-    EMSWorkMode,
-    CONF_VALUES_TO_INIT,
-)
+from .const import CONF_VALUES_TO_INIT
+from .modbusregisterdefinitions import EMSWorkMode
 
 from .common import (
     SigenergySensorEntityDescription,
@@ -44,7 +42,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Only log for these entities
 LOG_THIS_ENTITY = [
-    "sensor.sigen_plant_accumulated_consumed_energy",
+    # "sensor.sigen_plant_accumulated_consumed_energy",
     # "sensor.sigen_plant_accumulated_grid_import_energy",
     # "sensor.sigen_plant_accumulated_pv_energy",
 ]

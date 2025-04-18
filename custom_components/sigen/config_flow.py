@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-from decimal import Decimal
-import asyncio, re, logging
+import asyncio
+import re
+import logging
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ConnectionException, ModbusException
 
@@ -13,7 +14,7 @@ import voluptuous as vol
 from homeassistant import (
     config_entries,
 )
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
+from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.config_entries import (  # pylint: disable=syntax-error
     ConfigFlowResult,
@@ -27,61 +28,7 @@ from homeassistant.helpers.entity_registry import (
     async_entries_for_device,
 )
 from .modbus import _suppress_pymodbus_logging
-from .const import (
-    CONF_AC_CHARGER_CONNECTIONS,
-    CONF_DC_CHARGER_CONNECTIONS,
-    CONF_DEVICE_TYPE,
-    CONF_INVERTER_SLAVE_ID,
-    CONF_INVERTER_CONNECTIONS,
-    CONF_PARENT_INVERTER_ID,
-    CONF_PARENT_PLANT_ID,
-    CONF_SLAVE_ID,
-    CONF_SCAN_INTERVAL_HIGH,
-    CONF_SCAN_INTERVAL_ALARM,
-    CONF_SCAN_INTERVAL_MEDIUM,
-    CONF_SCAN_INTERVAL_LOW,
-    DEFAULT_PORT,
-    DEFAULT_PLANT_SLAVE_ID,
-    DEFAULT_INVERTER_SLAVE_ID,
-    DEFAULT_SCAN_INTERVAL_HIGH,
-    DEFAULT_SCAN_INTERVAL_ALARM,
-    DEFAULT_SCAN_INTERVAL_MEDIUM,
-    DEFAULT_SCAN_INTERVAL_LOW,
-    DEVICE_TYPE_NEW_PLANT,
-    DEVICE_TYPE_PLANT,
-    DEVICE_TYPE_INVERTER,
-    DEVICE_TYPE_AC_CHARGER,
-    DEVICE_TYPE_DC_CHARGER,
-    DOMAIN,
-    STEP_DEVICE_TYPE,
-    STEP_PLANT_CONFIG,
-    STEP_INVERTER_CONFIG,
-    STEP_AC_CHARGER_CONFIG,
-    STEP_SELECT_PLANT,
-    STEP_SELECT_INVERTER,
-    STEP_DHCP_SELECT_PLANT,
-    DEFAULT_READ_ONLY,
-    CONF_INVERTER_HAS_DCCHARGER,
-    CONF_PLANT_CONNECTION,
-    CONF_MIGRATE_YAML,
-    LEGACY_SENSOR_MIGRATION_MAP,
-    CONF_VALUES_TO_INIT,
-    CONF_RESET_VALUES,
-)
-
-DEVICE_TYPE_UNKNOWN = "unknown"
-
-# Define a constant for the ignore action (can also be added to const.py)
-ACTION_IGNORE = "ignore"
-
-# Define constants that might not be in the .const module
-CONF_READ_ONLY = "read_only"
-CONF_REMOVE_DEVICE = "remove_device"
-
-STEP_DC_CHARGER_CONFIG = "dc_charger_config"
-STEP_SELECT_DEVICE = "select_device"
-STEP_RECONFIGURE = "reconfigure"
-
+from .const import *
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -153,7 +100,8 @@ def generate_plant_schema(
 
     _LOGGER.debug("slave_id_type: %s",slave_id_type)
     validation_schema[vol.Required(slave_id_type, default=user_input[slave_id_type])] = int
-    validation_schema[vol.Required(CONF_READ_ONLY, default=user_input.get(CONF_READ_ONLY, True))] = bool
+    validation_schema[vol.Required(CONF_READ_ONLY,
+                                   default=user_input.get(CONF_READ_ONLY, DEFAULT_READ_ONLY))] = bool
 
     if migration_alternative:
         validation_schema[vol.Required(CONF_MIGRATE_YAML,
