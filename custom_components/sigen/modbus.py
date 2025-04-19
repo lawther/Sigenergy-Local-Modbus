@@ -135,15 +135,19 @@ class SigenergyModbusHub:
             async with self._locks[key]:
                 if key not in self._clients or not self._connected.get(key, False):
                     host, port = key
+                    _LOGGER.debug("Attempting to create new Modbus client for %s:%s", host, port)
                     self._clients[key] = AsyncModbusTcpClient(
                         host=host,
                         port=port,
-                        timeout=10,
+                        timeout=20, # Increased timeout to 20 seconds
                         retries=3
                     )
 
+                    _LOGGER.debug("Attempting to connect client for %s:%s", host, port)
                     connected = await self._clients[key].connect()
                     if not connected:
+                        _LOGGER.debug("Connection attempt result for %s:%s: %s", host, port, connected)
+                        _LOGGER.error("Failed to connect to %s:%s after connection attempt.", host, port)
                         raise SigenergyModbusError(f"Failed to connect to {host}:{port}")
 
                     self._connected[key] = True
@@ -166,8 +170,10 @@ class SigenergyModbusHub:
             if client and self._connected.get(key, False):
                 host, port = key
                 async with self._locks[key]:
+                    _LOGGER.debug("Attempting to close connection to %s:%s", host, port)
                     client.close()
                     self._connected[key] = False
+                    _LOGGER.debug("Connection closed for %s:%s", host, port)
                     _LOGGER.info("Disconnected from Sigenergy system at %s:%s", host, port)
 
     def _validate_register_response(self, result: Any,
@@ -403,13 +409,16 @@ class SigenergyModbusHub:
                     )
 
                     if result.isError():
-                        self._connected[key] = False
-                        return None
+                        # Do NOT mark connection as closed for specific register read errors
+                        _LOGGER.debug("Modbus read error for %s:%s@%s (address %s): %s.", key[0], key[1], slave_id, address, result)
+                        # self._connected[key] = False # Removed this line
+                        return None # Indicate read failure for this register
                     return result.registers
 
-        except ConnectionException as ex:
+        except (ConnectionException, asyncio.TimeoutError) as ex: # Catch TimeoutError here too
             key = self._get_connection_key(device_info)
-            self._connected[key] = False
+            _LOGGER.warning("ConnectionException/Timeout during read for %s:%s@%s (address %s): %s. Marking connection as closed.", key[0], key[1], slave_id, address, ex)
+            self._connected[key] = False # Mark disconnected only on actual connection issues
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
         except ModbusException as ex:
             raise SigenergyModbusError(f"Modbus error: {ex}") from ex
@@ -514,6 +523,7 @@ class SigenergyModbusHub:
 
                     # If we've tried all approaches and still have an error
                     self._connected[key] = False
+                    _LOGGER.warning("Modbus write error for %s:%s@%s (address %s): %s. Marking connection as closed.", key[0], key[1], slave_id, address, last_error)
                     if last_error:
                         _LOGGER.debug("All write attempts failed. Final error: %s", last_error)
                         if isinstance(last_error, Exception):
@@ -530,6 +540,7 @@ class SigenergyModbusHub:
                     )
         except ConnectionException as ex:
             key = self._get_connection_key(device_info)
+            _LOGGER.warning("ConnectionException during write for %s:%s@%s (address %s): %s. Marking connection as closed.", key[0], key[1], slave_id, address, ex)
             self._connected[key] = False
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
         except ModbusException as ex:
@@ -578,6 +589,7 @@ class SigenergyModbusHub:
                         )
 
                     if result.isError():
+                        _LOGGER.warning("Modbus write_registers error for %s:%s@%s (address %s): %s. Marking connection as closed.", key[0], key[1], slave_id, address, result)
                         self._connected[key] = False
                         _LOGGER.debug("Error response from write_registers: %s", result)
                         raise SigenergyModbusError(
@@ -592,6 +604,7 @@ class SigenergyModbusHub:
                     )
         except ConnectionException as ex:
             key = self._get_connection_key(device_info)
+            _LOGGER.warning("ConnectionException during write_registers for %s:%s@%s (address %s): %s. Marking connection as closed.", key[0], key[1], slave_id, address, ex)
             self._connected[key] = False
             raise SigenergyModbusError(f"Connection error: {ex}") from ex
         except ModbusException as ex:
@@ -732,6 +745,12 @@ class SigenergyModbusHub:
                         "Error reading %s '%s' register %s: %s",
                         device_type_log_prefix, device_name, register_name, ex
                     )
+                    # Check if the exception indicates a connection issue
+                    if isinstance(ex, (ConnectionException, SigenergyModbusError)) and 'connect' in str(ex).lower():
+                        key = self._get_connection_key(device_info)
+                        if self._connected.get(key, True): # Only log if not already marked disconnected
+                            _LOGGER.warning("Connection error detected during data read for %s '%s'. Marking connection as closed.", device_type_log_prefix, device_name)
+                            self._connected[key] = False
                     data[register_name] = None
                     # If this is the first time we fail to read this register,
                     # mark it as unsupported
