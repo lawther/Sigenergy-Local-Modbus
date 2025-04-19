@@ -85,13 +85,13 @@ class SigenergyModbusHub:
         """Initialize the Modbus hub."""
         self.hass = hass
         self.config_entry = config_entry
-        
+
         # Dictionary to store Modbus clients for different connections
         # Key is (host, port) tuple, value is the client instance
         self._clients: Dict[Tuple[str, int], AsyncModbusTcpClient] = {}
         self._locks: Dict[Tuple[str, int], asyncio.Lock] = {}
         self._connected: Dict[Tuple[str, int], bool] = {}
-        
+
         # Store connection for plant
         self.plant_connection = config_entry.data.get(CONF_PLANT_CONNECTION, {})
         self._plant_host = self.plant_connection[CONF_HOST]
@@ -169,33 +169,37 @@ class SigenergyModbusHub:
                     client.close()
                     self._connected[key] = False
                     _LOGGER.info("Disconnected from Sigenergy system at %s:%s", host, port)
-    
-    def _validate_register_response(self, result: Any, register_def: ModbusRegisterDefinition) -> bool:
+
+    def _validate_register_response(self, result: Any,
+                                    register_def: ModbusRegisterDefinition) -> bool:
         """Validate if register response indicates support for the register."""
         # Handle error responses silently - these indicate unsupported registers
         if result is None or (hasattr(result, 'isError') and result.isError()):
-            _LOGGER.debug(f"Register validation failed for address {register_def.address} with error: %s", result)
+            _LOGGER.debug(f"Register validation failed for address \
+                          {register_def.address} with error: %s", result)
             return False
-            
+
         registers = getattr(result, 'registers', [])
         if not registers:
-            _LOGGER.debug("Register validation failed for address %s: empty response", register_def.address)
+            _LOGGER.debug("Register validation failed for address %s: empty response",
+                          register_def.address)
             return False
-            
+
         # For string type registers, check if all values are 0 (indicating no support)
         if register_def.data_type == DataType.STRING:
             _LOGGER.debug(
-                "Register validation failed for address %s: string type (not all string registers have to be filled)",
-                register_def.address
+                "Register validation failed for address %s: string type \
+                    (not all string registers have to be filled)",
+                    register_def.address
             )
             return not all(reg == 0 for reg in registers)
-            
+
         # For numeric registers, check if values are within reasonable bounds
         try:
             value = self._decode_value(registers, register_def.data_type, register_def.gain)
             if isinstance(value, (int, float)):
                 # Consider register supported if value is non-zero and within reasonable bounds
-                # This helps filter out invalid/unsupported registers that might return garbage values
+                # This helps filter out invalid/unsupported registers that might return garbage
                 max_reasonable = {
                     "voltage": 1000,  # 1000V
                     "current": 1000,  # 1000A
@@ -204,7 +208,7 @@ class SigenergyModbusHub:
                     "temperature": 200, # 200°C
                     "percentage": 120  # 120% Some batteries can go above 100% when charging
                 }
-                
+
                 # Determine max value based on unit if present
                 if register_def.unit:
                     unit = register_def.unit.lower()
@@ -222,7 +226,7 @@ class SigenergyModbusHub:
                         return 0 <= value <= max_reasonable["percentage"]
                 # Default validation - accept any value including 0
                 return True
-            
+
             return True
         except Exception as ex:
             _LOGGER.debug("Register validation failed with exception: %s", ex)
@@ -319,7 +323,8 @@ class SigenergyModbusHub:
                     register.is_supported = False # Assume unsupported if probe was cancelled
             raise # Re-raise CancelledError
         except Exception as ex:
-            _LOGGER.error("Unexpected error during concurrent register probing for %s: %s", device_info_log, ex)
+            _LOGGER.error("Unexpected error during concurrent register probing for %s: %s",
+                          device_info_log, ex)
             # Mark all probed registers as potentially unsupported due to the gather error
             for name, register in register_defs.items():
                 if register.is_supported is None: # Only update those that were being probed
@@ -327,16 +332,19 @@ class SigenergyModbusHub:
             self._connected[key] = False # Assume connection issue
             return # Exit probing on major error
 
-        _LOGGER.debug("Finished probing for %s. Processing %d results.", device_info_log, len(results))
+        _LOGGER.debug("Finished probing for %s. Processing %d results.",
+                      device_info_log, len(results))
 
         # Process results
         connection_error_occurred = False
         for result in results:
             if isinstance(result, Exception):
                 # Handle exceptions raised by gather itself or _probe_single_register
-                _LOGGER.error("Error during register probe task for %s: %s", device_info_log, result)
+                _LOGGER.error("Error during register probe task for %s: %s",
+                              device_info_log, result)
                 # If it's a connection error, mark the connection as potentially bad
-                if isinstance(result, (ConnectionException, asyncio.TimeoutError, SigenergyModbusError)):
+                if isinstance(result, (ConnectionException, asyncio.TimeoutError,
+                                       SigenergyModbusError)):
                     connection_error_occurred = True
                 # We don't know which register failed here, so we can't mark it specifically.
                 # The registers remain is_supported=None and will be retried on read.
@@ -349,15 +357,22 @@ class SigenergyModbusHub:
                     register_defs[name].is_supported = is_supported
                     if probe_exception:
                         # Log the specific exception caught by _probe_single_register
-                        _LOGGER.debug("Probe failed for register %s on %s: %s", name, device_info_log, probe_exception)
-                        if isinstance(probe_exception, (ConnectionException, asyncio.TimeoutError, SigenergyModbusError)):
+                        _LOGGER.debug("Probe failed for register %s on %s: %s",
+                                      name, device_info_log, probe_exception)
+                        if isinstance(probe_exception, (ConnectionException, asyncio.TimeoutError,
+                                                        SigenergyModbusError)):
                             connection_error_occurred = True
 
         # If any connection-related error occurred during probing, mark the connection state
         if connection_error_occurred:
-            _LOGGER.warning("Connection errors encountered during probing for %s. Marking connection as potentially disconnected.", device_info_log)
+            _LOGGER.warning("Connection errors encountered during probing for %s. "
+                            "Marking connection as potentially disconnected.", device_info_log)
             self._connected[key] = False
 
+
+        _LOGGER.debug("Probing completed for %s. Supported registers: %s", device_info_log,
+                      {name: register.is_supported for name, register in register_defs.items() \
+                       if register.is_supported is not None})
 
     async def async_read_registers(
         self,
@@ -382,10 +397,11 @@ class SigenergyModbusHub:
                 with _suppress_pymodbus_logging():
                     result = await client.read_input_registers(
                         address=address, count=count, slave=slave_id
-                    ) if register_type == RegisterType.READ_ONLY else await client.read_holding_registers(
+                    ) if register_type == RegisterType.READ_ONLY \
+                        else await client.read_holding_registers(
                         address=address, count=count, slave=slave_id
                     )
-                    
+
                     if result.isError():
                         self._connected[key] = False
                         return None
@@ -420,7 +436,7 @@ class SigenergyModbusHub:
                 if register_type in [RegisterType.HOLDING, RegisterType.WRITE_ONLY]:
                     # Try multiple approaches to write to the register
                     approaches = []
-                    
+
                     # Always try direct addressing approaches
                     approaches.append({
                         "description": f"write_registers with direct addressing ({address})",
@@ -439,13 +455,15 @@ class SigenergyModbusHub:
                     if address >= 40001:
                         offset_address = address - 40001
                         approaches.append({
-                            "description": f"write_registers with offset addressing ({offset_address})",
+                            "description": f"write_registers with offset addressing \
+                                ({offset_address})",
                             "function": "write_registers",
                             "address": offset_address,
                             "values": [value]
                         })
                         approaches.append({
-                            "description": f"write_register with offset addressing ({offset_address})",
+                            "description": f"write_register with offset addressing \
+                                ({offset_address})",
                             "function": "write_register",
                             "address": offset_address,
                             "value": value
@@ -454,14 +472,14 @@ class SigenergyModbusHub:
                     # Try each approach until one succeeds
                     last_error = None
                     success = False
-                    
+
                     for i, approach in enumerate(approaches):
                         try:
                             _LOGGER.debug(
                                 "Attempt %d: Using %s for register %s with value %s for slave %s",
                                 i+1, approach["description"], address, value, slave_id
                             )
-                            
+
                             if approach["function"] == "write_registers":
                                 result = await client.write_registers(
                                     address=approach["address"],
@@ -474,24 +492,26 @@ class SigenergyModbusHub:
                                     value=approach["value"],
                                     slave=slave_id
                                 )
-                                
+
                             if not result.isError():
                                 _LOGGER.debug("Success with approach: %s", approach["description"])
                                 success = True
                                 break
-                            
-                            _LOGGER.debug("Error with approach %s: %s", approach["description"], result)
+
+                            _LOGGER.debug("Error with approach %s: %s", approach["description"],
+                                          result)
                             last_error = result
-                            
+
                         except Exception as ex:
-                            _LOGGER.debug("Exception with approach %s: %s", approach["description"], ex)
+                            _LOGGER.debug("Exception with approach %s: %s", approach["description"],
+                                          ex)
                             last_error = ex
-                    
+
                     # Check if any approach succeeded
                     if success:
                         _LOGGER.debug("Successfully wrote to register at address %s", address)
                         return
-                        
+
                     # If we've tried all approaches and still have an error
                     self._connected[key] = False
                     if last_error:
@@ -535,12 +555,14 @@ class SigenergyModbusHub:
 
             async with self._locks[key]:
                 if register_type in [RegisterType.HOLDING, RegisterType.WRITE_ONLY]:
-                    # For Modbus addresses starting with 4xxxx, some devices expect the offset (address - 40001)
+                    # For Modbus addresses starting with 4xxxx,
+                    # some devices expect the offset (address - 40001)
                     if address >= 40001:
                         # Try with the offset addressing first
                         offset_address = address - 40001
                         _LOGGER.debug(
-                            "Writing to registers starting at %s (offset address %s) with values %s for slave %s",
+                            "Writing to registers starting at %s (offset address %s) \
+                                with values %s for slave %s",
                             address, offset_address, values, slave_id
                         )
                         result = await client.write_registers(
@@ -554,7 +576,7 @@ class SigenergyModbusHub:
                         result = await client.write_registers(
                             address=address, values=values, slave=slave_id
                         )
-                    
+
                     if result.isError():
                         self._connected[key] = False
                         _LOGGER.debug("Error response from write_registers: %s", result)
@@ -562,7 +584,8 @@ class SigenergyModbusHub:
                             f"Error writing registers at address {address}: {result}"
                         )
                     else:
-                        _LOGGER.debug("Successfully wrote to registers starting at address %s", address)
+                        _LOGGER.debug("Successfully wrote to registers starting at address %s",
+                                      address)
                 else:
                     raise SigenergyModbusError(
                         f"Register type {register_type} is not writable"
@@ -577,9 +600,9 @@ class SigenergyModbusHub:
             raise SigenergyModbusError(f"Error writing registers: {ex}") from ex
 
     def _decode_value(
-        self, 
-        registers: List[int], 
-        data_type: DataType, 
+        self,
+        registers: List[int],
+        data_type: DataType,
         gain: float
     ) -> Union[int, float, str]:
         """Decode register values based on data type."""
@@ -622,9 +645,9 @@ class SigenergyModbusHub:
         return value  # type: ignore[no-untyped-return]
 
     def _encode_value(
-        self, 
-        value: Union[int, float, str], 
-        data_type: DataType, 
+        self,
+        value: Union[int, float, str],
+        data_type: DataType,
         gain: float
     ) -> List[int]:
         """Encode value to register values based on data type."""
@@ -633,16 +656,16 @@ class SigenergyModbusHub:
         if data_type == DataType.U16 and isinstance(value, int) and 0 <= value <= 255:
             _LOGGER.debug("Using direct value encoding for simple U16 value: %s", value)
             return [value]
-            
+
         # For other cases, use the BinaryPayloadBuilder
         builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.BIG)
-        
+
         # Apply gain for numeric values
         if isinstance(value, (int, float)) and gain != 1 and data_type != DataType.STRING:
             value = int(value * gain)
-        
+
         _LOGGER.debug("Encoding value %s with data_type %s", value, data_type)
-        
+
         if data_type == DataType.U16:
             builder.add_16bit_uint(int(value))
         elif data_type == DataType.S16:
@@ -657,11 +680,11 @@ class SigenergyModbusHub:
             builder.add_string(str(value))
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
-        
+
         registers = builder.to_registers()
         _LOGGER.debug("Encoded registers: %s", registers)
         return registers
-    
+
     async def _async_read_device_data_core(
         self,
         device_info: Dict[str, Any], # Changed from slave_id
@@ -696,9 +719,11 @@ class SigenergyModbusHub:
                     )
 
                     data[register_name] = value
-                    # _LOGGER.debug("Read register %s = %s from %s '%s'", register_name, value, device_type_log_prefix, device_name)
+                    # _LOGGER.debug("Read register %s = %s from %s '%s'",
+                    # register_name, value, device_type_log_prefix, device_name)
 
-                    # If we successfully read a register that wasn't probed/confirmed, mark it as supported
+                    # If we successfully read a register that wasn't probed/confirmed,
+                    # mark it as supported
                     if register_def.is_supported is None:
                         register_def.is_supported = True
 
@@ -708,12 +733,15 @@ class SigenergyModbusHub:
                         device_type_log_prefix, device_name, register_name, ex
                     )
                     data[register_name] = None
-                    # If this is the first time we fail to read this register, mark it as unsupported
+                    # If this is the first time we fail to read this register,
+                    # mark it as unsupported
                     if register_def.is_supported is None:
                         register_def.is_supported = False
         return data
 
-    async def async_read_plant_data(self, update_frequency: UpdateFrequencyType=UpdateFrequencyType.LOW) -> Dict[str, Any]:
+    async def async_read_plant_data(self, update_frequency:
+                                    UpdateFrequencyType=UpdateFrequencyType.LOW
+                                    ) -> Dict[str, Any]:
         """Read all supported plant data."""
         # Probe registers if not done yet
         if not self.plant_registers_probed:
@@ -743,11 +771,12 @@ class SigenergyModbusHub:
         }
         # Merge the dictionaries
         registers_to_read = {**running_regs, **param_regs}
-        _LOGGER.debug("Reading %s Plant registers. update_frequency is %s", len(registers_to_read), update_frequency)
+        _LOGGER.debug("Reading %s Plant registers. update_frequency is %s",
+                      len(registers_to_read), update_frequency)
 
         # Use the core reading logic
-        plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {}) # Ensure plant_info is available
-        plant_info.setdefault(CONF_SLAVE_ID, self.plant_id) # Ensure slave_id is in plant_info
+        plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {})
+        plant_info.setdefault(CONF_SLAVE_ID, self.plant_id)
         return await self._async_read_device_data_core(
             device_info=plant_info,
             device_name="plant",
@@ -755,7 +784,9 @@ class SigenergyModbusHub:
             registers_to_read=registers_to_read
         )
 
-    async def async_read_inverter_data(self, inverter_name: str, update_frequency: UpdateFrequencyType=UpdateFrequencyType.LOW) -> Dict[str, Any]:
+    async def async_read_inverter_data(self, inverter_name: str, update_frequency:
+                                       UpdateFrequencyType=UpdateFrequencyType.LOW
+                                       ) -> Dict[str, Any]:
         """Read all supported inverter data."""
         # Look up inverter details by name
         if inverter_name not in self.inverter_connections:
@@ -793,7 +824,8 @@ class SigenergyModbusHub:
             if reg.register_type != RegisterType.WRITE_ONLY and
             reg.update_frequency >= update_frequency },
         }
-        _LOGGER.debug("Reading %s Inverter registers. update_frequency is %s", len(registers_to_read), update_frequency)
+        _LOGGER.debug("Reading %s Inverter registers. update_frequency is %s",
+                      len(registers_to_read), update_frequency)
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
@@ -803,7 +835,9 @@ class SigenergyModbusHub:
             registers_to_read=registers_to_read
         )
 
-    async def async_read_ac_charger_data(self, ac_charger_name: str, update_frequency: UpdateFrequencyType=UpdateFrequencyType.LOW) -> Dict[str, Any]:
+    async def async_read_ac_charger_data(self, ac_charger_name: str, update_frequency:
+                                          UpdateFrequencyType=UpdateFrequencyType.LOW
+                                          ) -> Dict[str, Any]:
         """Read all supported AC charger data."""
         # Look up AC charger details by name
         if ac_charger_name not in self.ac_charger_connections:
@@ -836,7 +870,8 @@ class SigenergyModbusHub:
                if reg.register_type != RegisterType.WRITE_ONLY and
                reg.update_frequency >= update_frequency}
         }
-        _LOGGER.debug("Reading %s AC charger registers. update_frequency is %s", len(registers_to_read), update_frequency)
+        _LOGGER.debug("Reading %s AC charger registers. update_frequency is %s",
+                      len(registers_to_read), update_frequency)
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
@@ -911,7 +946,8 @@ class SigenergyModbusHub:
                 if isinstance(potential_device_info, dict):
                     device_info = potential_device_info
                 else:
-                    raise SigenergyModbusError(f"Configuration for {device_type} '{device_identifier}' is not a valid dictionary.")
+                    raise SigenergyModbusError(f"Configuration for {device_type} \
+                                               '{device_identifier}' is not a valid dictionary.")
 
         slave_id = device_info.get(CONF_SLAVE_ID)
 
@@ -935,8 +971,10 @@ class SigenergyModbusHub:
         register_def = parameter_registers[register_name]
 
         _LOGGER.debug(
-            "Writing %s parameter '%s' (device: %s, slave: %s) with value %s to address %s (type: %s, data_type: %s, gain: %s)",
-            device_type, register_name, device_identifier or 'plant', slave_id, value, register_def.address,
+            "Writing %s parameter '%s' (device: %s, slave: %s) with value %s \
+                to address %s (type: %s, data_type: %s, gain: %s)",
+            device_type, register_name, device_identifier or 'plant',
+            slave_id, value, register_def.address,
             register_def.register_type, register_def.data_type, register_def.gain
         )
 
@@ -950,10 +988,14 @@ class SigenergyModbusHub:
             if register_name == "plant_remote_ems_enable":
                 _LOGGER.debug("Special handling for plant_remote_ems_enable register")
                 approaches = [
-                    {"function": "write_registers", "address": register_def.address, "values": [int(value)]},
-                    {"function": "write_register", "address": register_def.address, "value": int(value)},
-                    {"function": "write_registers", "address": register_def.address - 40001, "values": [int(value)]},
-                    {"function": "write_register", "address": register_def.address - 40001, "value": int(value)},
+                    {"function": "write_registers", "address": register_def.address,
+                     "values": [int(value)]},
+                    {"function": "write_register", "address": register_def.address,
+                     "value": int(value)},
+                    {"function": "write_registers", "address": register_def.address - 40001,
+                     "values": [int(value)]},
+                    {"function": "write_register", "address": register_def.address - 40001,
+                     "value": int(value)},
                 ]
                 last_error = None
                 success = False
@@ -962,11 +1004,22 @@ class SigenergyModbusHub:
                         client = await self._get_client(device_info)
                         for approach in approaches:
                             try:
-                                _LOGGER.debug("Plant write attempt: %s", approach['description'] if 'description' in approach else f"{approach['function']} @ {approach['address']}")
+                                _LOGGER.debug(
+                                    "Plant write attempt: %s", approach['description'] \
+                                        if 'description' in approach \
+                                            else f"{approach['function']} @ {approach['address']}")
                                 if approach["function"] == "write_registers":
-                                    result = await client.write_registers(address=approach["address"], values=approach["values"], slave=slave_id)
+                                    result = await client.write_registers(
+                                        address=approach["address"],
+                                        values=approach["values"],
+                                        slave=slave_id
+                                    )
                                 else:
-                                    result = await client.write_register(address=approach["address"], value=approach["value"], slave=slave_id)
+                                    result = await client.write_register(
+                                        address=approach["address"],
+                                        value=approach["value"],
+                                        slave=slave_id
+                                    )
                                 if not result.isError():
                                     success = True
                                     break
@@ -974,18 +1027,22 @@ class SigenergyModbusHub:
                             except Exception as ex_inner:
                                 last_error = ex_inner
                     if not success:
-                        raise SigenergyModbusError(f"Failed plant_remote_ems_enable write after all attempts. Last error: {last_error}")
+                        raise SigenergyModbusError(f"Failed plant_remote_ems_enable write after \
+                                                   all attempts. Last error: {last_error}")
                     return # Success
                 except (ConnectionException, ModbusException, SigenergyModbusError) as ex_outer:
                     self._connected[key] = False
-                    raise SigenergyModbusError(f"Error during special plant write: {ex_outer}") from ex_outer
+                    raise SigenergyModbusError(f"Error during special plant write: {ex_outer}") \
+                        from ex_outer
                 except Exception as ex_outer:
-                    raise SigenergyModbusError(f"Unexpected error during special plant write: {ex_outer}") from ex_outer
+                    raise SigenergyModbusError(f"Unexpected error during special plant write: \
+                                               {ex_outer}") from ex_outer
 
             # Special handling for U32/S32 registers
             elif register_def.data_type in [DataType.U32, DataType.S32]:
                 _LOGGER.debug("Special handling for U32/S32 register %s", register_name)
-                encoded_values = self._encode_value(value=value, data_type=register_def.data_type, gain=register_def.gain)
+                encoded_values = self._encode_value(value=value, data_type=register_def.data_type,
+                                                    gain=register_def.gain)
                 _LOGGER.debug("Encoded values for %s: %s", register_name, encoded_values)
                 approaches = [
                     {"address": register_def.address},
@@ -1000,8 +1057,13 @@ class SigenergyModbusHub:
                         client = await self._get_client(device_info)
                         for approach in approaches:
                             try:
-                                _LOGGER.debug("Plant U32/S32 write attempt: write_registers @ %s", approach['address'])
-                                result = await client.write_registers(address=approach["address"], values=encoded_values, slave=slave_id)
+                                _LOGGER.debug("Plant U32/S32 write attempt: write_registers @ %s",
+                                              approach['address'])
+                                result = await client.write_registers(
+                                    address=approach["address"],
+                                    values=encoded_values,
+                                    slave=slave_id
+                                )
                                 if not result.isError():
                                     success = True
                                     break
@@ -1009,16 +1071,22 @@ class SigenergyModbusHub:
                             except Exception as ex_inner:
                                 last_error = ex_inner
                     if not success:
-                        raise SigenergyModbusError(f"Failed U32/S32 write for {register_name} after all attempts. Last error: {last_error}")
+                        raise SigenergyModbusError(
+                            f"Failed U32/S32 write for {register_name} after all attempts. "
+                            f"Last error: {last_error}"
+                        )
                     return # Success
                 except (ConnectionException, ModbusException, SigenergyModbusError) as ex_outer:
                     self._connected[key] = False
-                    raise SigenergyModbusError(f"Error during special plant U32/S32 write: {ex_outer}") from ex_outer
+                    raise SigenergyModbusError(f"Error during special plant U32/S32 \
+                                               write: {ex_outer}") from ex_outer
                 except Exception as ex_outer:
-                    raise SigenergyModbusError(f"Unexpected error during special plant U32/S32 write: {ex_outer}") from ex_outer
+                    raise SigenergyModbusError(f"Unexpected error during special plant U32/S32 \
+                                               write: {ex_outer}") from ex_outer
 
         # === General Write Logic ===
-        # (Executes if device_type is not 'plant' or if it's a plant register without special handling)
+        # (Executes if device_type is not 'plant' or if it's a plant register
+        # without special handling)
         encoded_values = self._encode_value(
             value=value,
             data_type=register_def.data_type,
