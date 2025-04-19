@@ -175,8 +175,8 @@ class SigenergyModbusHub:
         """Validate if register response indicates support for the register."""
         # Handle error responses silently - these indicate unsupported registers
         if result is None or (hasattr(result, 'isError') and result.isError()):
-            _LOGGER.debug(f"Register validation failed for address \
-                          {register_def.address} with error: %s", result)
+            _LOGGER.debug("Register validation failed for address"
+                          f" {register_def.address} with error: %s", result)
             return False
 
         registers = getattr(result, 'registers', [])
@@ -188,9 +188,9 @@ class SigenergyModbusHub:
         # For string type registers, check if all values are 0 (indicating no support)
         if register_def.data_type == DataType.STRING:
             _LOGGER.debug(
-                "Register validation failed for address %s: string type \
-                    (not all string registers have to be filled)",
-                    register_def.address
+                "Register validation failed for address %s: string type "
+                "(not all string registers have to be filled)",
+                register_def.address
             )
             return not all(reg == 0 for reg in registers)
 
@@ -1027,16 +1027,16 @@ class SigenergyModbusHub:
                             except Exception as ex_inner:
                                 last_error = ex_inner
                     if not success:
-                        raise SigenergyModbusError(f"Failed plant_remote_ems_enable write after \
-                                                   all attempts. Last error: {last_error}")
+                        raise SigenergyModbusError("Failed plant_remote_ems_enable write after "
+                                                   f"all attempts. Last error: {last_error}")
                     return # Success
                 except (ConnectionException, ModbusException, SigenergyModbusError) as ex_outer:
                     self._connected[key] = False
                     raise SigenergyModbusError(f"Error during special plant write: {ex_outer}") \
                         from ex_outer
                 except Exception as ex_outer:
-                    raise SigenergyModbusError(f"Unexpected error during special plant write: \
-                                               {ex_outer}") from ex_outer
+                    raise SigenergyModbusError("Unexpected error during special plant write:"
+                                               f" {ex_outer}") from ex_outer
 
             # Special handling for U32/S32 registers
             elif register_def.data_type in [DataType.U32, DataType.S32]:
@@ -1078,11 +1078,11 @@ class SigenergyModbusHub:
                     return # Success
                 except (ConnectionException, ModbusException, SigenergyModbusError) as ex_outer:
                     self._connected[key] = False
-                    raise SigenergyModbusError(f"Error during special plant U32/S32 \
-                                               write: {ex_outer}") from ex_outer
+                    raise SigenergyModbusError("Error during special plant U32/S32 write:"\
+                                               f" {ex_outer}") from ex_outer
                 except Exception as ex_outer:
-                    raise SigenergyModbusError(f"Unexpected error during special plant U32/S32 \
-                                               write: {ex_outer}") from ex_outer
+                    raise SigenergyModbusError("Unexpected error during special plant " \
+                                               f"U32/S32 write: {ex_outer}") from ex_outer
 
         # === General Write Logic ===
         # (Executes if device_type is not 'plant' or if it's a plant register
