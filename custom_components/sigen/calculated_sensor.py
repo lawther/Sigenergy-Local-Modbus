@@ -45,6 +45,7 @@ LOG_THIS_ENTITY = [
     # "sensor.sigen_plant_accumulated_consumed_energy",
     # "sensor.sigen_plant_accumulated_grid_import_energy",
     # "sensor.sigen_plant_accumulated_pv_energy",
+    "sigen_plant_accumulated_battery_charge_energy",
 ]
 
 
@@ -355,6 +356,105 @@ class SigenergyCalculations:
             return None
 
         return consumed_power
+
+    @staticmethod
+    def _calculate_total_inverter_energy(
+        coordinator_data: Optional[Dict[str, Any]],
+        energy_key: str,
+        log_prefix: str,
+    ) -> Optional[float]:
+        """Helper function to calculate total energy across all inverters for a given key."""
+        if coordinator_data is None or "inverters" not in coordinator_data:
+            _LOGGER.debug("[%s] No inverter data available for calculation", log_prefix)
+            return None
+
+        total_energy = Decimal("0.0")
+        inverters_data = coordinator_data.get("inverters", {})
+
+        if not inverters_data:
+            _LOGGER.debug("[%s] Inverter data is empty", log_prefix)
+            return None # No inverters found
+
+        for inverter_name, inverter_data in inverters_data.items():
+            energy_value = inverter_data.get(energy_key)
+            if energy_value is not None:
+                try:
+                    total_energy += Decimal(str(energy_value))
+                except (ValueError, TypeError, InvalidOperation) as e:
+                    _LOGGER.warning(
+                        "[%s] Invalid energy value '%s' for key '%s' in inverter %s: %s",
+                        log_prefix,
+                        energy_value,
+                        energy_key,
+                        inverter_name,
+                        e
+                    )
+            else:
+                 _LOGGER.debug(
+                    "[%s] Missing '%s' for inverter %s",
+                    log_prefix,
+                    energy_key,
+                    inverter_name
+                 )
+
+        # Return as float, matching other calculated sensors
+        return float(total_energy)
+
+    @staticmethod
+    def calculate_accumulated_battery_charge_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[float]:
+        _LOGGER.debug("[CS][Batt Charge] Calculating accumulated battery charge energy")
+        """Calculate the total accumulated battery charge energy across all inverters."""
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_ess_accumulated_charge_energy",
+            "CS][Batt Charge"
+        )
+
+    @staticmethod
+    def calculate_accumulated_battery_discharge_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[float]:
+        _LOGGER.debug("[CS][Batt Discharge] Calculating accumulated battery discharge energy")
+        """Calculate the total accumulated battery discharge energy across all inverters."""
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_ess_accumulated_discharge_energy",
+            "CS][Batt Discharge"
+        )
+
+    @staticmethod
+    def calculate_daily_battery_charge_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[float]:
+        _LOGGER.debug("[CS][Daily Batt Charge] Calculating daily battery charge energy")
+        """Calculate the total daily battery charge energy across all inverters."""
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_ess_daily_charge_energy",
+            "CS][Daily Batt Charge"
+        )
+
+    @staticmethod
+    def calculate_daily_battery_discharge_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[float]:
+        _LOGGER.debug("[CS][Daily Batt Discharge] Calculating daily battery discharge energy")
+        """Calculate the total daily battery discharge energy across all inverters."""
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_ess_daily_discharge_energy",
+            "CS][Daily Batt Discharge"
+        )
 
 
 class IntegrationTrigger(Enum):
@@ -916,6 +1016,54 @@ class SigenergyCalculatedSensors:
             extra_fn_data=True,  # Pass coordinator data to value_fn
             suggested_display_precision=2,
             round_digits=6,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_accumulated_battery_charge_energy",
+            name="Accumulated Battery Charge Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+            icon="mdi:battery-arrow-up",
+            value_fn=SigenergyCalculations.calculate_accumulated_battery_charge_energy,
+            extra_fn_data=True, # Pass coordinator data to value_fn
+            suggested_display_precision=2,
+            round_digits=6, # Match other energy sensors
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_accumulated_battery_discharge_energy",
+            name="Accumulated Battery Discharge Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+            icon="mdi:battery-arrow-down",
+            value_fn=SigenergyCalculations.calculate_accumulated_battery_discharge_energy,
+            extra_fn_data=True, # Pass coordinator data to value_fn
+            suggested_display_precision=2,
+            round_digits=6, # Match other energy sensors
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_daily_battery_charge_energy",
+            name="Daily Battery Charge Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING, # Resets daily
+            icon="mdi:battery-arrow-up",
+            value_fn=SigenergyCalculations.calculate_daily_battery_charge_energy,
+            extra_fn_data=True, # Pass coordinator data to value_fn
+            suggested_display_precision=2,
+            round_digits=6, # Match other energy sensors
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_daily_battery_discharge_energy",
+            name="Daily Battery Discharge Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING, # Resets daily
+            icon="mdi:battery-arrow-down",
+            value_fn=SigenergyCalculations.calculate_daily_battery_discharge_energy,
+            extra_fn_data=True, # Pass coordinator data to value_fn
+            suggested_display_precision=2,
+            round_digits=6, # Match other energy sensors
         ),
     ]
 

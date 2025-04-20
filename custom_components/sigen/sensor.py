@@ -385,79 +385,118 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the state of the sensor."""
-        if self.entity_description.key in [
-            "plant_grid_import_power",
-            "plant_grid_export_power",
-            "plant_consumed_power",
-        ]:
-            if self.coordinator.data is None or "plant" not in self.coordinator.data:
+        # Prioritize value_fn if it exists
+        if (
+            hasattr(self.entity_description, "value_fn")
+            and self.entity_description.value_fn is not None
+        ):
+            if self.coordinator.data is None:
                 _LOGGER.warning(
-                    "[CS][GridSensor] No coordinator data available for %s",
+                    "[CS][native_value] No coordinator data available for calculated sensor %s",
                     self.entity_id,
                 )
-                return None
+                return None # Return None for numeric calculated sensors if data is missing
 
-            # Call the value_fn directly with the coordinator data
-            if (
-                hasattr(self.entity_description, "value_fn")
-                and self.entity_description.value_fn is not None
-            ):
-                try:
-                    # Always pass coordinator data to the value_fn
+            try:
+                # Pass coordinator data if needed by the value_fn
+                if (
+                    hasattr(self.entity_description, "extra_fn_data")
+                    and self.entity_description.extra_fn_data
+                ):
+                    # Pass extra parameters if available
+                    extra_params = {
+                        "device_name": self._device_name,
+                        "pv_idx": self._pv_string_idx,
+                        **(getattr(self.entity_description, "extra_params", {}) or {}), # Merge params
+                    }
+                    transformed_value = self.entity_description.value_fn(
+                        None, # Pass None for raw value, it's calculated
+                        self.coordinator.data,
+                        extra_params
+                    )
+                else:
+                    # Pass coordinator data and None for extra_params for consistency
+                    # (Though value_fn without extra_fn_data=True might not expect coord_data)
                     transformed_value = self.entity_description.value_fn(
                         None, self.coordinator.data, None
                     )
-                    # _LOGGER.debug("[SigenergySensor][%s] Reporting state: %s", self.entity_id, transformed_value)
-                    return transformed_value
-                except Exception as ex:
-                    _LOGGER.error(
-                        "Error applying value_fn for %s: %s",
-                        self.entity_id,
-                        ex,
-                    )
-                    return None
+
+                # Apply rounding if specified and value is numeric
+                if transformed_value is not None and self._round_digits is not None:
+                    try:
+                        # Ensure it's a Decimal or float before rounding
+                        if isinstance(transformed_value, (Decimal, float, int)):
+                            transformed_value = round(Decimal(str(transformed_value)), self._round_digits)
+                            # Convert back to float if original wasn't Decimal, for HA state consistency
+                            if not isinstance(transformed_value, Decimal):
+                                 transformed_value = float(transformed_value)
+                    except (TypeError, ValueError, InvalidOperation):
+                         _LOGGER.warning("Could not round calculated value for %s", self.entity_id, exc_info=True)
+
+                # _LOGGER.debug("[SigenergySensor][Calc][%s] Reporting state: %s", self.entity_id, transformed_value)
+                return transformed_value
+            except Exception as ex:
+                _LOGGER.error(
+                    "Error applying value_fn for %s: %s",
+                    self.entity_id,
+                    ex,
+                    exc_info=True, # Add traceback
+                )
+                return None # Return None on calculation error for numeric sensors
+
+        # --- If no value_fn, proceed with direct key lookup --- 
 
         if self.coordinator.data is None:
             _LOGGER.error(
                 "[CS][native_value] No coordinator data available for %s",
                 self.entity_id,
             )
-            return STATE_UNKNOWN
-
-        if self._device_type == DEVICE_TYPE_PLANT:
-            # Use the key directly with plant_ prefix already included
-            value = self.coordinator.data["plant"].get(self.entity_description.key)
-        elif self._device_type == DEVICE_TYPE_INVERTER:
-            # Use the key directly with inverter_ prefix already included
-            # Access inverter data using device_name (inverter_name)
-            value = (
-                self.coordinator.data.get("inverters", {})
-                .get(self._device_name, {})
-                .get(self.entity_description.key)
-            )
-        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            # Use the key directly with ac_charger_ prefix already included
-            # Assuming data is keyed by device_name now, consistent with base class
-            value = (
-                self.coordinator.data.get("ac_chargers", {})
-                #.get(self._device_name, {}) # Use device_name if data is keyed by name
-                .get(self._device_id, {})
-                .get(self.entity_description.key)
-            )
-        else:
-            value = None
-
-        if value is None or str(value).lower() == "unknown":
-            # Always return None for numeric sensors (ones with measurements or units)
+            # Return None for numeric, STATE_UNKNOWN otherwise
             if (
                 self.entity_description.native_unit_of_measurement is not None
                 or self.entity_description.state_class
-                in [SensorStateClass.MEASUREMENT, SensorStateClass.TOTAL_INCREASING]
+                in [SensorStateClass.MEASUREMENT, SensorStateClass.TOTAL_INCREASING, SensorStateClass.TOTAL]
             ):
                 return None
             return STATE_UNKNOWN
 
-        # Special handling for timestamp sensors
+        # Retrieve value based on device type
+        value = None
+        try:
+            if self._device_type == DEVICE_TYPE_PLANT:
+                value = self.coordinator.data["plant"].get(self.entity_description.key)
+            elif self._device_type == DEVICE_TYPE_INVERTER:
+                value = (
+                    self.coordinator.data.get("inverters", {})
+                    .get(self._device_name, {})
+                    .get(self.entity_description.key)
+                )
+            elif self._device_type == DEVICE_TYPE_AC_CHARGER:
+                # Assuming data is keyed by device_name (consistent with base class)
+                # If keyed by slave_id (_device_id), change .get(self._device_name, {})
+                value = (
+                    self.coordinator.data.get("ac_chargers", {})
+                    .get(self._device_name, {})
+                    .get(self.entity_description.key)
+                )
+            # Add other device types if necessary
+        except KeyError as e:
+            _LOGGER.warning("KeyError retrieving data for %s: %s", self.entity_id, e)
+            value = None
+
+        # Handle missing or unknown values
+        if value is None or str(value).lower() == "unknown":
+            # Return None for numeric sensors, STATE_UNKNOWN otherwise
+            # Corrected check to include SensorStateClass.TOTAL
+            if (
+                self.entity_description.native_unit_of_measurement is not None
+                or self.entity_description.state_class
+                in [SensorStateClass.MEASUREMENT, SensorStateClass.TOTAL_INCREASING, SensorStateClass.TOTAL]
+            ):
+                return None
+            return STATE_UNKNOWN
+
+        # Special handling for timestamp sensors (remains the same)
         if self.entity_description.device_class == SensorDeviceClass.TIMESTAMP:
             try:
                 if not isinstance(value, (int, float)):
@@ -477,43 +516,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                 )
                 return None
 
-        # Apply value_fn if available
-        if (
-            hasattr(self.entity_description, "value_fn")
-            and self.entity_description.value_fn is not None
-        ):
-            try:
-                # Pass coordinator data if needed by the value_fn
-                if (
-                    hasattr(self.entity_description, "extra_fn_data")
-                    and self.entity_description.extra_fn_data
-                ):
-                    # Pass extra parameters if available
-                    extra_params = getattr(
-                        self.entity_description, "extra_params", None
-                    )
-                    transformed_value = self.entity_description.value_fn(
-                        value, self.coordinator.data, extra_params
-                    )
-                else:
-                    # Pass coordinator data and None for extra_params for consistency
-                    transformed_value = self.entity_description.value_fn(
-                        value, self.coordinator.data, None
-                    )
-
-                if transformed_value is not None:
-                    # _LOGGER.debug("[SigenergySensor][%s] Reporting state: %s", self.entity_id, transformed_value)
-                    return transformed_value
-            except Exception as ex:
-                _LOGGER.error(
-                    "Error applying value_fn for %s (value: %s, type: %s): %s",
-                    self.entity_id,
-                    value,
-                    type(value),
-                    ex,
-                )
-                return None        # Special handling for specific keys
-
+        # Special handling for specific keys (alarms, enums, etc.)
         try:
             # Handle alarm codes
             if "alarm" in self.entity_description.key.lower():
@@ -537,7 +540,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                 # If alarm key doesn't match specific patterns, return raw value
                 return value
 
-            # Other special cases
+            # Other special cases (enum mappings)
             if self.entity_description.key == "plant_on_off_grid_status":
                 return {
                     0: "On Grid",
@@ -579,11 +582,17 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             if self.entity_description.key == "plant_grid_sensor_status":
                 return "Connected" if value == 1 else "Not Connected"
 
-            value = (
-                round(value, self._round_digits)
-                if isinstance(value, Decimal) and self._round_digits is not None
-                else value
-            )
+            # Apply rounding if specified and value is numeric
+            if self._round_digits is not None:
+                 try:
+                     # Ensure it's a Decimal or float before rounding
+                     if isinstance(value, (Decimal, float, int)):
+                         value = round(Decimal(str(value)), self._round_digits)
+                         # Convert back to float if original wasn't Decimal
+                         if not isinstance(value, Decimal):
+                             value = float(value)
+                 except (TypeError, ValueError, InvalidOperation):
+                     _LOGGER.warning("Could not round direct value for %s", self.entity_id, exc_info=True)
 
         except Exception as ex:
             _LOGGER.error(
@@ -593,10 +602,11 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                 value,
                 type(value).__name__,
                 ex,
+                exc_info=True, # Add traceback
             )
-            return None
+            return None # Return None on conversion error for numeric sensors
 
-        # _LOGGER.debug("[SigenergySensor][%s] Reporting state: %s", self.entity_id, value)
+        # _LOGGER.debug("[SigenergySensor][Direct][%s] Reporting state: %s", self.entity_id, value)
         return value
 
     # The 'available' property is now inherited from SigenergyEntity
