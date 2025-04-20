@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import logging
+from typing import Any, Optional, cast
 from typing import Any, Optional
 from decimal import Decimal
 
@@ -34,6 +35,7 @@ from .calculated_sensor import (
     SigenergyIntegrationSensor,
 )
 from .static_sensor import StaticSensors as SS
+from .static_sensor import COORDINATOR_DIAGNOSTIC_SENSORS # Import the new descriptions
 from .common import *
 from .sigen_entity import SigenergyEntity # Import the new base class
 
@@ -91,6 +93,21 @@ async def async_setup_entry(
             hass,
         )
     )
+
+    # Add Coordinator Diagnostic Sensors:
+    async_add_entities(
+        generate_sigen_entity(
+            plant_name,
+            None, # No specific device name needed for plant-level coordinator sensor
+            None, # No specific connection details needed
+            coordinator,
+            CoordinatorDiagnosticSensor, # Use the new class
+            list(COORDINATOR_DIAGNOSTIC_SENSORS), # Use the new descriptions (converted to list)
+            DEVICE_TYPE_PLANT, # Associate with the plant device
+            # hass=hass, # Only needed if generate_sigen_entity requires it
+        )
+    )
+
 
     # Add inverter sensors
     for device_name, device_conn in coordinator.hub.inverter_connections.items():
@@ -724,3 +741,24 @@ class PVStringSensor(SigenergySensor):
                 ex,
             )
             return STATE_UNKNOWN  # Or None
+
+
+class CoordinatorDiagnosticSensor(SigenergyEntity, SensorEntity):
+    """Representation of a Sigenergy coordinator diagnostic sensor."""
+
+    # entity_description will be set by SigenergyEntity's __init__
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state of the sensor."""
+        coordinator = cast(SigenergyDataUpdateCoordinator, self.coordinator) # Use cast for type hint
+        # Directly access the attribute from the coordinator instance
+        value = coordinator.largest_update_interval
+        if value is None or value == 0.0: # Handle initial or unset state
+            return None # Return None for numeric sensors if unavailable
+        try:
+            # Ensure it's a float
+            return float(value)
+        except (ValueError, TypeError):
+            return None # Return None if conversion fails
+

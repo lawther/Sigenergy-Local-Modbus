@@ -14,6 +14,7 @@ from homeassistant.const import (
     UnitOfFrequency,
     UnitOfPower,
     UnitOfTemperature,
+    UnitOfTime,
 )
 from .common import (SigenergySensorEntityDescription)
 
@@ -924,3 +925,16 @@ class StaticSensors:
             state_class=SensorStateClass.MEASUREMENT,
         ),
     ]
+
+
+COORDINATOR_DIAGNOSTIC_SENSORS: tuple[SigenergySensorEntityDescription, ...] = (
+    SigenergySensorEntityDescription(
+        key="modbus_max_data_fetch_time",
+        name="Modbus Max Data Fetch Time",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:timer-sync-outline",
+    ),
+)
