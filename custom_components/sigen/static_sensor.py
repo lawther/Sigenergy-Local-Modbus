@@ -207,7 +207,6 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_available_max_active_power",
