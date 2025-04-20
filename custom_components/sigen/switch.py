@@ -50,6 +50,7 @@ PLANT_SWITCHES = [
         is_on_fn=lambda data, _: data["plant"].get("plant_running_state") == 1, # Sync
         turn_on_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_start_stop", 1), # Already returns awaitable
         turn_off_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_start_stop", 0), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergySwitchEntityDescription(
         key="plant_remote_ems_enable",
@@ -58,6 +59,7 @@ PLANT_SWITCHES = [
         is_on_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
         turn_on_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_remote_ems_enable", 1), # Already returns awaitable
         turn_off_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_remote_ems_enable", 0), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergySwitchEntityDescription(
         key="plant_independent_phase_power_control_enable",
@@ -67,6 +69,7 @@ PLANT_SWITCHES = [
         is_on_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1, # Sync
         turn_on_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_independent_phase_power_control_enable", 1), # Already returns awaitable
         turn_off_fn=lambda hub, _: hub.async_write_parameter("plant", None, "plant_independent_phase_power_control_enable", 0), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
 ]
 

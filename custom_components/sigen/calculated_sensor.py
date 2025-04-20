@@ -857,6 +857,7 @@ class SigenergyCalculatedSensors:
                 value, coord_data
             ),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_system_timezone",
@@ -865,6 +866,7 @@ class SigenergyCalculatedSensors:
             entity_category=EntityCategory.DIAGNOSTIC,
             # Adapt function signature
             value_fn=lambda value, _, __: SigenergyCalculations.minutes_to_gmt(value),
+            entity_registry_enabled_default=False,
         ),
         # EMS Work Mode sensor with value mapping
         SigenergySensorEntityDescription(

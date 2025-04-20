@@ -127,6 +127,7 @@ PLANT_SELECTS = [
             }.get(option, RemoteEMSControlMode.PCS_REMOTE_CONTROL),
         ),
         available_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
 ]
 

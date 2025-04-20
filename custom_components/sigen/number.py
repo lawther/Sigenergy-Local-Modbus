@@ -122,6 +122,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_ess_max_charging_limit", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_parameter("plant", None, "plant_ess_max_charging_limit", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_ess_max_discharging_limit",
@@ -134,6 +135,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_ess_max_discharging_limit", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_parameter("plant", None, "plant_ess_max_discharging_limit", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_pv_max_power_limit",
@@ -146,6 +148,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_pv_max_power_limit", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_parameter("plant", None, "plant_pv_max_power_limit", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_grid_point_maximum_export_limitation",
@@ -158,6 +161,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_grid_point_maximum_export_limitation", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_parameter("plant", None, "plant_grid_point_maximum_export_limitation", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_grid_maximum_import_limitation",
@@ -170,6 +174,7 @@ PLANT_NUMBERS = [
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data, _: data["plant"].get("plant_grid_maximum_import_limitation", 0),
         set_value_fn=lambda hub, _, value: hub.async_write_parameter("plant", None, "plant_grid_maximum_import_limitation", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergyNumberEntityDescription(
         key="plant_pcs_maximum_export_limitation",
@@ -451,6 +456,7 @@ AC_CHARGER_NUMBERS = [
         # identifier here will be ac_charger_name
         value_fn=lambda data, identifier: data["ac_chargers"].get(identifier, {}).get("ac_charger_output_current", 0),
         set_value_fn=lambda hub, identifier, value: hub.async_write_parameter("ac_charger", identifier, "ac_charger_output_current", value), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
 ]
 

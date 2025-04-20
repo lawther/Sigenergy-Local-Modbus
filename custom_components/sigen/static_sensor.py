@@ -48,6 +48,7 @@ class StaticSensors:
             name="Grid Sensor Status",
             icon="mdi:power-plug",
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_active_power",
@@ -55,7 +56,6 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_reactive_power",
@@ -63,6 +63,7 @@ class StaticSensors:
             native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_on_off_grid_status",
@@ -78,6 +79,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_max_apparent_power",
@@ -85,6 +87,7 @@ class StaticSensors:
             native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_soc",
@@ -93,7 +96,6 @@ class StaticSensors:
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
         ),
-        # Phase-specific active power
         SigenergySensorEntityDescription(
             key="plant_phase_a_active_power",
             name="Phase A Active Power",
@@ -101,6 +103,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_phase_b_active_power",
@@ -109,6 +112,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_phase_c_active_power",
@@ -117,6 +121,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         # Phase-specific reactive power
         SigenergySensorEntityDescription(
@@ -125,6 +130,7 @@ class StaticSensors:
             native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_phase_b_reactive_power",
@@ -132,6 +138,7 @@ class StaticSensors:
             native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_phase_c_reactive_power",
@@ -139,6 +146,7 @@ class StaticSensors:
             native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         # Alarm registers
         SigenergySensorEntityDescription(
@@ -177,7 +185,6 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-
         ),
         SigenergySensorEntityDescription(
             key="plant_reactive_power",
@@ -185,6 +192,7 @@ class StaticSensors:
             native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_photovoltaic_power",
@@ -199,6 +207,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_available_max_active_power",
@@ -206,6 +215,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_available_min_active_power",
@@ -213,6 +223,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_available_max_reactive_power",
@@ -220,6 +231,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_available_min_reactive_power",
@@ -227,6 +239,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_available_max_charging_power",
@@ -235,6 +248,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_available_max_discharging_power",
@@ -243,6 +257,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_running_state",
@@ -258,6 +273,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_phase_b_active_power",
@@ -266,6 +282,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_phase_c_active_power",
@@ -274,6 +291,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_phase_a_reactive_power",
@@ -281,6 +299,7 @@ class StaticSensors:
             native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_phase_b_reactive_power",
@@ -288,6 +307,7 @@ class StaticSensors:
             native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_phase_c_reactive_power",
@@ -295,6 +315,7 @@ class StaticSensors:
             native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         # ESS rated power metrics
         SigenergySensorEntityDescription(
@@ -304,6 +325,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_rated_discharging_power",
@@ -312,6 +334,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_available_max_charging_capacity",
@@ -320,6 +343,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_available_max_discharging_capacity",
@@ -328,6 +352,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_rated_energy_capacity",
@@ -336,18 +361,21 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_charge_cut_off_soc",
             name="Charge Cut-Off SOC",
             native_unit_of_measurement=PERCENTAGE,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_discharge_cut_off_soc",
             name="Discharge Cut-Off SOC",
             native_unit_of_measurement=PERCENTAGE,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_soh",
@@ -369,6 +397,7 @@ class StaticSensors:
             key="inverter_serial_number",
             name="Serial Number",
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_machine_firmware_version",
@@ -381,12 +410,14 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_max_apparent_power",
             name="Max Apparent Power",
             native_unit_of_measurement="kVA",
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_max_active_power",
@@ -394,6 +425,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_max_absorption_power",
@@ -401,6 +433,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_rated_battery_capacity",
@@ -408,6 +441,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_rated_charge_power",
@@ -415,6 +449,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_rated_discharge_power",
@@ -422,6 +457,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_daily_charge_energy",
@@ -456,13 +492,13 @@ class StaticSensors:
             name="Running State",
             icon="mdi:power",
         ),
-        # Power adjustment values
         SigenergySensorEntityDescription(
             key="inverter_max_active_power_adjustment_value",
             name="Max Active Power Adjustment",
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_min_active_power_adjustment_value",
@@ -470,18 +506,21 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_max_reactive_power_adjustment_value_fed",
             name="Max Reactive Power Fed",
             native_unit_of_measurement="kvar",
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_max_reactive_power_adjustment_value_absorbed",
             name="Max Reactive Power Absorbed",
             native_unit_of_measurement="kvar",
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_active_power",
@@ -496,6 +535,7 @@ class StaticSensors:
             native_unit_of_measurement="kvar",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_charge_discharge_power",
@@ -511,6 +551,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_max_battery_discharge_power",
@@ -518,6 +559,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_available_battery_charge_energy",
@@ -526,6 +568,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_available_battery_discharge_energy",
@@ -534,6 +577,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_battery_soc",
@@ -556,6 +600,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_average_cell_voltage",
@@ -564,6 +609,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_maximum_battery_temperature",
@@ -572,6 +618,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_minimum_battery_temperature",
@@ -580,6 +627,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_maximum_battery_cell_voltage",
@@ -588,6 +636,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_minimum_battery_cell_voltage",
@@ -596,6 +645,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         # Alarm registers
         SigenergySensorEntityDescription(
@@ -635,6 +685,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfFrequency.HERTZ,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_pcs_internal_temperature",
@@ -656,6 +707,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_rated_grid_frequency",
@@ -663,6 +715,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.FREQUENCY,
             native_unit_of_measurement=UnitOfFrequency.HERTZ,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         # Line voltages
         SigenergySensorEntityDescription(
@@ -672,6 +725,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_bc_line_voltage",
@@ -680,6 +734,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ca_line_voltage",
@@ -688,6 +743,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_phase_a_voltage",
@@ -696,6 +752,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_phase_b_voltage",
@@ -704,6 +761,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_phase_c_voltage",
@@ -712,6 +770,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_phase_a_current",
@@ -720,6 +779,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_phase_b_current",
@@ -728,6 +788,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_phase_c_current",
@@ -736,28 +797,33 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_power_factor",
             name="Power Factor",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         # PV system metrics
         SigenergySensorEntityDescription(
             key="inverter_pack_count",
             name="PACK Count",
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_pv_string_count",
             name="PV String Count",
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_mppt_count",
             name="MPPT Count",
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_pv_power",
@@ -773,8 +839,9 @@ class StaticSensors:
             native_unit_of_measurement="MΩ",
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
-        # This sensors are quite unkonown in what they do. The import kind of follows the PV production but it's a bit higher and begins earlier.
+        # This sensors are unkonown in what they do. The import kind of follows the PV production but it's a bit higher and begins earlier.
         # They are undocumented.
         # SigenergySensorEntityDescription(
         #     key="accumulated_export_energy",
@@ -815,7 +882,6 @@ class StaticSensors:
             key="ac_charger_system_state",
             name="System State",
             entity_category=EntityCategory.DIAGNOSTIC,
-
         ),
         SigenergySensorEntityDescription(
             key="ac_charger_total_energy_consumed",
@@ -838,6 +904,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="ac_charger_rated_current",
@@ -845,6 +912,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="ac_charger_rated_voltage",
@@ -852,6 +920,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         # Additional AC charger metrics
         SigenergySensorEntityDescription(
@@ -860,6 +929,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         # Alarm registers
         SigenergySensorEntityDescription(
@@ -896,7 +966,6 @@ class StaticSensors:
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
-
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_output_power",
@@ -904,7 +973,6 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_vehicle_soc",
@@ -950,6 +1018,7 @@ COORDINATOR_DIAGNOSTIC_SENSORS: tuple[SigenergySensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:timer-sync-outline",
         suggested_display_precision=3,
+        entity_registry_enabled_default=False,
     ),
     SigenergySensorEntityDescription(
         key="modbus_latest_fetch_time_medium",
@@ -960,6 +1029,7 @@ COORDINATOR_DIAGNOSTIC_SENSORS: tuple[SigenergySensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:timer-sync-outline",
         suggested_display_precision=3,
+        entity_registry_enabled_default=False,
     ),
     SigenergySensorEntityDescription(
         key="modbus_latest_fetch_time_low",
@@ -970,6 +1040,7 @@ COORDINATOR_DIAGNOSTIC_SENSORS: tuple[SigenergySensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:timer-sync-outline",
         suggested_display_precision=3,
+        entity_registry_enabled_default=False,
     ),
     SigenergySensorEntityDescription(
         key="modbus_latest_fetch_time_alarm",
@@ -980,5 +1051,6 @@ COORDINATOR_DIAGNOSTIC_SENSORS: tuple[SigenergySensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:timer-sync-outline",
         suggested_display_precision=3,
+        entity_registry_enabled_default=False,
     ),
 )
