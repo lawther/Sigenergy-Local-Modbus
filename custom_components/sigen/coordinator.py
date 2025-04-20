@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
+from typing import Any, Dict, Optional, Union # Added Optional, Union
 from typing import Any, Dict
 
 import async_timeout
@@ -11,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=syntax-error
 from homeassistant.util import dt as dt_util
 
+from .modbus import SigenergyModbusHub, SigenergyModbusError # Added SigenergyModbusError
 from .modbus import SigenergyModbusHub
 from .const import DEFAULT_SCAN_INTERVAL_HIGH, DEFAULT_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_ALARM
 from .modbusregisterdefinitions import UpdateFrequencyType
@@ -149,3 +151,35 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception
         except Exception as exception:
             raise UpdateFailed(f"Error communicating with Sigenergy system: {exception}") from exception
+
+    async def async_write_parameter(
+        self,
+        device_type: str,
+        device_identifier: Optional[str],
+        register_name: str,
+        value: Union[int, float, str]
+    ) -> None:
+        """Write a parameter via the Modbus hub and schedule a low-frequency update."""
+        try:
+            await self.hub.async_write_parameter(
+                device_type=device_type,
+                device_identifier=device_identifier,
+                register_name=register_name,
+                value=value,
+            )
+            # Schedule the next update to be LOW frequency to quickly reflect the change
+            self._update_counter = self._low_update_ratio - 1
+            _LOGGER.debug("Scheduled next update as LOW frequency after writing %s to %s '%s'",
+                          value, device_type, device_identifier or 'plant')
+            # Trigger an immediate refresh if desired, though the scheduled one might be sufficient
+            await self.async_request_refresh()
+        except SigenergyModbusError as ex:
+            _LOGGER.error("Failed to write parameter %s to %s '%s': %s",
+                          register_name, device_type, device_identifier or 'plant', ex)
+            # Re-raise the exception so the calling entity knows the write failed
+            raise
+        except Exception as ex:
+            _LOGGER.error("Unexpected error writing parameter %s to %s '%s': %s",
+                          register_name, device_type, device_identifier or 'plant', ex)
+            # Re-raise for visibility
+            raise

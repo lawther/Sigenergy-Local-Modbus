@@ -45,7 +45,7 @@ LOG_THIS_ENTITY = [
     # "sensor.sigen_plant_accumulated_consumed_energy",
     # "sensor.sigen_plant_accumulated_grid_import_energy",
     # "sensor.sigen_plant_accumulated_pv_energy",
-    "sigen_plant_accumulated_battery_charge_energy",
+    # "sigen_plant_accumulated_battery_charge_energy",
 ]
 
 
@@ -407,7 +407,7 @@ class SigenergyCalculations:
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[float]:
         """Calculate the total accumulated battery charge energy across all inverters."""
-        _LOGGER.debug("[CS][Batt Charge] Calculating accumulated battery charge energy")
+        # _LOGGER.debug("[CS][Batt Charge] Calculating accumulated battery charge energy")
         return SigenergyCalculations._calculate_total_inverter_energy(
             coordinator_data,
             "inverter_ess_accumulated_charge_energy",
@@ -421,7 +421,7 @@ class SigenergyCalculations:
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[float]:
         """Calculate the total accumulated battery discharge energy across all inverters."""
-        _LOGGER.debug("[CS][Batt Discharge] Calculating accumulated battery discharge energy")
+        # _LOGGER.debug("[CS][Batt Discharge] Calculating accumulated battery discharge energy")
         return SigenergyCalculations._calculate_total_inverter_energy(
             coordinator_data,
             "inverter_ess_accumulated_discharge_energy",
@@ -435,7 +435,7 @@ class SigenergyCalculations:
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[float]:
         """Calculate the total daily battery charge energy across all inverters."""
-        _LOGGER.debug("[CS][Daily Batt Charge] Calculating daily battery charge energy")
+        # _LOGGER.debug("[CS][Daily Batt Charge] Calculating daily battery charge energy")
         return SigenergyCalculations._calculate_total_inverter_energy(
             coordinator_data,
             "inverter_ess_daily_charge_energy",
@@ -449,7 +449,7 @@ class SigenergyCalculations:
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[float]:
         """Calculate the total daily battery discharge energy across all inverters."""
-        _LOGGER.debug("[CS][Daily Batt Discharge] Calculating daily battery discharge energy")
+        # _LOGGER.debug("[CS][Daily Batt Discharge] Calculating daily battery discharge energy")
         return SigenergyCalculations._calculate_total_inverter_energy(
             coordinator_data,
             "inverter_ess_daily_discharge_energy",
