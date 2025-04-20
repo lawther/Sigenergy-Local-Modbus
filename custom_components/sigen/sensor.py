@@ -3,7 +3,7 @@
 from __future__ import annotations
 import logging
 from typing import Any, Optional, cast
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -22,7 +22,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import *
 from .modbusregisterdefinitions import (
     RunningState,
     ALARM_CODES,
@@ -36,7 +35,16 @@ from .calculated_sensor import (
 )
 from .static_sensor import StaticSensors as SS
 from .static_sensor import COORDINATOR_DIAGNOSTIC_SENSORS # Import the new descriptions
-from .common import *
+from .common import generate_sigen_entity, generate_device_id, SigenergySensorEntityDescription, SensorEntityDescription
+from .const import (
+    DOMAIN,
+    DEVICE_TYPE_PLANT,
+    DEVICE_TYPE_INVERTER,
+    DEVICE_TYPE_AC_CHARGER,
+    DEVICE_TYPE_DC_CHARGER,
+    CONF_SLAVE_ID,
+    CONF_INVERTER_HAS_DCCHARGER,
+)
 from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
@@ -426,14 +434,15 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     try:
                         # Ensure it's a Decimal or float before rounding
                         if isinstance(transformed_value, (Decimal, float, int)):
-                            transformed_value = round(Decimal(str(transformed_value)), self._round_digits)
-                            # Convert back to float if original wasn't Decimal, for HA state consistency
+                            transformed_value = round(Decimal(str(transformed_value)),
+                                                      self._round_digits)
+                            # Convert back to float if original wasn't Decimal, for HA consistency
                             if not isinstance(transformed_value, Decimal):
-                                 transformed_value = float(transformed_value)
+                                transformed_value = float(transformed_value)
                     except (TypeError, ValueError, InvalidOperation):
-                         _LOGGER.warning("Could not round calculated value for %s", self.entity_id, exc_info=True)
+                        _LOGGER.warning("Could not round calculated value for %s",
+                                        self.entity_id, exc_info=True)
 
-                # _LOGGER.debug("[SigenergySensor][Calc][%s] Reporting state: %s", self.entity_id, transformed_value)
                 return transformed_value
             except Exception as ex:
                 _LOGGER.error(
@@ -584,15 +593,15 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
 
             # Apply rounding if specified and value is numeric
             if self._round_digits is not None:
-                 try:
-                     # Ensure it's a Decimal or float before rounding
-                     if isinstance(value, (Decimal, float, int)):
-                         value = round(Decimal(str(value)), self._round_digits)
-                         # Convert back to float if original wasn't Decimal
-                         if not isinstance(value, Decimal):
-                             value = float(value)
-                 except (TypeError, ValueError, InvalidOperation):
-                     _LOGGER.warning("Could not round direct value for %s", self.entity_id, exc_info=True)
+                try:
+                    # Ensure it's a Decimal or float before rounding
+                    if isinstance(value, (Decimal, float, int)):
+                        value = round(Decimal(str(value)), self._round_digits)
+                        # Convert back to float if original wasn't Decimal
+                        if not isinstance(value, Decimal):
+                            value = float(value)
+                except (TypeError, ValueError, InvalidOperation):
+                    _LOGGER.warning("Could not round direct value for %s", self.entity_id, exc_info=True)
 
         except Exception as ex:
             _LOGGER.error(

@@ -390,7 +390,7 @@ class SigenergyCalculations:
                         e
                     )
             else:
-                 _LOGGER.debug(
+                _LOGGER.debug(
                     "[%s] Missing '%s' for inverter %s",
                     log_prefix,
                     energy_key,
@@ -406,8 +406,8 @@ class SigenergyCalculations:
         coordinator_data: Optional[Dict[str, Any]] = None,
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[float]:
-        _LOGGER.debug("[CS][Batt Charge] Calculating accumulated battery charge energy")
         """Calculate the total accumulated battery charge energy across all inverters."""
+        _LOGGER.debug("[CS][Batt Charge] Calculating accumulated battery charge energy")
         return SigenergyCalculations._calculate_total_inverter_energy(
             coordinator_data,
             "inverter_ess_accumulated_charge_energy",
@@ -420,8 +420,8 @@ class SigenergyCalculations:
         coordinator_data: Optional[Dict[str, Any]] = None,
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[float]:
-        _LOGGER.debug("[CS][Batt Discharge] Calculating accumulated battery discharge energy")
         """Calculate the total accumulated battery discharge energy across all inverters."""
+        _LOGGER.debug("[CS][Batt Discharge] Calculating accumulated battery discharge energy")
         return SigenergyCalculations._calculate_total_inverter_energy(
             coordinator_data,
             "inverter_ess_accumulated_discharge_energy",
@@ -434,8 +434,8 @@ class SigenergyCalculations:
         coordinator_data: Optional[Dict[str, Any]] = None,
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[float]:
-        _LOGGER.debug("[CS][Daily Batt Charge] Calculating daily battery charge energy")
         """Calculate the total daily battery charge energy across all inverters."""
+        _LOGGER.debug("[CS][Daily Batt Charge] Calculating daily battery charge energy")
         return SigenergyCalculations._calculate_total_inverter_energy(
             coordinator_data,
             "inverter_ess_daily_charge_energy",
@@ -448,8 +448,8 @@ class SigenergyCalculations:
         coordinator_data: Optional[Dict[str, Any]] = None,
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[float]:
-        _LOGGER.debug("[CS][Daily Batt Discharge] Calculating daily battery discharge energy")
         """Calculate the total daily battery discharge energy across all inverters."""
+        _LOGGER.debug("[CS][Daily Batt Discharge] Calculating daily battery discharge energy")
         return SigenergyCalculations._calculate_total_inverter_energy(
             coordinator_data,
             "inverter_ess_daily_discharge_energy",
@@ -502,6 +502,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self._round_digits = getattr(description, "round_digits", None)
         self._max_sub_interval = getattr(description, "max_sub_interval", None)
         self.log_this_entity = False
+        self._last_coordinator_update = None
 
         # Initialize state variables
         self._state: Decimal | None = None
@@ -600,7 +601,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 )
             self.async_write_ha_state()
             if self.log_this_entity:
-                 _LOGGER.debug("[%s] _handle_midnight - Called async_write_ha_state()", self.entity_id)
+                _LOGGER.debug("[%s] _handle_midnight - Called async_write_ha_state()",
+                               self.entity_id)
             self._setup_midnight_reset()  # Schedule next reset
 
         # Schedule the reset
@@ -741,11 +743,11 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         # Compare coordinator update time and elapsed interval
         coordinatorTime = self.coordinator.last_update_success or now
         timeSinceLast = (now - self._last_integration_time).total_seconds()
-        if coordinatorTime == getattr(self, "_lastCoordinatorUpdate", None) \
+        if coordinatorTime == getattr(self, "_last_coordinator_update", None) \
            and timeSinceLast < 2:
             _LOGGER.debug("Skipping integration: %s, interval too short: %s", self.name, timeSinceLast)
         else:
-            self._lastCoordinatorUpdate = coordinatorTime
+            self._last_coordinator_update = coordinatorTime
             try:
                 self._integrate_on_state_change(old_state, new_state)
                 self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
@@ -1027,7 +1029,7 @@ class SigenergyCalculatedSensors:
             icon="mdi:battery-positive",
             value_fn=SigenergyCalculations.calculate_accumulated_battery_charge_energy,
             extra_fn_data=True, # Pass coordinator data to value_fn
-            suggested_display_precision=3,
+            suggested_display_precision=2,
             round_digits=6, # Match other energy sensors
         ),
         SigenergySensorEntityDescription(
@@ -1039,7 +1041,7 @@ class SigenergyCalculatedSensors:
             icon="mdi:battery-negative",
             value_fn=SigenergyCalculations.calculate_accumulated_battery_discharge_energy,
             extra_fn_data=True, # Pass coordinator data to value_fn
-            suggested_display_precision=3,
+            suggested_display_precision=2,
             round_digits=6, # Match other energy sensors
         ),
         SigenergySensorEntityDescription(

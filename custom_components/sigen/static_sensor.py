@@ -17,11 +17,8 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from .common import (SigenergySensorEntityDescription)
-from .coordinator import SigenergyDataUpdateCoordinator # Added for type hinting
-from .modbusregisterdefinitions import UpdateFrequencyType # Added for value_fn
 
 class StaticSensors:
-
     # PV string sensor descriptions
     PV_STRING_SENSORS = [
         SigenergySensorEntityDescription(
@@ -203,6 +200,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            suggested_display_precision=3,
             icon="mdi:solar-power",
         ),
         SigenergySensorEntityDescription(
