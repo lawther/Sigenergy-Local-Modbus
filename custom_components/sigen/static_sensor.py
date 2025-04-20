@@ -17,6 +17,8 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from .common import (SigenergySensorEntityDescription)
+from .coordinator import SigenergyDataUpdateCoordinator # Added for type hinting
+from .modbusregisterdefinitions import UpdateFrequencyType # Added for value_fn
 
 class StaticSensors:
 
@@ -930,11 +932,53 @@ class StaticSensors:
 COORDINATOR_DIAGNOSTIC_SENSORS: tuple[SigenergySensorEntityDescription, ...] = (
     SigenergySensorEntityDescription(
         key="modbus_max_data_fetch_time",
-        name="Modbus Max Data Fetch Time",
+        name="Modbus Max Data Fetch Time Since Restart",
         native_unit_of_measurement=UnitOfTime.SECONDS,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:timer-sync-outline",
+        suggested_display_precision=3,
+    ),
+    # Latest Fetch Time Sensors
+    SigenergySensorEntityDescription(
+        key="modbus_latest_fetch_time_high",
+        name="Modbus HIGH Frequency Fetch Time",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:timer-sync-outline",
+        suggested_display_precision=3,
+    ),
+    SigenergySensorEntityDescription(
+        key="modbus_latest_fetch_time_medium",
+        name="Modbus MEDIUM Frequency Fetch Time",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:timer-sync-outline",
+        suggested_display_precision=3,
+    ),
+    SigenergySensorEntityDescription(
+        key="modbus_latest_fetch_time_low",
+        name="Modbus Low Frequency Fetch Time",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:timer-sync-outline",
+        suggested_display_precision=3,
+    ),
+    SigenergySensorEntityDescription(
+        key="modbus_latest_fetch_time_alarm",
+        name="Modbus ALARM Frequency Fetch Time",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:timer-sync-outline",
+        suggested_display_precision=3,
     ),
 )

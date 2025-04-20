@@ -49,6 +49,10 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self._low_update_ratio = max(1, low_scan_interval // high_scan_interval)
         # Initialize counter so the first run triggers LOW frequency
         self._update_counter = self._low_update_ratio - 1
+        # Initialize latest fetch time tracking
+        self._latest_fetch_times: Dict[UpdateFrequencyType, float] = {
+            freq: 0.0 for freq in UpdateFrequencyType
+        }
 
         super().__init__(
             hass,
@@ -124,18 +128,20 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # --- End Merge ---
 
                 timetaken = (dt_util.utcnow() - start_time).total_seconds()
-                # First time is much slower than subsequent times
-                if self.largest_update_interval == 0.0:
-                    self.largest_update_interval = 0.1
-                    _LOGGER.debug("First update interval: %s seconds", timetaken)
-                elif timetaken > update_interval:
-                    self.largest_update_interval = update_interval
-                    _LOGGER.warning("Fetching Sigenergy Modbus data took %s seconds which is larger than the update interval.", timetaken)
-                elif self.largest_update_interval < timetaken:
+
+                # Update latest fetch time and max fetch time
+                if self.largest_update_interval < timetaken:
                     self.largest_update_interval = timetaken
-                    _LOGGER.debug("Largest update interval so far: %s seconds", self.largest_update_interval)
-                else:
-                    _LOGGER.debug("Fetching data took %s seconds", timetaken)
+                self._latest_fetch_times[current_frequency_type] = timetaken
+
+                log_level = logging.WARNING if timetaken > update_interval else logging.DEBUG
+                self.logger.log(
+                    log_level,
+                    "Fetching data for %s took %.3f seconds%s",
+                    current_frequency_type.name,
+                    timetaken,
+                    " - exceeds update interval!" if timetaken > update_interval else ""
+                )
 
                 # Return the updated, complete data structure
                 return self.data

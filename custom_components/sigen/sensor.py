@@ -3,7 +3,6 @@
 from __future__ import annotations
 import logging
 from typing import Any, Optional, cast
-from typing import Any, Optional
 from decimal import Decimal
 
 from homeassistant.components.sensor import (
@@ -27,6 +26,7 @@ from .const import *
 from .modbusregisterdefinitions import (
     RunningState,
     ALARM_CODES,
+    UpdateFrequencyType,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .calculated_sensor import (
@@ -746,19 +746,44 @@ class PVStringSensor(SigenergySensor):
 class CoordinatorDiagnosticSensor(SigenergyEntity, SensorEntity):
     """Representation of a Sigenergy coordinator diagnostic sensor."""
 
-    # entity_description will be set by SigenergyEntity's __init__
+    # Explicitly type entity_description for this class
+    entity_description: SigenergySensorEntityDescription
 
     @property
     def native_value(self) -> float | None:
         """Return the state of the sensor."""
-        coordinator = cast(SigenergyDataUpdateCoordinator, self.coordinator) # Use cast for type hint
-        # Directly access the attribute from the coordinator instance
-        value = coordinator.largest_update_interval
-        if value is None or value == 0.0: # Handle initial or unset state
-            return None # Return None for numeric sensors if unavailable
+        coordinator = cast(SigenergyDataUpdateCoordinator, self.coordinator)
+        key = self.entity_description.key
+        value: float | None = None
+
         try:
-            # Ensure it's a float
+            if key == "modbus_max_data_fetch_time":
+                value = coordinator.largest_update_interval
+            elif key == "modbus_latest_fetch_time_high":
+                value = coordinator._latest_fetch_times[UpdateFrequencyType.HIGH]
+            elif key == "modbus_latest_fetch_time_medium":
+                value = coordinator._latest_fetch_times[UpdateFrequencyType.MEDIUM]
+            elif key == "modbus_latest_fetch_time_low":
+                value = coordinator._latest_fetch_times[UpdateFrequencyType.LOW]
+            elif key == "modbus_latest_fetch_time_alarm":
+                value = coordinator._latest_fetch_times[UpdateFrequencyType.ALARM]
+            else:
+                _LOGGER.warning("Unknown key for CoordinatorDiagnosticSensor: %s", key)
+                return None
+
+            # Ensure the final value is a float or None
+            if value is None:
+                return None
             return float(value)
-        except (ValueError, TypeError):
-            return None # Return None if conversion fails
+
+        except (KeyError, ZeroDivisionError, TypeError, ValueError) as e:
+            _LOGGER.warning(
+                "Could not calculate value for %s (%s): %s", self.entity_id, key, e
+            )
+            return None
+        except Exception as e:
+            _LOGGER.exception(
+                "Unexpected error calculating value for %s (%s): %s", self.entity_id, key, e
+            )
+            return None
 
