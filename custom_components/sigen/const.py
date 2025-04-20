@@ -69,7 +69,7 @@ DEFAULT_INVERTER_COUNT = 1
 DEFAULT_READ_ONLY = True  # Default to read-only mode
 
 # Platforms
-PLATFORMS = ["sensor", "switch", "select", "number"]
+PLATFORMS = ["sensor", "switch", "select", "number", "binary_sensor"]
 
 # Device types
 DEVICE_TYPE_NEW_PLANT = "new_plant"

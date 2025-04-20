@@ -11,9 +11,13 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
+from homeassistant.components.binary_sensor import (
+    BinarySensorEntityDescription,
+)
 
 from .const import (DOMAIN, DEVICE_TYPE_INVERTER, DEVICE_TYPE_DC_CHARGER)
 
+from homeassistant.helpers.entity import EntityDescription
 _LOGGER = logging.getLogger(__name__)
 
 @staticmethod
@@ -58,6 +62,7 @@ def generate_sigen_entity(
 
     entities = []
     for description in entity_description:
+        _LOGGER.debug("Generating entity for description: %s", description.name)
 
         # Generate PV specific entity names and IDs if applicable
         if pv_string_idx is not None:

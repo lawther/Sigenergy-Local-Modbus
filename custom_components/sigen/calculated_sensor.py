@@ -939,8 +939,9 @@ class SigenergyCalculatedSensors:
             state_class=SensorStateClass.MEASUREMENT,
             value_fn=SigenergyCalculations.calculate_pv_power,
             extra_fn_data=True,
-            suggested_display_precision=2,
+            suggested_display_precision=3,
             round_digits=6,
+            icon="mdi:solar-power",
         ),
     ]
 
@@ -987,10 +988,10 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:power",
+            icon="mdi:transmission-tower-import",
             value_fn=SigenergyCalculations.calculate_grid_import_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
-            suggested_display_precision=2,
+            suggested_display_precision=3,
             round_digits=6,
         ),
         SigenergySensorEntityDescription(
@@ -999,10 +1000,10 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:power",
+            icon="mdi:transmission-tower-export",
             value_fn=SigenergyCalculations.calculate_grid_export_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
-            suggested_display_precision=2,
+            suggested_display_precision=3,
             round_digits=6,
         ),
         SigenergySensorEntityDescription(
@@ -1014,7 +1015,7 @@ class SigenergyCalculatedSensors:
             icon="mdi:home-lightning-bolt",
             value_fn=SigenergyCalculations.calculate_plant_consumed_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
-            suggested_display_precision=2,
+            suggested_display_precision=3,
             round_digits=6,
         ),
         SigenergySensorEntityDescription(
@@ -1023,10 +1024,10 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL, # Assumes this value only increases
-            icon="mdi:battery-arrow-up",
+            icon="mdi:battery-positive",
             value_fn=SigenergyCalculations.calculate_accumulated_battery_charge_energy,
             extra_fn_data=True, # Pass coordinator data to value_fn
-            suggested_display_precision=2,
+            suggested_display_precision=3,
             round_digits=6, # Match other energy sensors
         ),
         SigenergySensorEntityDescription(
@@ -1035,10 +1036,10 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL, # Assumes this value only increases
-            icon="mdi:battery-arrow-down",
+            icon="mdi:battery-negative",
             value_fn=SigenergyCalculations.calculate_accumulated_battery_discharge_energy,
             extra_fn_data=True, # Pass coordinator data to value_fn
-            suggested_display_precision=2,
+            suggested_display_precision=3,
             round_digits=6, # Match other energy sensors
         ),
         SigenergySensorEntityDescription(
@@ -1047,7 +1048,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING, # Resets daily
-            icon="mdi:battery-arrow-up",
+            icon="mdi:battery-positive",
             value_fn=SigenergyCalculations.calculate_daily_battery_charge_energy,
             extra_fn_data=True, # Pass coordinator data to value_fn
             suggested_display_precision=2,
@@ -1059,7 +1060,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING, # Resets daily
-            icon="mdi:battery-arrow-down",
+            icon="mdi:battery-negative",
             value_fn=SigenergyCalculations.calculate_daily_battery_discharge_energy,
             extra_fn_data=True, # Pass coordinator data to value_fn
             suggested_display_precision=2,
@@ -1110,6 +1111,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_photovoltaic_power",  # Key of the source entity to use
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
         ),
         SigenergySensorEntityDescription(
             key="plant_daily_pv_energy",
@@ -1121,6 +1123,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
         ),
         SigenergySensorEntityDescription(
             key="plant_accumulated_grid_export_energy",
@@ -1132,6 +1135,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_grid_export_power",  # Key matches the calculated sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:transmission-tower-export",
         ),
         SigenergySensorEntityDescription(
             key="plant_accumulated_grid_import_energy",
@@ -1143,6 +1147,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_grid_import_power",  # Key matches the calculated sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:transmission-tower-import",
         ),
         SigenergySensorEntityDescription(
             key="plant_daily_grid_export_energy",
@@ -1154,6 +1159,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_grid_export_power",  # Key matches the grid export power sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:transmission-tower-export",
         ),
         SigenergySensorEntityDescription(
             key="plant_daily_grid_import_energy",
@@ -1165,6 +1171,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_grid_import_power",  # Key matches the grid import power sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:transmission-tower-import",
         ),
         SigenergySensorEntityDescription(
             key="plant_accumulated_consumed_energy",
@@ -1176,6 +1183,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_consumed_power",  # Key of the source entity to use
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:home-lightning-bolt",
         ),
         SigenergySensorEntityDescription(
             key="plant_daily_consumed_energy",
@@ -1187,6 +1195,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_consumed_power",  # Key of the source entity to use
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:home-lightning-bolt",
         ),
     ]
 
@@ -1202,6 +1211,7 @@ class SigenergyCalculatedSensors:
             source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
         ),
         SigenergySensorEntityDescription(
             key="inverter_daily_pv_energy",
@@ -1213,6 +1223,7 @@ class SigenergyCalculatedSensors:
             source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
         ),
     ]
     # Integration sensors for individual PV strings (dynamically created)
@@ -1230,6 +1241,7 @@ class SigenergyCalculatedSensors:
             source_key="pv_string_power",
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
         ),
         SigenergySensorEntityDescription(
             key="pv_string_daily_energy", # Template key
@@ -1242,6 +1254,7 @@ class SigenergyCalculatedSensors:
             source_key="pv_string_power",
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
         ),
     ]
 

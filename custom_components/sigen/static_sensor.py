@@ -56,6 +56,8 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            suggested_display_precision=3,
+            icon="mdi:transmission-tower",
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_reactive_power",
@@ -68,8 +70,7 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="plant_on_off_grid_status",
             name="Grid Connection Status",
-            icon="mdi:transmission-tower",
-            entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:transmission-tower-off",
         ),
         # Max power metrics
         SigenergySensorEntityDescription(
@@ -95,6 +96,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.BATTERY,
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:battery",
         ),
         SigenergySensorEntityDescription(
             key="plant_phase_a_active_power",
@@ -185,6 +187,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:power-plug-battery-outline"
         ),
         SigenergySensorEntityDescription(
             key="plant_reactive_power",
@@ -200,6 +203,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:solar-power",
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_power",
@@ -207,6 +211,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:battery-charging-100",
         ),
         SigenergySensorEntityDescription(
             key="plant_available_max_active_power",
@@ -262,7 +267,6 @@ class StaticSensors:
             key="plant_running_state",
             name="Plant Running State",
             icon="mdi:power",
-            entity_category=EntityCategory.DIAGNOSTIC,
         ),
         # Grid sensor phase-specific metrics
         SigenergySensorEntityDescription(
@@ -382,6 +386,7 @@ class StaticSensors:
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:battery-heart",
         ),
     ]
 
@@ -391,17 +396,20 @@ class StaticSensors:
             key="inverter_model_type",
             name="Model Type",
             entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:information-box"
         ),
         SigenergySensorEntityDescription(
             key="inverter_serial_number",
             name="Serial Number",
             entity_category=EntityCategory.DIAGNOSTIC,
             entity_registry_enabled_default=False,
+            icon="mdi:information-outline"
         ),
         SigenergySensorEntityDescription(
             key="inverter_machine_firmware_version",
             name="Firmware Version",
             entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:information-outline"
         ),
         SigenergySensorEntityDescription(
             key="inverter_rated_active_power",
@@ -464,6 +472,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
+            icon="mdi:battery-positive",
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_accumulated_charge_energy",
@@ -471,6 +480,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
+            icon="mdi:battery-positive",
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_daily_discharge_energy",
@@ -478,6 +488,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
+            icon="mdi:battery-negative",
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_accumulated_discharge_energy",
@@ -485,6 +496,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
+            icon="mdi:battery-negative",
         ),
         SigenergySensorEntityDescription(
             key="inverter_running_state",
@@ -527,6 +539,8 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            suggested_display_precision=3,
+            icon="mdi:power-plug",
         ),
         SigenergySensorEntityDescription(
             key="inverter_reactive_power",
@@ -542,6 +556,8 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:battery-charging-100",
+            suggested_display_precision=3,
         ),
         # Battery power metrics
         SigenergySensorEntityDescription(
@@ -584,6 +600,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.BATTERY,
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:battery",
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_battery_soh",
@@ -591,6 +608,7 @@ class StaticSensors:
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:battery-heart",
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_average_cell_temperature",
@@ -599,6 +617,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:thermometer",
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_average_cell_voltage",
@@ -692,6 +711,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:thermometer",
         ),
         SigenergySensorEntityDescription(
             key="inverter_output_type",
@@ -830,6 +850,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:solar-power",
 
         ),
         SigenergySensorEntityDescription(
@@ -881,6 +902,7 @@ class StaticSensors:
             key="ac_charger_system_state",
             name="System State",
             entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:lightning-bolt-circle",
         ),
         SigenergySensorEntityDescription(
             key="ac_charger_total_energy_consumed",
@@ -888,6 +910,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
+            icon="mdi:car-electric",
         ),
         SigenergySensorEntityDescription(
             key="ac_charger_charging_power",
@@ -895,7 +918,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-
+            icon="mdi:ev-plug-type2",
         ),
         SigenergySensorEntityDescription(
             key="ac_charger_rated_power",
@@ -958,6 +981,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:car-battery",
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_charging_current",
@@ -965,6 +989,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:car-electric",
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_output_power",
@@ -972,6 +997,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:ev-plug-ccs2",
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_vehicle_soc",
@@ -979,6 +1005,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.BATTERY,
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:battery",
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_current_charging_capacity",
@@ -986,6 +1013,7 @@ class StaticSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
+            icon="mdi:car-electric",
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_current_charging_duration",
