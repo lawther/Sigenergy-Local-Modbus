@@ -82,6 +82,7 @@ INVERTER_SWITCHES = [
         is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_running_state") == 1,
         turn_on_fn=lambda hub, identifier: hub.async_write_parameter("inverter", identifier, "inverter_start_stop", 1), # Already returns awaitable
         turn_off_fn=lambda hub, identifier: hub.async_write_parameter("inverter", identifier, "inverter_start_stop", 0), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
     SigenergySwitchEntityDescription(
         key="inverter_remote_ems_dispatch_enable",
@@ -92,6 +93,7 @@ INVERTER_SWITCHES = [
         is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_remote_ems_dispatch_enable") == 1,
         turn_on_fn=lambda hub, identifier: hub.async_write_parameter("inverter", identifier, "inverter_remote_ems_dispatch_enable", 1), # Already returns awaitable
         turn_off_fn=lambda hub, identifier: hub.async_write_parameter("inverter", identifier, "inverter_remote_ems_dispatch_enable", 0), # Already returns awaitable
+        entity_registry_enabled_default=False,
     ),
 ]
 AC_CHARGER_SWITCHES = [

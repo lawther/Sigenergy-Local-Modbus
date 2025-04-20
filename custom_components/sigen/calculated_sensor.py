@@ -930,6 +930,7 @@ class SigenergyCalculatedSensors:
                 value, coord_data
             ),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_shutdown_time",
@@ -941,6 +942,7 @@ class SigenergyCalculatedSensors:
                 value, coord_data
             ),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data
+            entity_registry_enabled_default=False,
         ),
     ]
 

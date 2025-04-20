@@ -600,7 +600,6 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
-            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_average_cell_voltage",
@@ -699,6 +698,7 @@ class StaticSensors:
             key="inverter_output_type",
             name="Output Type",
             entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
         ),
         # Grid metrics
         SigenergySensorEntityDescription(
