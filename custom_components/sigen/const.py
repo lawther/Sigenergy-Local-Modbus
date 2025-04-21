@@ -26,7 +26,7 @@ CONF_AC_CHARGER_CONNECTIONS = "ac_charger_connections"
 CONF_DC_CHARGER_CONNECTIONS = "dc_charger_connections"
 CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
-CONF_MIGRATE_YAML = "migrate_yaml"
+CONF_KEEP_EXISTING = "keep_existing"
 CONF_VALUES_TO_INIT = "values_to_initialize"
 
 # Default names
@@ -39,6 +39,7 @@ DEFAULT_INVERTER_HAS_DCCHARGER = False
 STEP_USER = "user"
 STEP_DEVICE_TYPE = "device_type"
 STEP_PLANT_CONFIG = "plant_config"
+STEP_DHCP_PLANT_CONFIG = "dhcp_plant_config"
 STEP_INVERTER_CONFIG = "inverter_config"
 STEP_AC_CHARGER_CONFIG = "ac_charger_config"
 STEP_DC_CHARGER_CONFIG = "dc_charger_config"
