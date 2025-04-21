@@ -357,16 +357,17 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         new_plant_connection[CONF_HOST] = self._discovered_ip
         new_plant_connection[CONF_PORT] = DEFAULT_PORT
         new_plant_connection[CONF_SLAVE_ID] = DEFAULT_PLANT_SLAVE_ID
-        new_plant_connection[CONF_INVERTER_SLAVE_ID] = self._discovered_device_type[DEVICE_TYPE_INVERTER][0]
+        new_plant_connection[CONF_INVERTER_SLAVE_ID] = \
+            self._discovered_device_type[DEVICE_TYPE_INVERTER][0]
         self._data[CONF_PLANT_CONNECTION] = new_plant_connection
         self._data[CONF_INVERTER_CONNECTIONS] = {}
         self._data[CONF_AC_CHARGER_CONNECTIONS] = {}
 
         # Create the inverter connections dictionary for each discovered inverter
-        for i, device_id in enumerate(self._discovered_device_type[DEVICE_TYPE_INVERTER], start=1):
-            inverter_name = "Sigen Inverter" + f" {str(device_id)}" if i > 1 else ""
+        for i, device_id in enumerate(self._discovered_device_type[DEVICE_TYPE_INVERTER],
+                                       start=1):
+            inverter_name = "Sigen Inverter" + (f" {str(device_id)}" if i > 1 else "")
             self._data[CONF_INVERTER_CONNECTIONS][inverter_name] = {
-                inverter_name: {
                     CONF_HOST: self._discovered_ip,
                     CONF_PORT: DEFAULT_PORT,
                     CONF_SLAVE_ID: device_id,
@@ -374,11 +375,11 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                         device_id in self._discovered_device_type[DEVICE_TYPE_DC_CHARGER]
                     ),
                 }
-            }
 
         # Create the AC-Charger connections dictionary for each discovered AC charger
-        for i, device_id in enumerate(self._discovered_device_type[DEVICE_TYPE_AC_CHARGER], start=1):
-            ac_charger_name = "Sigen AC Charger" + f" {str(device_id)}" if i > 1 else ""
+        for i, device_id in enumerate(self._discovered_device_type[DEVICE_TYPE_AC_CHARGER],
+                                       start=1):
+            ac_charger_name = "Sigen AC Charger" + (f" {str(device_id)}" if i > 1 else "")
             self._data[CONF_AC_CHARGER_CONNECTIONS][ac_charger_name] = {
                 CONF_HOST: self._discovered_ip,
                 CONF_PORT: DEFAULT_PORT,
