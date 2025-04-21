@@ -51,7 +51,6 @@ from .const import (
     CONF_INVERTER_HAS_DCCHARGER,
     CONF_READ_ONLY,
     CONF_KEEP_EXISTING,
-    CONF_RESET_VALUES,
     CONF_REMOVE_DEVICE,
     CONF_VALUES_TO_INIT,
     CONF_SCAN_INTERVAL_HIGH,
@@ -130,9 +129,8 @@ DEVICE_CHECKS = {
 def generate_plant_schema(
         user_input,
         discovered_ip = "",
-        migration_alternative = False,
         use_inverter_device_id = False,
-        reset_state_alternative = False,
+        keep_existing_alternative = False,
         display_update_frq = False
     ) -> vol.Schema:
     """Dynamically create schema using the determined prefill_host
@@ -140,8 +138,9 @@ def generate_plant_schema(
     Args:
         user_input (_type_, optional): _description_. Defaults to None.
         discovered_ip (str, optional): _description_. Defaults to "".
-        migration_alternative (bool, optional): _description_. Defaults to False.
-        reset_state_alternative (bool, optional): _description_. Defaults to False.
+        use_inverter_device_id (bool, optional): _description_. Defaults to False.
+        keep_existing_alternative (bool, optional): _description_. Defaults to False.
+        display_update_frq (bool, optional): _description_. Defaults to False.
 
     Returns:
         vol.Schema: _description_
@@ -158,13 +157,9 @@ def generate_plant_schema(
     validation_schema[vol.Required(CONF_READ_ONLY,
                                    default=user_input.get(CONF_READ_ONLY, DEFAULT_READ_ONLY))] = bool
 
-    if migration_alternative:
+    if keep_existing_alternative:
         validation_schema[vol.Required(CONF_KEEP_EXISTING,
                                        default=user_input.get(CONF_KEEP_EXISTING, False))] = bool
-    elif reset_state_alternative:
-        validation_schema[vol.Required(CONF_RESET_VALUES,
-                                       default=user_input.get(CONF_RESET_VALUES, False))] = bool
-
     if display_update_frq:
         validation_schema[vol.Required(CONF_SCAN_INTERVAL_HIGH,
                                        default=user_input.get(CONF_SCAN_INTERVAL_HIGH,DEFAULT_SCAN_INTERVAL_HIGH))] = vol.All(vol.Coerce(int))
@@ -504,7 +499,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         if user_input is None:
             schema = generate_plant_schema(DEFAULT_PLANT_CONNECTION,
                                            discovered_ip=self._discovered_ip or "",
-                                           migration_alternative=bool(legacy_yaml_present),
+                                           keep_existing_alternative=bool(legacy_yaml_present),
                                            use_inverter_device_id=True
             )
 
@@ -512,6 +507,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 step_id=STEP_PLANT_CONFIG,
                 data_schema=schema,
             )
+
+        # Check if keep_existing is set to True, if so and the user has not approved to continue, throw an error.
+        if legacy_yaml_present and not user_input.get(CONF_KEEP_EXISTING, False):
+            errors[CONF_KEEP_EXISTING] = "old_config_found"
 
         # Process and validate inverter ID
         try:
@@ -539,7 +538,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 step_id=STEP_PLANT_CONFIG,
                 data_schema=generate_plant_schema(user_input,
                                                   discovered_ip=self._discovered_ip or "",
-                                                  migration_alternative=bool(legacy_yaml_present),
+                                                  keep_existing_alternative=bool(legacy_yaml_present),
                                                   use_inverter_device_id=True
                                                   ),
                                             errors=errors,
@@ -571,20 +570,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         # Set the device type as plant
         self._data[CONF_DEVICE_TYPE] = DEVICE_TYPE_PLANT
-
-        # If chose to migrate, save sensor values to migrate to.
-        values_to_initialize = {}
-        if user_input.get(CONF_KEEP_EXISTING, False):
-            _LOGGER.debug("Migration option True")
-            for new_sensor, old_sensor in LEGACY_SENSOR_MIGRATION_MAP.items():
-                value = self.hass.states.get(old_sensor)
-                if value:
-                    _LOGGER.debug("Adding migrating values %s for %s", value.state, new_sensor)
-                    values_to_initialize[new_sensor] = str(value.state)
-
-        # Save choice if to migrate data at first run after plant being added.
-        self._data[CONF_VALUES_TO_INIT] = values_to_initialize
-        _LOGGER.debug("Values to migrate: %s", values_to_initialize)
 
         # Create the configuration entry with the default name
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
@@ -1223,7 +1208,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
                 data_schema=generate_plant_schema(self._data[CONF_PLANT_CONNECTION],
-                                                  reset_state_alternative= True,
                                                   display_update_frq=True
                                                   )
             )
@@ -1269,7 +1253,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
                 data_schema=generate_plant_schema(user_input,
-                                                  reset_state_alternative= True,
                                                   display_update_frq=True
                                                   ),
                 errors=errors
@@ -1287,18 +1270,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
         _LOGGER.debug("Update intervals:")
         _LOGGER.debug(f"High: {high_interval}, Medium: {medium_interval}, Low: {low_interval}, Alarm: {alarm_interval}")
-
-        # If chose to reset values, save sensor values to reset.
-        values_to_initialize = {}
-        if user_input[CONF_RESET_VALUES]:
-            _LOGGER.debug("Reseting option True")
-            for new_sensor in LEGACY_SENSOR_MIGRATION_MAP.keys():
-                _LOGGER.debug("Adding 0 as init value for %s", new_sensor)
-                values_to_initialize[new_sensor] = "0"
-
-        # Save choice if to migrate data at first run after plant being added.
-        new_data[CONF_VALUES_TO_INIT] = values_to_initialize
-        _LOGGER.debug("Values to init as 0: %s", values_to_initialize)
 
         # Update data if changed (optional check, keeping existing behavior for now)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)

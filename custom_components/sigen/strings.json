@@ -24,15 +24,6 @@
           "device_type": "Device Type"
         }
       },
-      "dhcp_select_plant": {
-        "title": "Discovered Device: Select Action",
-        "description": "A new Sigenergy device was discovered at {ip_address}. Choose how to add it.",
-        "data": {
-          "action_configure_new_plant": "Configure as New Plant",
-          "action_add_inverter": "Add as Inverter to Existing Plant",
-          "action_add_ac_charger": "Add as AC Charger to Existing Plant"
-        }
-      },
       "plant_config": {
         "title": "Configure Sigenergy Plant",
         "description": "Set up a new Sigenergy Plant to monitor and control it through Home Assistant. The Plant ID will be automatically set to 247.",
@@ -42,13 +33,18 @@
           "inverter_slave_id": "Inverter Device ID (Default is 1)",
           "ac_charger_slave_ids": "AC Charger Device IDs (comma-separated when multiple. Default is empty for no AC charger)",
           "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)",
-          "read_only": "Read-Only Mode (prevents any changes being made to the Sigenergy system)",
           "scan_interval_high": "High Priority Scan Interval (seconds)",
           "scan_interval_medium": "Medium Priority Scan Interval (seconds)",
           "scan_interval_low": "Low Priority Scan Interval (seconds)",
           "scan_interval_alarm": "Alarm Scan Interval (seconds)",
           "migrate_yaml": "Migrate legacy YAML sensor values",
-          "migrate_yaml_description": "If enabled, initial sensor values will be imported from the legacy YAML configuration (if present)."
+          "migrate_yaml_description": "If enabled, initial sensor values will be imported from the legacy YAML configuration (if present).",
+          "read_only": "Read-Only Mode",
+          "keep_existing": "Keep Existing Sensors (and potentially rename new ones)"
+        },
+        "data_description": {
+          "read_only": "(Prevents Home Assistant from making changes to the Sigenergy system. Recommended for initial setup. Can be changed later in device settings.)",
+          "keep_existing": "If you have previous configurations for this device, adding it again might create duplicate or numbered sensors (e.g., `sensor_name_2`).\n\nRECOMMENDED PATH: Leave this unchecked and manually delete any old Sigenergy YAML configuration and related sensor entities in Home Assistant *before* submitting. This ensures new sensors use standard names.\n\nALTERNATIVE PATH: Check this box to keep existing sensors. No cleanup is needed beforehand, but new sensors with conflicting names will be automatically numbered. You can manage/rename sensors later in device settings."
         }
       },
       "select_plant": {
@@ -153,7 +149,12 @@
           "scan_interval_high": "High Priority Scan Interval (seconds)",
           "scan_interval_alarm": "Alarm Scan Interval (seconds)",
           "scan_interval_medium": "Medium Priority Scan Interval (seconds)",
-          "scan_interval_low": "Low Priority Scan Interval (seconds)"
+          "scan_interval_low": "Low Priority Scan Interval (seconds)",
+          "keep_existing": "Keep Existing Sensors (and potentially rename new ones)"
+        },
+        "data_description": {
+          "read_only": "(Prevents Home Assistant from making changes to the Sigenergy system. Recommended for initial setup. Can be changed later in device settings.)",
+          "keep_existing": "If you have previous configurations for this device, adding it again might create duplicate or numbered sensors (e.g., `sensor_name_2`).\n\nRECOMMENDED PATH: Leave this unchecked and manually delete any old Sigenergy YAML configuration and related sensor entities in Home Assistant *before* submitting. This ensures new sensors use standard names.\n\nALTERNATIVE PATH: Check this box to keep existing sensors. No cleanup is needed beforehand, but new sensors with conflicting names will be automatically numbered. You can manage/rename sensors later in device settings."
         }
       },
       "inverter_config": {
