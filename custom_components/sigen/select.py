@@ -20,7 +20,7 @@ from .const import (
     DOMAIN,
 )
 from .modbusregisterdefinitions import (RemoteEMSControlMode)
-from .coordinator import SigenergyDataUpdateCoordinator
+from .coordinator import SigenergyDataUpdateCoordinator # Import coordinator
 from .modbus import SigenergyModbusError
 from .common import generate_sigen_entity # Added generate_device_id
 from .sigen_entity import SigenergyEntity # Import the new base class
@@ -86,7 +86,8 @@ class SigenergySelectEntityDescription(SelectEntityDescription):
     # The second argument 'identifier' will be device_name for inverters, device_id otherwise. Default returns empty string.
     current_option_fn: Callable[[Dict[str, Any], Optional[Any]], str] = lambda data, identifier: ""
     # Make select_option_fn async and update type hint
-    select_option_fn: Callable[[Any, Optional[Any], str], Coroutine[Any, Any, None]] = lambda hub, identifier, option: asyncio.sleep(0) # Placeholder async lambda
+    # Make select_option_fn async and update type hint to accept coordinator
+    select_option_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any], str], Coroutine[Any, Any, None]] = lambda coordinator, identifier, option: asyncio.sleep(0) # Placeholder async lambda
     available_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, _: True
     entity_registry_enabled_default: bool = True
 
@@ -104,6 +105,7 @@ PLANT_SELECTS = [
             "Command Charging (PV First)",
             "Command Discharging (PV First)",
             "Command Discharging (ESS First)",
+            "Unknown",
         ],
         current_option_fn=lambda data, _: {
             RemoteEMSControlMode.PCS_REMOTE_CONTROL: "PCS Remote Control",
@@ -114,7 +116,7 @@ PLANT_SELECTS = [
             RemoteEMSControlMode.COMMAND_DISCHARGING_PV_FIRST: "Command Discharging (PV First)",
             RemoteEMSControlMode.COMMAND_DISCHARGING_ESS_FIRST: "Command Discharging (ESS First)",
         }.get(data["plant"].get("plant_remote_ems_control_mode"), "Unknown"),
-        select_option_fn=lambda hub, _, option: hub.async_write_parameter( # Already returns awaitable
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
             "plant", None, "plant_remote_ems_control_mode",
             {
                 "PCS Remote Control": RemoteEMSControlMode.PCS_REMOTE_CONTROL,
@@ -127,6 +129,7 @@ PLANT_SELECTS = [
             }.get(option, RemoteEMSControlMode.PCS_REMOTE_CONTROL),
         ),
         available_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
+        entity_registry_enabled_default=False,
     ),
 ]
 
@@ -140,7 +143,7 @@ INVERTER_SELECTS = [
         # Use identifier (device_name for inverters)
         current_option_fn=lambda data, identifier: _get_grid_code_display(data, identifier),
         # Use identifier (device_name for inverters)
-        select_option_fn=lambda hub, identifier, option: hub.async_write_parameter( # Already returns awaitable
+        select_option_fn=lambda coordinator, identifier, option: coordinator.async_write_parameter(
             "inverter", identifier, "inverter_grid_code",
             COUNTRY_TO_CODE_MAP.get(option, 0)  # Default to 0 if country not found
         ),
@@ -189,6 +192,8 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
     """Representation of a Sigenergy select."""
 
     entity_description: SigenergySelectEntityDescription
+    # Explicitly type coordinator here
+    coordinator: SigenergyDataUpdateCoordinator
 
     def __init__(
         self,
@@ -235,12 +240,7 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        try:
-            # Use device_name as the primary identifier passed to the lambda/function
-            identifier = self._device_name
-            await self.entity_description.select_option_fn(self.hub, identifier, option)
-            await self.coordinator.async_request_refresh()
-        except SigenergyModbusError as error:
-            _LOGGER.error("Failed to select option %s for %s: %s", option, self.name, error)
-        except Exception as e:
-             _LOGGER.error(f"Unexpected error selecting option for {self.entity_id}: {e}")
+        # Use device_name as the primary identifier passed to the lambda/function
+        identifier = self._device_name
+        # Exceptions are handled and logged in coordinator.async_write_parameter
+        await self.entity_description.select_option_fn(self.coordinator, identifier, option)

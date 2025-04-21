@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
+from typing import Any, Dict, Optional, Union # Added Optional, Union
 from typing import Any, Dict
 
 import async_timeout
@@ -11,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=syntax-error
 from homeassistant.util import dt as dt_util
 
+from .modbus import SigenergyModbusHub, SigenergyModbusError # Added SigenergyModbusError
 from .modbus import SigenergyModbusHub
 from .const import DEFAULT_SCAN_INTERVAL_HIGH, DEFAULT_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_ALARM
 from .modbusregisterdefinitions import UpdateFrequencyType
@@ -49,6 +51,10 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self._low_update_ratio = max(1, low_scan_interval // high_scan_interval)
         # Initialize counter so the first run triggers LOW frequency
         self._update_counter = self._low_update_ratio - 1
+        # Initialize latest fetch time tracking
+        self._latest_fetch_times: Dict[UpdateFrequencyType, float] = {
+            freq: 0.0 for freq in UpdateFrequencyType
+        }
 
         super().__init__(
             hass,
@@ -77,7 +83,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 else:
                     current_frequency_type = UpdateFrequencyType.HIGH
 
-                _LOGGER.debug("Update cycle %s: Requesting frequency %s", self._update_counter, current_frequency_type.name)
+                # _LOGGER.debug("Update cycle %s: Requesting frequency %s", self._update_counter, current_frequency_type.name)
 
                 # Fetch plant data with the determined frequency
                 plant_data = await self.hub.async_read_plant_data(update_frequency=current_frequency_type)
@@ -124,18 +130,20 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # --- End Merge ---
 
                 timetaken = (dt_util.utcnow() - start_time).total_seconds()
-                # First time is much slower than subsequent times
-                if self.largest_update_interval == 0.0:
-                    self.largest_update_interval = 0.1
-                    _LOGGER.debug("First update interval: %s seconds", timetaken)
-                elif timetaken > update_interval:
-                    self.largest_update_interval = update_interval
-                    _LOGGER.warning("Fetching Sigenergy Modbus data took %s seconds which is larger than the update interval.", timetaken)
-                elif self.largest_update_interval < timetaken:
+
+                # Update latest fetch time and max fetch time
+                if self.largest_update_interval < timetaken:
                     self.largest_update_interval = timetaken
-                    _LOGGER.debug("Largest update interval so far: %s seconds", self.largest_update_interval)
-                else:
-                    _LOGGER.debug("Fetching data took %s seconds", timetaken)
+                self._latest_fetch_times[current_frequency_type] = timetaken
+
+                log_level = logging.WARNING if timetaken > update_interval else logging.DEBUG
+                self.logger.log(
+                    log_level,
+                    "Fetching data for %s took %.3f seconds%s",
+                    current_frequency_type.name,
+                    timetaken,
+                    " - exceeds update interval!" if timetaken > update_interval else ""
+                )
 
                 # Return the updated, complete data structure
                 return self.data
@@ -143,3 +151,35 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception
         except Exception as exception:
             raise UpdateFailed(f"Error communicating with Sigenergy system: {exception}") from exception
+
+    async def async_write_parameter(
+        self,
+        device_type: str,
+        device_identifier: Optional[str],
+        register_name: str,
+        value: Union[int, float, str]
+    ) -> None:
+        """Write a parameter via the Modbus hub and schedule a low-frequency update."""
+        try:
+            await self.hub.async_write_parameter(
+                device_type=device_type,
+                device_identifier=device_identifier,
+                register_name=register_name,
+                value=value,
+            )
+            # Schedule the next update to be LOW frequency to quickly reflect the change
+            self._update_counter = self._low_update_ratio - 1
+            _LOGGER.debug("Scheduled next update as LOW frequency after writing %s to %s '%s'",
+                          value, device_type, device_identifier or 'plant')
+            # Trigger an immediate refresh if desired, though the scheduled one might be sufficient
+            await self.async_request_refresh()
+        except SigenergyModbusError as ex:
+            _LOGGER.error("Failed to write parameter %s to %s '%s': %s",
+                          register_name, device_type, device_identifier or 'plant', ex)
+            # Re-raise the exception so the calling entity knows the write failed
+            raise
+        except Exception as ex:
+            _LOGGER.error("Unexpected error writing parameter %s to %s '%s': %s",
+                          register_name, device_type, device_identifier or 'plant', ex)
+            # Re-raise for visibility
+            raise

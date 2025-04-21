@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any, Optional, Callable, Dict
 from dataclasses import dataclass
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
@@ -58,6 +59,7 @@ def generate_sigen_entity(
 
     entities = []
     for description in entity_description:
+        # _LOGGER.debug("Generating entity for description: %s", description.name)
 
         # Generate PV specific entity names and IDs if applicable
         if pv_string_idx is not None:
@@ -153,15 +155,15 @@ def get_source_entity_id(device_type, device_name, source_key, coordinator, hass
             pv_string_idx=pv_string_idx,
         )
 
-        _LOGGER.debug("Looking for entity with unique ID pattern: %s", unique_id_pattern)
+        # _LOGGER.debug("Looking for entity with unique ID pattern: %s", unique_id_pattern)
         entity_id = ha_entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id_pattern)
 
         if entity_id is None:
             _LOGGER.warning("No entity found for unique ID pattern: %s", unique_id_pattern)
             _LOGGER.debug("unique ID pattern constructed from: \n config_entry_id: %s \n device_type: %s \n device_name: %s \n source_key: %s \n pv_idx: %s",
                             coordinator.hub.config_entry.entry_id, device_type, device_name, source_key, pv_string_idx)
-        else:
-            _LOGGER.debug("Found entity ID: %s for pattern %s", entity_id, unique_id_pattern)
+        # else:
+        #     _LOGGER.debug("Found entity ID: %s for pattern %s", entity_id, unique_id_pattern)
 
         return entity_id
     except Exception as ex: # pylint: disable=broad-exception-caught
@@ -207,7 +209,6 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
     source_key: Optional[str] = None  # Key of the source entity to use for integration
     max_sub_interval: Optional[timedelta] = None
     round_digits: Optional[int] = None
-    high_update_frequency: Optional[bool] = False
 
     @classmethod
     def from_entity_description(cls, description,
@@ -232,7 +233,6 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 				source_key=getattr(description, "source_key", None),
 				max_sub_interval=getattr(description, "max_sub_interval", None),
 				round_digits=getattr(description, "round_digits", None),
-                high_update_frequency=getattr(description, "high_update_frequency", False),
 			)
         else:
             # It's a regular SensorEntityDescription
@@ -248,3 +248,19 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
                 extra_params=extra_params,
             )
         return result
+
+def safe_float(value: Any, precision: int = 6) -> Optional[float]:
+    """Convert to float only if possible, else None."""
+    try:
+        return round(float(str(value)), precision)
+    except (InvalidOperation, TypeError, ValueError):
+        _LOGGER.warning("Could not convert value %s (type %s) to float", value, type(value).__name__)
+        return None
+    
+def safe_decimal(value: Any) -> Optional[Decimal]:
+    """Convert to Decimal only if possible, else None."""
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        _LOGGER.warning("Could not convert value %s (type %s) to Decimal", value, type(value).__name__)
+        return None

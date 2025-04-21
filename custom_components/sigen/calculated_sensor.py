@@ -27,11 +27,13 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_VALUES_TO_INIT
+from .const import CONF_VALUES_TO_INIT, DEFAULT_MIN_INTEGRATION_TIME
 from .modbusregisterdefinitions import EMSWorkMode
 
 from .common import (
     SigenergySensorEntityDescription,
+    safe_decimal,
+    safe_float,
 )
 from .sigen_entity import SigenergyEntity # Import the new base class
 
@@ -45,6 +47,7 @@ LOG_THIS_ENTITY = [
     # "sensor.sigen_plant_accumulated_consumed_energy",
     # "sensor.sigen_plant_accumulated_grid_import_energy",
     # "sensor.sigen_plant_accumulated_pv_energy",
+    # "sigen_plant_accumulated_battery_charge_energy",
 ]
 
 
@@ -180,17 +183,19 @@ class SigenergyCalculations:
             # Calculate power with bounds checking
             # Convert to Decimal for precise calculation
             try:
-                voltage_dec = Decimal(str(pv_voltage))
-                current_dec = Decimal(str(pv_current))
-                power = voltage_dec * current_dec  # Already in Watts
+                voltage_dec = safe_decimal(pv_voltage)
+                current_dec = safe_decimal(pv_current)
+                if voltage_dec and current_dec:
+                    power = voltage_dec * current_dec  # Already in Watts
+                else:
+                    return None
             except (ValueError, TypeError, InvalidOperation):
                 _LOGGER.warning(
                     "[CS][PV Power] Error converting values to Decimal: V=%s, I=%s",
                     pv_voltage,
                     pv_current,
                 )
-                # Fallback to float calculation
-                power = float(pv_voltage) * float(pv_current)
+                return None
 
             # Apply some reasonable bounds
             MAX_REASONABLE_POWER = Decimal(
@@ -218,7 +223,7 @@ class SigenergyCalculations:
                 final_power = power / 1000
 
             return (
-                float(final_power) if isinstance(final_power, Decimal) else final_power
+                safe_float(final_power) if isinstance(final_power, Decimal) else final_power
             )
         except Exception as ex:  # pylint: disable=broad-exception-caught
             _LOGGER.warning(
@@ -233,7 +238,7 @@ class SigenergyCalculations:
         value,
         coordinator_data: Optional[Dict[str, Any]] = None,
         extra_params: Optional[Dict[str, Any]] = None,
-    ) -> Optional[float]:
+    ) -> Optional[Decimal]:
         """Calculate grid import power (positive values only)."""
         if coordinator_data is None or "plant" not in coordinator_data:
             return None
@@ -246,19 +251,19 @@ class SigenergyCalculations:
 
         # Convert to Decimal for precise calculation
         try:
-            power_dec = Decimal(str(grid_power))
+            power_dec = safe_decimal(grid_power)
             # Return value if positive, otherwise 0
-            return float(power_dec) if power_dec > Decimal("0") else 0
+            return power_dec if power_dec and power_dec > Decimal("0") else Decimal("0.0")
         except (ValueError, TypeError, InvalidOperation):
             # Fallback to float calculation
-            return grid_power if grid_power > 0 else 0
+            return safe_decimal(grid_power) if grid_power > 0 else Decimal("0.0")
 
     @staticmethod
     def calculate_grid_export_power(
         value,
         coordinator_data: Optional[Dict[str, Any]] = None,
         extra_params: Optional[Dict[str, Any]] = None,
-    ) -> Optional[float]:
+    ) -> Optional[Decimal]:
         """Calculate grid export power (negative values converted to positive)."""
         if coordinator_data is None or "plant" not in coordinator_data:
             return None
@@ -271,12 +276,12 @@ class SigenergyCalculations:
 
         # Convert to Decimal for precise calculation
         try:
-            power_dec = Decimal(str(grid_power))
+            power_dec = safe_decimal(str(grid_power))
             # Return absolute value if negative, otherwise 0
-            return float(-power_dec) if power_dec < Decimal("0") else 0
+            return -power_dec if power_dec and power_dec < Decimal("0") else Decimal("0.0")
         except (ValueError, TypeError, InvalidOperation):
             # Fallback to float calculation
-            return -grid_power if grid_power < 0 else 0
+            return safe_decimal(-grid_power) if grid_power < 0 else Decimal("0.0")
 
     @staticmethod
     def calculate_plant_consumed_power(
@@ -356,6 +361,105 @@ class SigenergyCalculations:
 
         return consumed_power
 
+    @staticmethod
+    def _calculate_total_inverter_energy(
+        coordinator_data: Optional[Dict[str, Any]],
+        energy_key: str,
+        log_prefix: str,
+    ) -> Optional[Decimal]:
+        """Helper function to calculate total energy across all inverters for a given key."""
+        if coordinator_data is None or "inverters" not in coordinator_data:
+            _LOGGER.debug("[%s] No inverter data available for calculation", log_prefix)
+            return None
+
+        total_energy = Decimal("0.0")
+        inverters_data = coordinator_data.get("inverters", {})
+
+        if not inverters_data:
+            _LOGGER.debug("[%s] Inverter data is empty", log_prefix)
+            return None # No inverters found
+
+        for inverter_name, inverter_data in inverters_data.items():
+            energy_value = safe_decimal(inverter_data.get(energy_key))
+            if energy_value is not None:
+                try:
+                    total_energy += energy_value
+                except (ValueError, TypeError, InvalidOperation) as e:
+                    _LOGGER.warning(
+                        "[%s] Invalid energy value '%s' for key '%s' in inverter %s: %s",
+                        log_prefix,
+                        energy_value,
+                        energy_key,
+                        inverter_name,
+                        e
+                    )
+            else:
+                _LOGGER.debug(
+                    "[%s] Missing '%s' for inverter %s",
+                    log_prefix,
+                    energy_key,
+                    inverter_name
+                 )
+
+        # Return as Decimal, matching other calculated sensors
+        return safe_decimal(total_energy)
+
+    @staticmethod
+    def calculate_accumulated_battery_charge_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Calculate the total accumulated battery charge energy across all inverters."""
+        # _LOGGER.debug("[CS][Batt Charge] Calculating accumulated battery charge energy")
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_ess_accumulated_charge_energy",
+            "CS][Batt Charge"
+        )
+
+    @staticmethod
+    def calculate_accumulated_battery_discharge_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Calculate the total accumulated battery discharge energy across all inverters."""
+        # _LOGGER.debug("[CS][Batt Discharge] Calculating accumulated battery discharge energy")
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_ess_accumulated_discharge_energy",
+            "CS][Batt Discharge"
+        )
+
+    @staticmethod
+    def calculate_daily_battery_charge_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Calculate the total daily battery charge energy across all inverters."""
+        # _LOGGER.debug("[CS][Daily Batt Charge] Calculating daily battery charge energy")
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_ess_daily_charge_energy",
+            "CS][Daily Batt Charge"
+        )
+
+    @staticmethod
+    def calculate_daily_battery_discharge_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Calculate the total daily battery discharge energy across all inverters."""
+        # _LOGGER.debug("[CS][Daily Batt Discharge] Calculating daily battery discharge energy")
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_ess_daily_discharge_energy",
+            "CS][Daily Batt Discharge"
+        )
+
 
 class IntegrationTrigger(Enum):
     """Trigger type for integration calculations."""
@@ -402,6 +506,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self._round_digits = getattr(description, "round_digits", None)
         self._max_sub_interval = getattr(description, "max_sub_interval", None)
         self.log_this_entity = False
+        self._last_coordinator_update = None
 
         # Initialize state variables
         self._state: Decimal | None = None
@@ -425,8 +530,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     def _decimal_state(self, state: str) -> Optional[Decimal]:
         """Convert state to Decimal or return None if not possible."""
         try:
-            decimal_value = Decimal(state)
-            return decimal_value
+            return safe_decimal(state)
         except (InvalidOperation, TypeError) as e:
             _LOGGER.warning("[CS][State] Failed to convert %s to Decimal: %s", state, e)
             return None
@@ -446,12 +550,6 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     ) -> Decimal:
         """Calculate area using the trapezoidal method."""
         return elapsed_time * (left + right) / Decimal(2)
-
-    def _calculate_area_with_one_state(
-        self, elapsed_time: Decimal, constant_state: Decimal
-    ) -> Decimal:
-        """Calculate area given one state (constant value)."""
-        return constant_state * elapsed_time
 
     def _update_integral(self, area: Decimal) -> None:
         """Update the integral with the calculated area."""
@@ -500,7 +598,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 )
             self.async_write_ha_state()
             if self.log_this_entity:
-                 _LOGGER.debug("[%s] _handle_midnight - Called async_write_ha_state()", self.entity_id)
+                _LOGGER.debug("[%s] _handle_midnight - Called async_write_ha_state()",
+                               self.entity_id)
             self._setup_midnight_reset()  # Schedule next reset
 
         # Schedule the reset
@@ -552,16 +651,17 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         if restore_value:
             try:
-                restored_state = Decimal(restore_value)
-                if self.log_this_entity:
-                    _LOGGER.debug(
-                        "[%s] async_added_to_hass - Restoring state to %s",
-                        self.entity_id,
-                        restored_state,
-                    )
-                self._state = restored_state
-                self._last_valid_state = self._state
-                self._last_integration_time = dt_util.utcnow()
+                restored_state = safe_decimal(restore_value)
+                if restored_state:
+                    if self.log_this_entity:
+                        _LOGGER.debug(
+                            "[%s] async_added_to_hass - Restoring state to %s",
+                            self.entity_id,
+                            restored_state,
+                        )
+                    self._state = restored_state
+                    self._last_valid_state = self._state
+                    self._last_integration_time = dt_util.utcnow()
             except (ValueError, TypeError, InvalidOperation):
                 _LOGGER.warning("Could not restore last state for %s", self.entity_id)
 
@@ -641,11 +741,11 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         # Compare coordinator update time and elapsed interval
         coordinatorTime = self.coordinator.last_update_success or now
         timeSinceLast = (now - self._last_integration_time).total_seconds()
-        if coordinatorTime == getattr(self, "_lastCoordinatorUpdate", None) \
-           and timeSinceLast < 2:
+        if coordinatorTime == getattr(self, "_last_coordinator_update", None) \
+           and timeSinceLast < DEFAULT_MIN_INTEGRATION_TIME:
             _LOGGER.debug("Skipping integration: %s, interval too short: %s", self.name, timeSinceLast)
         else:
-            self._lastCoordinatorUpdate = coordinatorTime
+            self._last_coordinator_update = coordinatorTime
             try:
                 self._integrate_on_state_change(old_state, new_state)
                 self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
@@ -740,7 +840,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 if self.log_this_entity:
                     _LOGGER.debug("[%s] Performing timer-based integration", self.entity_id)
 
-                elapsed_seconds = Decimal(
+                elapsed_seconds = safe_decimal(
                     (now - self._last_integration_time).total_seconds()
                 )
                 if self.log_this_entity:
@@ -752,9 +852,23 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                     )
 
                 # Calculate area with constant state
-                area = self._calculate_area_with_one_state(
-                    elapsed_seconds, source_state_dec
-                )
+                try:
+                    if elapsed_seconds and source_state:
+                        area = elapsed_seconds * source_state_dec
+                    else:
+                        raise ValueError(
+                            "Elapsed seconds or source state is invalid for area calculation"
+                        )
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning(
+                        "[%s] Timer - Error calculating area. elapsed_seconds: %s, state: %s, error: %s",
+                        self.entity_id,
+                        elapsed_seconds,
+                        source_state_dec,
+                        e,
+                    )
+                    return
+
                 if self.log_this_entity:
                     _LOGGER.debug("[%s] Timer - Calculated area: %s", self.entity_id, area)
 
@@ -839,8 +953,9 @@ class SigenergyCalculatedSensors:
             state_class=SensorStateClass.MEASUREMENT,
             value_fn=SigenergyCalculations.calculate_pv_power,
             extra_fn_data=True,
-            suggested_display_precision=2,
+            suggested_display_precision=3,
             round_digits=6,
+            icon="mdi:solar-power",
         ),
     ]
 
@@ -857,6 +972,7 @@ class SigenergyCalculatedSensors:
                 value, coord_data
             ),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_system_timezone",
@@ -865,6 +981,7 @@ class SigenergyCalculatedSensors:
             entity_category=EntityCategory.DIAGNOSTIC,
             # Adapt function signature
             value_fn=lambda value, _, __: SigenergyCalculations.minutes_to_gmt(value),
+            entity_registry_enabled_default=False,
         ),
         # EMS Work Mode sensor with value mapping
         SigenergySensorEntityDescription(
@@ -877,7 +994,7 @@ class SigenergyCalculatedSensors:
                 EMSWorkMode.AI_MODE: "AI Mode",
                 EMSWorkMode.TOU: "Time of Use",
                 EMSWorkMode.REMOTE_EMS: "Remote EMS",
-            }.get(value, "Unknown"),
+            }.get(value, f"Unknown: ({value})"), # Fallback to original value
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_import_power",
@@ -885,10 +1002,10 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:power",
+            icon="mdi:transmission-tower-import",
             value_fn=SigenergyCalculations.calculate_grid_import_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
-            suggested_display_precision=2,
+            suggested_display_precision=3,
             round_digits=6,
         ),
         SigenergySensorEntityDescription(
@@ -897,10 +1014,10 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:power",
+            icon="mdi:transmission-tower-export",
             value_fn=SigenergyCalculations.calculate_grid_export_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
-            suggested_display_precision=2,
+            suggested_display_precision=3,
             round_digits=6,
         ),
         SigenergySensorEntityDescription(
@@ -912,8 +1029,58 @@ class SigenergyCalculatedSensors:
             icon="mdi:home-lightning-bolt",
             value_fn=SigenergyCalculations.calculate_plant_consumed_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
-            suggested_display_precision=2,
+            suggested_display_precision=3,
             round_digits=6,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_accumulated_battery_charge_energy",
+            name="Accumulated Battery Charge Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+            icon="mdi:battery-positive",
+            value_fn=SigenergyCalculations.calculate_accumulated_battery_charge_energy,
+            extra_fn_data=True, # Pass coordinator data to value_fn
+            suggested_display_precision=3,
+            round_digits=6, # Match other energy sensors
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR # Suggest a different unit for display
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_accumulated_battery_discharge_energy",
+            name="Accumulated Battery Discharge Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+            icon="mdi:battery-negative",
+            value_fn=SigenergyCalculations.calculate_accumulated_battery_discharge_energy,
+            extra_fn_data=True, # Pass coordinator data to value_fn
+            suggested_display_precision=3,
+            round_digits=6, # Match other energy sensors
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR # Suggest a different unit for display
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_daily_battery_charge_energy",
+            name="Daily Battery Charge Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING, # Resets daily
+            icon="mdi:battery-positive",
+            value_fn=SigenergyCalculations.calculate_daily_battery_charge_energy,
+            extra_fn_data=True, # Pass coordinator data to value_fn
+            suggested_display_precision=2,
+            round_digits=6, # Match other energy sensors
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_daily_battery_discharge_energy",
+            name="Daily Battery Discharge Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING, # Resets daily
+            icon="mdi:battery-negative",
+            value_fn=SigenergyCalculations.calculate_daily_battery_discharge_energy,
+            extra_fn_data=True, # Pass coordinator data to value_fn
+            suggested_display_precision=2,
+            round_digits=6, # Match other energy sensors
         ),
     ]
 
@@ -928,6 +1095,7 @@ class SigenergyCalculatedSensors:
                 value, coord_data
             ),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="inverter_shutdown_time",
@@ -939,6 +1107,7 @@ class SigenergyCalculatedSensors:
                 value, coord_data
             ),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data
+            entity_registry_enabled_default=False,
         ),
     ]
 
@@ -958,6 +1127,8 @@ class SigenergyCalculatedSensors:
             source_key="plant_photovoltaic_power",  # Key of the source entity to use
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
         SigenergySensorEntityDescription(
             key="plant_daily_pv_energy",
@@ -969,6 +1140,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
         ),
         SigenergySensorEntityDescription(
             key="plant_accumulated_grid_export_energy",
@@ -980,6 +1152,8 @@ class SigenergyCalculatedSensors:
             source_key="plant_grid_export_power",  # Key matches the calculated sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:transmission-tower-export",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
         SigenergySensorEntityDescription(
             key="plant_accumulated_grid_import_energy",
@@ -991,6 +1165,8 @@ class SigenergyCalculatedSensors:
             source_key="plant_grid_import_power",  # Key matches the calculated sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:transmission-tower-import",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
         SigenergySensorEntityDescription(
             key="plant_daily_grid_export_energy",
@@ -1002,6 +1178,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_grid_export_power",  # Key matches the grid export power sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:transmission-tower-export",
         ),
         SigenergySensorEntityDescription(
             key="plant_daily_grid_import_energy",
@@ -1013,6 +1190,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_grid_import_power",  # Key matches the grid import power sensor
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:transmission-tower-import",
         ),
         SigenergySensorEntityDescription(
             key="plant_accumulated_consumed_energy",
@@ -1024,6 +1202,8 @@ class SigenergyCalculatedSensors:
             source_key="plant_consumed_power",  # Key of the source entity to use
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:home-lightning-bolt",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
         SigenergySensorEntityDescription(
             key="plant_daily_consumed_energy",
@@ -1035,6 +1215,7 @@ class SigenergyCalculatedSensors:
             source_key="plant_consumed_power",  # Key of the source entity to use
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:home-lightning-bolt",
         ),
     ]
 
@@ -1050,6 +1231,8 @@ class SigenergyCalculatedSensors:
             source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
         SigenergySensorEntityDescription(
             key="inverter_daily_pv_energy",
@@ -1061,6 +1244,7 @@ class SigenergyCalculatedSensors:
             source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
         ),
     ]
     # Integration sensors for individual PV strings (dynamically created)
@@ -1078,6 +1262,8 @@ class SigenergyCalculatedSensors:
             source_key="pv_string_power",
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
         SigenergySensorEntityDescription(
             key="pv_string_daily_energy", # Template key
@@ -1090,6 +1276,7 @@ class SigenergyCalculatedSensors:
             source_key="pv_string_power",
             round_digits=6,
             max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
         ),
     ]
 
