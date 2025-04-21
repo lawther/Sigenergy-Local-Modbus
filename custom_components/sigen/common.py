@@ -209,7 +209,6 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
     source_key: Optional[str] = None  # Key of the source entity to use for integration
     max_sub_interval: Optional[timedelta] = None
     round_digits: Optional[int] = None
-    high_update_frequency: Optional[bool] = False
 
     @classmethod
     def from_entity_description(cls, description,
@@ -234,7 +233,6 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 				source_key=getattr(description, "source_key", None),
 				max_sub_interval=getattr(description, "max_sub_interval", None),
 				round_digits=getattr(description, "round_digits", None),
-                high_update_frequency=getattr(description, "high_update_frequency", False),
 			)
         else:
             # It's a regular SensorEntityDescription

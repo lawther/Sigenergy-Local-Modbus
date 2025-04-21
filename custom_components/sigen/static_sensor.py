@@ -479,7 +479,8 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
             icon="mdi:battery-positive",
-        ),
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+),
         SigenergySensorEntityDescription(
             key="inverter_ess_daily_discharge_energy",
             name="Daily Discharge Energy",
@@ -495,6 +496,7 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
             icon="mdi:battery-negative",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
         SigenergySensorEntityDescription(
             key="inverter_running_state",

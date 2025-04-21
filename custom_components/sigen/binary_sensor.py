@@ -73,7 +73,7 @@ PLANT_BINARY_SENSORS = [
         source_key="plant_grid_sensor_active_power",
         # Exporting is when grid power is positive (Sigenergy convention)
         value_fn=lambda data: (val := data.get("plant_grid_sensor_active_power")) \
-            is not None and Decimal(str(val)) > Decimal("0.01"),
+            is not None and Decimal(str(val)) < Decimal("0.01"),
     ),
     SigenergyBinarySensorEntityDescription(
         key="plant_importing_from_grid",
@@ -83,7 +83,7 @@ PLANT_BINARY_SENSORS = [
         source_key="plant_grid_sensor_active_power",
         # Importing is when grid power is negative (Sigenergy convention)
         value_fn=lambda data: (val := data.get("plant_grid_sensor_active_power")) \
-            is not None and Decimal(str(val)) < Decimal("0.01"),
+            is not None and Decimal(str(val)) > Decimal("0.01"),
     ),
 ]
 

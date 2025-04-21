@@ -741,7 +741,7 @@ class PVStringSensor(SigenergySensor):
             try:
                 # Check if it's already a number (int, float, Decimal)
                 if isinstance(value, (int, float, Decimal)):
-                    final_value = float(value)  # Convert to float for HA consistency
+                    final_value = Decimal(value)  # Convert to Decimal for HA consistency
                 else:
                     final_value = value  # Return non-numeric values directly
                 # _LOGGER.debug("[PVStringSensor][%s] Reporting state: %s", self.entity_id, final_value)
