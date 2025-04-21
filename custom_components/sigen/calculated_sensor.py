@@ -27,7 +27,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_VALUES_TO_INIT
+from .const import CONF_VALUES_TO_INIT, DEFAULT_MIN_INTEGRATION_TIME
 from .modbusregisterdefinitions import EMSWorkMode
 
 from .common import (
@@ -742,7 +742,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         coordinatorTime = self.coordinator.last_update_success or now
         timeSinceLast = (now - self._last_integration_time).total_seconds()
         if coordinatorTime == getattr(self, "_last_coordinator_update", None) \
-           and timeSinceLast < 2:
+           and timeSinceLast < DEFAULT_MIN_INTEGRATION_TIME:
             _LOGGER.debug("Skipping integration: %s, interval too short: %s", self.name, timeSinceLast)
         else:
             self._last_coordinator_update = coordinatorTime

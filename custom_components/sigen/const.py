@@ -67,6 +67,7 @@ DEFAULT_SCAN_INTERVAL_MEDIUM = 30
 DEFAULT_SCAN_INTERVAL_LOW = 600
 DEFAULT_INVERTER_COUNT = 1
 DEFAULT_READ_ONLY = True  # Default to read-only mode
+DEFAULT_MIN_INTEGRATION_TIME = 1  # Minimum integration time in seconds
 
 # Platforms
 PLATFORMS = ["sensor", "switch", "select", "number", "binary_sensor"]
