@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 import asyncio
 import re
 import logging
@@ -411,25 +411,25 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 # If this is not answering as a plant return false
                 # Returns error message if failed.
                 if await self._async_try_read_register(
-                    client, host, port, DEFAULT_PLANT_SLAVE_ID, DEVICE_CHECKS[DEVICE_TYPE_PLANT]):
+                    client, DEFAULT_PLANT_SLAVE_ID, DEVICE_CHECKS[DEVICE_TYPE_PLANT]):
                     return False
 
                 for device_id in range(1, 247):
 
                     # Check if DC Charger 
                     if not await self._async_try_read_register(
-                        client, host, port, device_id, DEVICE_CHECKS[DEVICE_TYPE_DC_CHARGER]):
+                        client, device_id, DEVICE_CHECKS[DEVICE_TYPE_DC_CHARGER]):
                         self._discovered_device_type[DEVICE_TYPE_DC_CHARGER].append(device_id)
                         self._discovered_device_type[DEVICE_TYPE_INVERTER].append(device_id)
                         continue
                     # Check if Inverter
                     elif not await self._async_try_read_register(
-                        client, host, port, device_id, DEVICE_CHECKS[DEVICE_TYPE_INVERTER]):
+                        client, device_id, DEVICE_CHECKS[DEVICE_TYPE_INVERTER]):
                         self._discovered_device_type[DEVICE_TYPE_INVERTER].append(device_id)
                         continue
                     # Check if AC Charger
                     elif not await self._async_try_read_register(
-                        client, host, port, device_id, DEVICE_CHECKS[DEVICE_TYPE_AC_CHARGER]):
+                        client, device_id, DEVICE_CHECKS[DEVICE_TYPE_AC_CHARGER]):
                         self._discovered_device_type[DEVICE_TYPE_AC_CHARGER].append(device_id)
                         continue
                     else:
@@ -593,30 +593,45 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                                     register_count=1, timeout=1) -> dict[str, str]:
         errors = {}
         # Check the connection
-        _LOGGER.debug("DHCP discovery: Testing Modbus connection to %s:%s", host, port)
-        response = await self.async_check_device_type(host, port, slave_id, timeout)
-        if response not in [DEVICE_TYPE_UNKNOWN, DEVICE_TYPE_INVERTER, 
-                               DEVICE_TYPE_DC_CHARGER, DEVICE_TYPE_AC_CHARGER]:
+        response = await self._async_try_read_register(
+            AsyncModbusTcpClient(host=host, port=port, timeout=timeout),
+            slave_id,
+            register_address,
+        )
+        # self.async_check_device_type(host, port, slave_id, timeout)
+        if response:
             errors[CONF_HOST] = response
         return errors
 
-    async def _async_try_read_register(self, client: AsyncModbusTcpClient, host: str, port: int, slave_id: int, register_address: int) -> str:
+    async def _async_try_read_register(self, client: AsyncModbusTcpClient, slave_id: int, register_address: int) -> str:
         """Helper to attempt reading a single Modbus register."""
+        err = ""
         try:
-            result = await client.read_input_registers(
-                address=register_address,
-                count=1,
-                slave=slave_id
-            )
-            if result and not result.isError():
-                _LOGGER.debug("Modbus read successful for register %s on %s:%s, slave %s.",
-                              register_address, host, port, slave_id)
-                return ""
-            else:
-                err = f"Modbus read failed or returned error for register " +\
-                    f"{register_address} on {host}:{port}, slave {slave_id}."
-                _LOGGER.debug(err)
-                return err
+            host = client.comm_params.host
+            port = client.comm_params.port
+
+            with _suppress_pymodbus_logging():
+                if not await client.connect():
+                    err = ("Modbus connection failed to %s:%s" % (host, port))
+                    _LOGGER.debug(err)
+                    return err
+
+                _LOGGER.debug("Modbus connected to %s:%s. Checking device type...", host, port)
+
+                result = await client.read_input_registers(
+                    address=register_address,
+                    count=1,
+                    slave=slave_id
+                )
+                if result and not result.isError():
+                    _LOGGER.debug("Modbus read successful for register %s on %s:%s, slave %s.",
+                                register_address, host, port, slave_id)
+                    return ""
+                else:
+                    err = f"Modbus read failed or returned error for register " +\
+                        f"{register_address} on {host}:{port}, slave {slave_id}."
+                    _LOGGER.debug(err)
+                    return err
         except (ModbusException, asyncio.TimeoutError) as e:
             err = "Modbus exception during read for register %s on %s: %s" % \
                 (register_address, host, e)
@@ -648,7 +663,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 for device_type, register_address in DEVICE_CHECKS.items():
                     # Returns error message if failed.
                     if not await self._async_try_read_register(
-                        client, host, port, slave_id, register_address):
+                        client, slave_id, register_address):
                     # Special case: If DC Charger register read succeeds, it's an Inverter *with* DC.
                     # The loop structure handles this implicitly by checking DC first.
                     # If the DC check passes, we return DEVICE_TYPE_DC_CHARGER.
@@ -723,9 +738,9 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         # Dynamically create schema to pre-fill host if discovered via DHCP
         schema = vol.Schema({
-            vol.Required(CONF_HOST, default=self._discovered_ip or ""): str,
-            vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-            vol.Required(CONF_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
+            vol.Required(CONF_HOST, default=(user_input.get(CONF_HOST, "") if user_input else "")): str,
+            vol.Required(CONF_PORT, default=(user_input.get(CONF_PORT, DEFAULT_PORT) if user_input else DEFAULT_PORT)): int,
+            vol.Required(CONF_SLAVE_ID, default=(user_input.get(CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID) if user_input else DEFAULT_INVERTER_SLAVE_ID)): int,
             })
 
         if user_input is None:
@@ -745,15 +760,17 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors.update(await self.async_test_connection(user_input[CONF_HOST],
                                                        user_input[CONF_PORT],
                                                        user_input[CONF_SLAVE_ID],
-                                                       30578))  # inverter_running_state
+                                                       DEVICE_CHECKS[DEVICE_TYPE_INVERTER]))
 
         if not errors:
+            _LOGGER.debug("Inverter error is: %s", errors)
             dc_charger_error = {}
             dc_charger_error.update(await self.async_test_connection(user_input[CONF_HOST],
                                                         user_input[CONF_PORT],
                                                         user_input[CONF_SLAVE_ID],
-                                                        31501))  # dc_charger_charging_current
+                                                        DEVICE_CHECKS[DEVICE_TYPE_DC_CHARGER]))
             if not dc_charger_error:
+                _LOGGER.debug("DC_charger error is: %s", dc_charger_error)
                 _LOGGER.debug("DC charger connection successful for %s", user_input[CONF_HOST])
 
         if errors:
@@ -854,7 +871,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 errors.update(await self.async_test_connection(user_input[CONF_HOST],
                                                             user_input[CONF_PORT],
                                                             user_input[CONF_SLAVE_ID],
-                                                            32000))  # ac_charger_system_state
+                                                            DEVICE_CHECKS[DEVICE_TYPE_AC_CHARGER]))  # ac_charger_system_state
 
             if errors:
                 return self.async_show_form(
@@ -1308,25 +1325,30 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         )
         inverter_details = inverter_connections.get(inverter_name, {})
 
+       # Determine if the remove option should be shown (only if more than one inverter exists)
+        show_remove_option = len(inverter_connections) > 1
+
         if user_input is None:
-            # Create schema with previously saved values
-            schema = vol.Schema(
-                {
-                    vol.Optional(CONF_REMOVE_DEVICE, default=False): bool,
-                    vol.Required(
-                        CONF_HOST, default=inverter_details.get(CONF_HOST, "")
-                    ): str,
-                    vol.Required(
-                        CONF_PORT, default=inverter_details.get(CONF_PORT, DEFAULT_PORT)
-                    ): int,
-                    vol.Required(
-                        CONF_SLAVE_ID,
-                        default=inverter_details.get(
-                            CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID
-                        ),
-                    ): int,
-                }
-            )
+            # Create schema dictionary with base fields
+            schema_dict: Dict[Union[vol.Required, vol.Optional], Any] = {
+                vol.Required(
+                    CONF_HOST, default=inverter_details.get(CONF_HOST, "")
+                ): str,
+                vol.Required(
+                    CONF_PORT, default=inverter_details.get(CONF_PORT, DEFAULT_PORT)
+                ): int,
+                vol.Required(
+                    CONF_SLAVE_ID,
+                    default=inverter_details.get(
+                        CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID
+                    ),
+                ): int,
+            }
+            # Conditionally add the remove option
+            if show_remove_option:
+                schema_dict[vol.Optional(CONF_REMOVE_DEVICE, default=False)] = bool
+
+            schema = vol.Schema(schema_dict)
 
             return self.async_show_form(
                 step_id=STEP_INVERTER_CONFIG,
