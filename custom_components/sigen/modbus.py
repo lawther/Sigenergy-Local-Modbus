@@ -248,25 +248,30 @@ class SigenergyModbusHub:
     ) -> Tuple[str, bool, Optional[Exception]]:
         """Probe a single register and return its name, support status, and any exception."""
         try:
-            with _suppress_pymodbus_logging(really_suppress=True):
-                if register.register_type == RegisterType.READ_ONLY:
-                    result = await client.read_input_registers(
-                        address=register.address,
-                        count=register.count,
-                        slave=slave_id
-                    )
-                elif register.register_type == RegisterType.HOLDING:
-                    result = await client.read_holding_registers(
-                        address=register.address,
-                        count=register.count,
-                        slave=slave_id
-                    )
-                else:
-                    _LOGGER.debug(
-                        "Register %s (0x%04X) for slave %d (%s) has unsupported type: %s",
-                        name, register.address, slave_id, device_info_log, register.register_type
-                    )
-                    return name, False, None # Mark as unsupported, no exception
+            key = self._get_connection_key(
+                {CONF_HOST: client.comm_params.host, CONF_PORT: client.comm_params.port})
+
+            async with self._locks[key]:
+
+                with _suppress_pymodbus_logging(really_suppress=True):
+                    if register.register_type == RegisterType.READ_ONLY:
+                        result = await client.read_input_registers(
+                            address=register.address,
+                            count=register.count,
+                            slave=slave_id
+                        )
+                    elif register.register_type == RegisterType.HOLDING:
+                        result = await client.read_holding_registers(
+                            address=register.address,
+                            count=register.count,
+                            slave=slave_id
+                        )
+                    else:
+                        _LOGGER.debug(
+                            "Register %s (0x%04X) for slave %d (%s) has unsupported type: %s",
+                            name, register.address, slave_id, device_info_log, register.register_type
+                        )
+                        return name, False, None # Mark as unsupported, no exception
 
             is_supported = self._validate_register_response(result, register)
 

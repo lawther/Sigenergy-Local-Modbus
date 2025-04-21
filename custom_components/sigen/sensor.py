@@ -550,46 +550,55 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                 return value
 
             # Other special cases (enum mappings)
-            if self.entity_description.key == "plant_on_off_grid_status":
-                return {
-                    0: "On Grid",
-                    1: "Off Grid (Auto)",
-                    2: "Off Grid (Manual)",
-                }.get(value, STATE_UNKNOWN)
-            if self.entity_description.key == "plant_running_state":
-                return {
-                    RunningState.STANDBY: "Standby",
-                    RunningState.RUNNING: "Running",
-                    RunningState.FAULT: "Fault",
-                    RunningState.SHUTDOWN: "Shutdown",
-                }.get(value, STATE_UNKNOWN)
-            if self.entity_description.key == "inverter_running_state":
-                return {
-                    RunningState.STANDBY: "Standby",
-                    RunningState.RUNNING: "Running",
-                    RunningState.FAULT: "Fault",
-                    RunningState.SHUTDOWN: "Shutdown",
-                }.get(value, STATE_UNKNOWN)
-            if self.entity_description.key == "ac_charger_system_state":
-                return {
-                    0: "System Init",
-                    1: "A1/A2",
-                    2: "B1",
-                    3: "B2",
-                    4: "C1",
-                    5: "C2",
-                    6: "F",
-                    7: "E",
-                }.get(value, STATE_UNKNOWN)
-            if self.entity_description.key == "inverter_output_type":
-                return {
-                    0: "L/N",
-                    1: "L1/L2/L3",
-                    2: "L1/L2/L3/N",
-                    3: "L1/L2/N",
-                }.get(value, STATE_UNKNOWN)
-            if self.entity_description.key == "plant_grid_sensor_status":
-                return "Connected" if value == 1 else "Not Connected"
+            try:
+                if self.entity_description.key == "plant_on_off_grid_status":
+                    return {
+                        0: "On Grid",
+                        1: "Off Grid (Auto)",
+                        2: "Off Grid (Manual)",
+                    }.get(value, STATE_UNKNOWN)
+                if self.entity_description.key == "plant_running_state":
+                    return {
+                        RunningState.STANDBY: "Standby",
+                        RunningState.RUNNING: "Running",
+                        RunningState.FAULT: "Fault",
+                        RunningState.SHUTDOWN: "Shutdown",
+                    }.get(value, STATE_UNKNOWN)
+                if self.entity_description.key == "inverter_running_state":
+                    return {
+                        RunningState.STANDBY: "Standby",
+                        RunningState.RUNNING: "Running",
+                        RunningState.FAULT: "Fault",
+                        RunningState.SHUTDOWN: "Shutdown",
+                    }.get(value, STATE_UNKNOWN)
+                if self.entity_description.key == "ac_charger_system_state":
+                    return {
+                        0: "System Init",
+                        1: "A1/A2",
+                        2: "B1",
+                        3: "B2",
+                        4: "C1",
+                        5: "C2",
+                        6: "F",
+                        7: "E",
+                    }.get(value, STATE_UNKNOWN)
+                if self.entity_description.key == "inverter_output_type":
+                    return {
+                        0: "L/N",
+                        1: "L1/L2/L3",
+                        2: "L1/L2/L3/N",
+                        3: "L1/L2/N",
+                    }.get(value, STATE_UNKNOWN)
+                if self.entity_description.key == "plant_grid_sensor_status":
+                    return "Connected" if value == 1 else "Not Connected"
+            except Exception as ex:
+                _LOGGER.error(
+                    "Error decoding enum value for %s with value: %s. Error: %s",
+                    self.entity_id,
+                    value,
+                    ex,
+                )
+                return None
 
             # Apply rounding if specified and value is numeric
             if self._round_digits is not None:
