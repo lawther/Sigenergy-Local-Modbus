@@ -155,15 +155,15 @@ def get_source_entity_id(device_type, device_name, source_key, coordinator, hass
             pv_string_idx=pv_string_idx,
         )
 
-        _LOGGER.debug("Looking for entity with unique ID pattern: %s", unique_id_pattern)
+        # _LOGGER.debug("Looking for entity with unique ID pattern: %s", unique_id_pattern)
         entity_id = ha_entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id_pattern)
 
         if entity_id is None:
             _LOGGER.warning("No entity found for unique ID pattern: %s", unique_id_pattern)
             _LOGGER.debug("unique ID pattern constructed from: \n config_entry_id: %s \n device_type: %s \n device_name: %s \n source_key: %s \n pv_idx: %s",
                             coordinator.hub.config_entry.entry_id, device_type, device_name, source_key, pv_string_idx)
-        else:
-            _LOGGER.debug("Found entity ID: %s for pattern %s", entity_id, unique_id_pattern)
+        # else:
+        #     _LOGGER.debug("Found entity ID: %s for pattern %s", entity_id, unique_id_pattern)
 
         return entity_id
     except Exception as ex: # pylint: disable=broad-exception-caught
@@ -251,22 +251,18 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
             )
         return result
 
-def safe_float(value: Any, precision: int = 6) -> Any:
-    """Round only numeric values, leave others untouched."""
+def safe_float(value: Any, precision: int = 6) -> Optional[float]:
+    """Convert to float only if possible, else None."""
     try:
-        if not isinstance(value, (int, float, Decimal)):
-            return value
-        return float(round(value, precision))
+        return round(float(str(value)), precision)
     except (InvalidOperation, TypeError, ValueError):
         _LOGGER.warning("Could not convert value %s (type %s) to float", value, type(value).__name__)
-        return value
+        return None
     
-def safe_decimal(value: Any) -> Any:
-    """Convert to Decimal only if possible."""
+def safe_decimal(value: Any) -> Optional[Decimal]:
+    """Convert to Decimal only if possible, else None."""
     try:
-        if not isinstance(value, (int, float, Decimal)):
-            return value
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         _LOGGER.warning("Could not convert value %s (type %s) to Decimal", value, type(value).__name__)
-        return value
+        return None

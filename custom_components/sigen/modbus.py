@@ -247,49 +247,35 @@ class SigenergyModbusHub:
         device_info_log: str # Added for logging context
     ) -> Tuple[str, bool, Optional[Exception]]:
         """Probe a single register and return its name, support status, and any exception."""
-        try:
-            key = self._get_connection_key(
-                {CONF_HOST: client.comm_params.host, CONF_PORT: client.comm_params.port})
 
-            async with self._locks[key]:
-
-                with _suppress_pymodbus_logging(really_suppress=True):
-                    if register.register_type == RegisterType.READ_ONLY:
-                        result = await client.read_input_registers(
-                            address=register.address,
-                            count=register.count,
-                            slave=slave_id
-                        )
-                    elif register.register_type == RegisterType.HOLDING:
-                        result = await client.read_holding_registers(
-                            address=register.address,
-                            count=register.count,
-                            slave=slave_id
-                        )
-                    else:
-                        _LOGGER.debug(
-                            "Register %s (0x%04X) for slave %d (%s) has unsupported type: %s",
-                            name, register.address, slave_id, device_info_log, register.register_type
-                        )
-                        return name, False, None # Mark as unsupported, no exception
+        with _suppress_pymodbus_logging(really_suppress=True):
+            if register.register_type == RegisterType.READ_ONLY:
+                result = await client.read_input_registers(
+                    address=register.address,
+                    count=register.count,
+                    slave=slave_id
+                )
+            elif register.register_type == RegisterType.HOLDING:
+                result = await client.read_holding_registers(
+                    address=register.address,
+                    count=register.count,
+                    slave=slave_id
+                )
+            else:
+                _LOGGER.debug(
+                    "Register %s (0x%04X) for slave %d (%s) has unsupported type: %s",
+                    name, register.address, slave_id, device_info_log, register.register_type
+                )
+                return name, False, None # Mark as unsupported, no exception
 
             is_supported = self._validate_register_response(result, register)
 
-            if _LOGGER.isEnabledFor(logging.DEBUG) and not is_supported:
-                _LOGGER.debug(
-                    "Register %s (%s) for device %s is not supported. Result: %s, registers: %s",
-                    name, register.address, device_info_log, str(result), str(register)
-                )
+            # if _LOGGER.isEnabledFor(logging.DEBUG) and not is_supported:
+            #     _LOGGER.debug(
+            #         "Register %s (%s) for device %s is not supported. Result: %s, registers: %s",
+            #         name, register.address, device_info_log, str(result), str(register)
+            #     )
             return name, is_supported, None # Return name, support status, no exception
-
-        except Exception as ex:
-            if _LOGGER.isEnabledFor(logging.DEBUG):
-                _LOGGER.debug(
-                    "Register %s (0x%04X) for slave %d (%s) probe failed: %s",
-                    name, register.address, slave_id, device_info_log, str(ex)
-                )
-            # Return name, mark as unsupported, and the exception
-            return name, False, ex
 
     async def async_probe_registers(
         self,
@@ -306,13 +292,23 @@ class SigenergyModbusHub:
         device_info_log = f"{key[0]}:{key[1]}@{slave_id}" # For logging
 
         tasks = []
-        # Create tasks for probing each register
-        for name, register in register_defs.items():
-            # Only probe if support status is unknown (None)
-            if register.is_supported is None:
-                tasks.append(
-                    self._probe_single_register(client, slave_id, name, register, device_info_log)
-                )
+        try:
+            async with self._locks[key]:
+                # Create tasks for probing each register
+                for name, register in register_defs.items():
+                    # Only probe if support status is unknown (None)
+                    if register.is_supported is None:
+                        tasks.append(
+                            self._probe_single_register(client, slave_id, name, register, device_info_log)
+                        )
+        except Exception as ex:
+            _LOGGER.error("Error while preparing register probing tasks for %s: %s",
+                          device_info_log, ex)
+            # Mark all probed registers as potentially unsupported due to the error
+            for name, register in register_defs.items():
+                if register.is_supported is None:
+                    register.is_supported = False
+            return
 
         if not tasks:
             _LOGGER.debug("No registers need probing for %s.", device_info_log)

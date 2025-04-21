@@ -105,6 +105,7 @@ PLANT_SELECTS = [
             "Command Charging (PV First)",
             "Command Discharging (PV First)",
             "Command Discharging (ESS First)",
+            "Unknown",
         ],
         current_option_fn=lambda data, _: {
             RemoteEMSControlMode.PCS_REMOTE_CONTROL: "PCS Remote Control",

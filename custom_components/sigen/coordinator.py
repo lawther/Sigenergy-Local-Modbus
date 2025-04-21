@@ -83,7 +83,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 else:
                     current_frequency_type = UpdateFrequencyType.HIGH
 
-                _LOGGER.debug("Update cycle %s: Requesting frequency %s", self._update_counter, current_frequency_type.name)
+                # _LOGGER.debug("Update cycle %s: Requesting frequency %s", self._update_counter, current_frequency_type.name)
 
                 # Fetch plant data with the determined frequency
                 plant_data = await self.hub.async_read_plant_data(update_frequency=current_frequency_type)

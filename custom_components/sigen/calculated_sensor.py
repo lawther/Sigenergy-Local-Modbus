@@ -185,15 +185,17 @@ class SigenergyCalculations:
             try:
                 voltage_dec = safe_decimal(pv_voltage)
                 current_dec = safe_decimal(pv_current)
-                power = voltage_dec * current_dec  # Already in Watts
+                if voltage_dec and current_dec:
+                    power = voltage_dec * current_dec  # Already in Watts
+                else:
+                    return None
             except (ValueError, TypeError, InvalidOperation):
                 _LOGGER.warning(
                     "[CS][PV Power] Error converting values to Decimal: V=%s, I=%s",
                     pv_voltage,
                     pv_current,
                 )
-                # Fallback to float calculation
-                power = safe_float(pv_voltage) * safe_float(pv_current)
+                return None
 
             # Apply some reasonable bounds
             MAX_REASONABLE_POWER = Decimal(
@@ -251,7 +253,7 @@ class SigenergyCalculations:
         try:
             power_dec = safe_decimal(grid_power)
             # Return value if positive, otherwise 0
-            return safe_float(power_dec) if power_dec > Decimal("0") else 0
+            return safe_float(power_dec) if power_dec and power_dec> Decimal("0") else 0
         except (ValueError, TypeError, InvalidOperation):
             # Fallback to float calculation
             return grid_power if grid_power > 0 else 0
@@ -276,7 +278,7 @@ class SigenergyCalculations:
         try:
             power_dec = safe_decimal(str(grid_power))
             # Return absolute value if negative, otherwise 0
-            return float(-power_dec) if power_dec < Decimal("0") else 0
+            return float(-power_dec) if power_dec and power_dec < Decimal("0") else 0
         except (ValueError, TypeError, InvalidOperation):
             # Fallback to float calculation
             return safe_float(-grid_power) if grid_power < 0 else 0
@@ -378,10 +380,10 @@ class SigenergyCalculations:
             return None # No inverters found
 
         for inverter_name, inverter_data in inverters_data.items():
-            energy_value = inverter_data.get(energy_key)
+            energy_value = safe_decimal(inverter_data.get(energy_key))
             if energy_value is not None:
                 try:
-                    total_energy += safe_decimal(str(energy_value))
+                    total_energy += energy_value
                 except (ValueError, TypeError, InvalidOperation) as e:
                     _LOGGER.warning(
                         "[%s] Invalid energy value '%s' for key '%s' in inverter %s: %s",
@@ -549,12 +551,6 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         """Calculate area using the trapezoidal method."""
         return elapsed_time * (left + right) / Decimal(2)
 
-    def _calculate_area_with_one_state(
-        self, elapsed_time: Decimal, constant_state: Decimal
-    ) -> Decimal:
-        """Calculate area given one state (constant value)."""
-        return constant_state * elapsed_time
-
     def _update_integral(self, area: Decimal) -> None:
         """Update the integral with the calculated area."""
         state_before = self._state
@@ -655,16 +651,17 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         if restore_value:
             try:
-                restored_state = safe_float(restore_value)
-                if self.log_this_entity:
-                    _LOGGER.debug(
-                        "[%s] async_added_to_hass - Restoring state to %s",
-                        self.entity_id,
-                        restored_state,
-                    )
-                self._state = restored_state
-                self._last_valid_state = self._state
-                self._last_integration_time = dt_util.utcnow()
+                restored_state = safe_decimal(restore_value)
+                if restored_state:
+                    if self.log_this_entity:
+                        _LOGGER.debug(
+                            "[%s] async_added_to_hass - Restoring state to %s",
+                            self.entity_id,
+                            restored_state,
+                        )
+                    self._state = restored_state
+                    self._last_valid_state = self._state
+                    self._last_integration_time = dt_util.utcnow()
             except (ValueError, TypeError, InvalidOperation):
                 _LOGGER.warning("Could not restore last state for %s", self.entity_id)
 
@@ -843,7 +840,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 if self.log_this_entity:
                     _LOGGER.debug("[%s] Performing timer-based integration", self.entity_id)
 
-                elapsed_seconds = Decimal(
+                elapsed_seconds = safe_decimal(
                     (now - self._last_integration_time).total_seconds()
                 )
                 if self.log_this_entity:
@@ -855,9 +852,23 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                     )
 
                 # Calculate area with constant state
-                area = self._calculate_area_with_one_state(
-                    elapsed_seconds, source_state_dec
-                )
+                try:
+                    if elapsed_seconds and source_state:
+                        area = elapsed_seconds * source_state_dec
+                    else:
+                        raise ValueError(
+                            "Elapsed seconds or source state is invalid for area calculation"
+                        )
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning(
+                        "[%s] Timer - Error calculating area. elapsed_seconds: %s, state: %s, error: %s",
+                        self.entity_id,
+                        elapsed_seconds,
+                        source_state_dec,
+                        e,
+                    )
+                    return
+
                 if self.log_this_entity:
                     _LOGGER.debug("[%s] Timer - Calculated area: %s", self.entity_id, area)
 
@@ -983,7 +994,7 @@ class SigenergyCalculatedSensors:
                 EMSWorkMode.AI_MODE: "AI Mode",
                 EMSWorkMode.TOU: "Time of Use",
                 EMSWorkMode.REMOTE_EMS: "Remote EMS",
-            }.get(value, "Unknown"),
+            }.get(value, f"Unknown: ({value})"), # Fallback to original value
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_import_power",

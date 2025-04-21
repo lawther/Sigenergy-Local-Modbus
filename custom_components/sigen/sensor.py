@@ -556,21 +556,21 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                         0: "On Grid",
                         1: "Off Grid (Auto)",
                         2: "Off Grid (Manual)",
-                    }.get(value, STATE_UNKNOWN)
+                    }.get(value, f"Unknown: {value}")
                 if self.entity_description.key == "plant_running_state":
                     return {
                         RunningState.STANDBY: "Standby",
                         RunningState.RUNNING: "Running",
                         RunningState.FAULT: "Fault",
                         RunningState.SHUTDOWN: "Shutdown",
-                    }.get(value, STATE_UNKNOWN)
+                    }.get(value, f"Unknown: {value}")
                 if self.entity_description.key == "inverter_running_state":
                     return {
                         RunningState.STANDBY: "Standby",
                         RunningState.RUNNING: "Running",
                         RunningState.FAULT: "Fault",
                         RunningState.SHUTDOWN: "Shutdown",
-                    }.get(value, STATE_UNKNOWN)
+                    }.get(value, f"Unknown: {value}")
                 if self.entity_description.key == "ac_charger_system_state":
                     return {
                         0: "System Init",
@@ -581,14 +581,14 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                         5: "C2",
                         6: "F",
                         7: "E",
-                    }.get(value, STATE_UNKNOWN)
+                    }.get(value, f"Unknown: {value}")
                 if self.entity_description.key == "inverter_output_type":
                     return {
                         0: "L/N",
                         1: "L1/L2/L3",
                         2: "L1/L2/L3/N",
                         3: "L1/L2/N",
-                    }.get(value, STATE_UNKNOWN)
+                    }.get(value, f"Unknown: {value}")
                 if self.entity_description.key == "plant_grid_sensor_status":
                     return "Connected" if value == 1 else "Not Connected"
             except Exception as ex:
@@ -731,10 +731,10 @@ class PVStringSensor(SigenergySensor):
 
             # Final check and return
             if value is None:
-                _LOGGER.warning(
-                    "PVStringSensor %s native_value: Final value is None, returning None",
-                    self.entity_id,
-                )
+                # _LOGGER.debug(
+                #     "PVStringSensor %s native_value: Final value is None, returning None",
+                #     self.entity_id,
+                # )
                 return None  # Return None for numeric sensors if value is missing
 
             # Attempt to convert to float if it's numeric, otherwise return as is
