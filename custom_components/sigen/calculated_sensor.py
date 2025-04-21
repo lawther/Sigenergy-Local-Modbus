@@ -32,6 +32,8 @@ from .modbusregisterdefinitions import EMSWorkMode
 
 from .common import (
     SigenergySensorEntityDescription,
+    safe_decimal,
+    safe_float,
 )
 from .sigen_entity import SigenergyEntity # Import the new base class
 
@@ -181,8 +183,8 @@ class SigenergyCalculations:
             # Calculate power with bounds checking
             # Convert to Decimal for precise calculation
             try:
-                voltage_dec = Decimal(str(pv_voltage))
-                current_dec = Decimal(str(pv_current))
+                voltage_dec = safe_decimal(pv_voltage)
+                current_dec = safe_decimal(pv_current)
                 power = voltage_dec * current_dec  # Already in Watts
             except (ValueError, TypeError, InvalidOperation):
                 _LOGGER.warning(
@@ -191,7 +193,7 @@ class SigenergyCalculations:
                     pv_current,
                 )
                 # Fallback to float calculation
-                power = float(pv_voltage) * float(pv_current)
+                power = safe_float(pv_voltage) * safe_float(pv_current)
 
             # Apply some reasonable bounds
             MAX_REASONABLE_POWER = Decimal(
@@ -219,7 +221,7 @@ class SigenergyCalculations:
                 final_power = power / 1000
 
             return (
-                float(final_power) if isinstance(final_power, Decimal) else final_power
+                safe_float(final_power) if isinstance(final_power, Decimal) else final_power
             )
         except Exception as ex:  # pylint: disable=broad-exception-caught
             _LOGGER.warning(
@@ -247,9 +249,9 @@ class SigenergyCalculations:
 
         # Convert to Decimal for precise calculation
         try:
-            power_dec = Decimal(str(grid_power))
+            power_dec = safe_decimal(grid_power)
             # Return value if positive, otherwise 0
-            return float(power_dec) if power_dec > Decimal("0") else 0
+            return safe_float(power_dec) if power_dec > Decimal("0") else 0
         except (ValueError, TypeError, InvalidOperation):
             # Fallback to float calculation
             return grid_power if grid_power > 0 else 0
@@ -272,12 +274,12 @@ class SigenergyCalculations:
 
         # Convert to Decimal for precise calculation
         try:
-            power_dec = Decimal(str(grid_power))
+            power_dec = safe_decimal(str(grid_power))
             # Return absolute value if negative, otherwise 0
             return float(-power_dec) if power_dec < Decimal("0") else 0
         except (ValueError, TypeError, InvalidOperation):
             # Fallback to float calculation
-            return -grid_power if grid_power < 0 else 0
+            return safe_float(-grid_power) if grid_power < 0 else 0
 
     @staticmethod
     def calculate_plant_consumed_power(
@@ -379,7 +381,7 @@ class SigenergyCalculations:
             energy_value = inverter_data.get(energy_key)
             if energy_value is not None:
                 try:
-                    total_energy += Decimal(str(energy_value))
+                    total_energy += safe_decimal(str(energy_value))
                 except (ValueError, TypeError, InvalidOperation) as e:
                     _LOGGER.warning(
                         "[%s] Invalid energy value '%s' for key '%s' in inverter %s: %s",
@@ -398,7 +400,7 @@ class SigenergyCalculations:
                  )
 
         # Return as float, matching other calculated sensors
-        return float(total_energy)
+        return safe_float(total_energy)
 
     @staticmethod
     def calculate_accumulated_battery_charge_energy(
@@ -526,8 +528,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     def _decimal_state(self, state: str) -> Optional[Decimal]:
         """Convert state to Decimal or return None if not possible."""
         try:
-            decimal_value = Decimal(state)
-            return decimal_value
+            return safe_decimal(state)
         except (InvalidOperation, TypeError) as e:
             _LOGGER.warning("[CS][State] Failed to convert %s to Decimal: %s", state, e)
             return None
@@ -654,7 +655,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         if restore_value:
             try:
-                restored_state = Decimal(restore_value)
+                restored_state = safe_float(restore_value)
                 if self.log_this_entity:
                     _LOGGER.debug(
                         "[%s] async_added_to_hass - Restoring state to %s",

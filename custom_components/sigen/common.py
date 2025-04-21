@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any, Optional, Callable, Dict
 from dataclasses import dataclass
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
@@ -11,13 +12,9 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
-from homeassistant.components.binary_sensor import (
-    BinarySensorEntityDescription,
-)
 
 from .const import (DOMAIN, DEVICE_TYPE_INVERTER, DEVICE_TYPE_DC_CHARGER)
 
-from homeassistant.helpers.entity import EntityDescription
 _LOGGER = logging.getLogger(__name__)
 
 @staticmethod
@@ -253,3 +250,23 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
                 extra_params=extra_params,
             )
         return result
+
+def safe_float(value: Any, precision: int = 6) -> Any:
+    """Round only numeric values, leave others untouched."""
+    try:
+        if not isinstance(value, (int, float, Decimal)):
+            return value
+        return float(round(value, precision))
+    except (InvalidOperation, TypeError, ValueError):
+        _LOGGER.warning("Could not convert value %s (type %s) to float", value, type(value).__name__)
+        return value
+    
+def safe_decimal(value: Any) -> Any:
+    """Convert to Decimal only if possible."""
+    try:
+        if not isinstance(value, (int, float, Decimal)):
+            return value
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        _LOGGER.warning("Could not convert value %s (type %s) to Decimal", value, type(value).__name__)
+        return value
