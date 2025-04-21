@@ -233,6 +233,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 				source_key=getattr(description, "source_key", None),
 				max_sub_interval=getattr(description, "max_sub_interval", None),
 				round_digits=getattr(description, "round_digits", None),
+				suggested_display_precision=getattr(description, "suggested_display_precision", None),
 			)
         else:
             # It's a regular SensorEntityDescription
