@@ -500,6 +500,9 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         )
         # Then initialize RestoreSensor
         RestoreSensor.__init__(self)
+        self._attr_suggested_display_precision = getattr(
+            description, "suggested_display_precision", None
+        )
 
         # Sensor-specific initialization
         self._source_entity_id = source_entity_id
