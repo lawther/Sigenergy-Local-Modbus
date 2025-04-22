@@ -189,7 +189,7 @@ class SigenergyCalculations:
                 if voltage_dec and current_dec:
                     power = voltage_dec * current_dec  # Already in Watts
                 else:
-                    return None
+                    return 0.0
             except (ValueError, TypeError, InvalidOperation):
                 _LOGGER.warning(
                     "[CS][PV Power] Error converting values to Decimal: V=%s, I=%s",
