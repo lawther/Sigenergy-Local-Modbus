@@ -1,156 +1,116 @@
-# Sigenergy ESS Integration for Home Assistant
+# <img src="https://brands.home-assistant.io/sigen/dark_icon.png" alt="Sigenergy" width="50" style="vertical-align:Left;" />  Sigenergy ESS Integration for Home Assistant
+[![HACS](https://img.shields.io/badge/HACS-Default-blue)](https://hacs.xyz/) [![Release](https://img.shields.io/github/v/release/TypQxQ/HACS-Sigenergy-Local-Modbus)](https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/releases) [![License](https://img.shields.io/github/license/TypQxQ/HACS-Sigenergy-Local-Modbus)](LICENSE)
 
-This integration allows you to monitor and control your Sigenergy ESS (Energy Storage System) through Home Assistant. It dynamically discovers and configures your plant, inverters, AC chargers, and DC chargers, providing real-time data and control capabilities.
-
-## Highly experimental
-This implementation is still under development and should not be used if you need help.
-It is published for those that can help with finding out what works and what doesn't.
+## Overview
+The Sigenergy ESS Integration brings local Modbus‑TCP monitoring and control of your Sigenergy Energy Storage System (ESS) directly into Home Assistant. Gain real‑time insights, dynamic device management, and seamless UI‑based setup.
 
 ## Features
-
-- **Dynamic Device Addition and Configuration:** Easily add and configure multiple inverters, AC chargers, and DC chargers within a single plant configuration.
-- **Automatic Device Support Detection:** Utilizes Modbus register probing to automatically determine supported features and entities for your specific Sigenergy devices.
-- **Real-time Monitoring:** Monitor power flows (grid import/export, battery charge/discharge, PV production), energy statistics (daily/monthly/yearly counters), and battery metrics (SoC, SoH, temperature, cycles).
-- **Inverter and Charger Status:** Track the status of your inverters and chargers, including running state, alarms, and detailed parameters.
-- **Control Capabilities:** Control your Sigenergy system with options like starting/stopping the plant, changing EMS work modes, and adjusting power limits (availability depends on device model and configuration).
+- **UI‑Driven Setup** with DHCP discovery  
+- **Dynamic Device Management** (Plants, Inverters, AC/DC Chargers)  
+- **Auto‑Detect** supported registers via Modbus probing  
+- **Real‑Time Metrics** for power flows, energy statistics, SoC/SoH  
+- **Control Capabilities** for EMS work modes and more
 
 ## Requirements
-
-- Home Assistant 2024.4.1 or newer
-- Sigenergy ESS with Modbus TCP access activated by your installer.
-- Network connectivity between Home Assistant
-- The Home Assistant Community Store (HACS)
+- Home Assistant **2024.4.1** or newer  
+- Home Assistant Community Store (HACS)  
+- Sigenergy ESS with Modbus‑TCP enabled by your installer. And prefferably confirmed with a screenshot of your DeviceID 
+- Assign a **static IP** to your Sigenergy device in your router to ensure it always receives the same IP address.
 
 ## Installation
+### HACS (Recommended)
+1. Go to **HACS > Integrations** in Home Assistant  
+2. Click the three dots and select **Custom repositories**  
+3. Add repository `TypQxQ/HACS-Sigenergy-Local-Modbus` as **Integration**  
+4. Install **Sigenergy ESS Integration**  
+5. Restart Home Assistant
 
-### HACS Installation (Recommended)
+### Manual
+1. Download the latest `.zip` from the [Releases](https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/releases) page  
+2. Extract and copy `custom_components/sigen` into your HA `custom_components/` folder  
+3. Restart Home Assistant
 
-1.  Make sure [HACS](https://hacs.xyz/) is installed in your Home Assistant instance.
-2.  Add this repository as a custom repository in HACS:
-    -   Go to HACS > Integrations
-    -   Click the three dots in the top right corner
-    -   Select "Custom repositories"
-    -   Add the URL of this repository:
-    <br>`https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus`
-    -   Select "Integration" as the category
-3.  Click "Install" on the Sigenergy integration card.
-4.  Restart Home Assistant.
+## Configuration & Usage
+### Plant Concept
+Central **Plant** entry groups devices by Host/IP and Port.  
+```
+Plant (IP:Port)
+   ├─ Inverter 1 (ID 1)
+   │    └─ DC Charger (via Inverter 1)
+   ├─ Inverter 2 (ID 2)
+   └─ AC Charger (ID 3)
+```
 
-### Manual Installation
 
-1.  Download the latest release from the GitHub repository.
-2.  Create a `custom_components/sigen` directory in your Home Assistant configuration directory.
-3.  Extract the contents of the release into the `custom_components/sigen` directory.
-4.  Restart Home Assistant.
+### Initial Setup (Discovery)
+![Discovered Sigenergy System](docs/images/discovery_demo.png)
+1. Navigate to **Settings > Devices & Services**
+2. If your Sigenergy device is discovered automatically on the network, it will appear under **Discovered**.  
+    If not discovered, try unplugging and replugging the network cable of your Sigenergy system.  
+    If discovery still fails, see the [Troubleshooting](#troubleshooting) section below.
+> Controls are **read-only by default**. To enable control features, you must explicitly activate them in the integration configuration **and** allow them in Home Assistant. This precaution helps prevent unintended changes or adverse effects.
 
-## Configuration
 
-The integration uses a configuration process through the Home Assistant UI.  When adding your first Sigenergy device, the integration will always add a Plant and an Inverter. A Plant represents your overall Sigenergy system, encompassing all connected devices.
+### Manual Initial Setup
+1. Navigate to **Settings > Devices & Services > Add Integration**
+2. Search for **Sigenergy**  
+3. If discovered, click **Configure**; otherwise select manually  
+4. Enter **Host IP**, **Port** (default 502), and first **Device ID**  
+5. Add additional Inverters/Chargers via the same Plant entry
 
-To add more devices, you need to add the "Sigenergy" integration again for each subsequent device (Inverter, AC Charger, or DC Charger).
+### Reconfiguration & Options
+1.  Navigate to **Settings > Devices & Services**.
+2.  Find your **Sigenergy** integration entry and click **Configure**.
+3.  From the configuration menu, you can:
+    *   Adjust **Plant** settings (e.g., read-only, refresh intervals).
+    *   Modify settings for individual **Inverters** or **Chargers**.
+> While it is technically possible to assign different IP addresses and ports to devices, it is not advised. For best results and reliable operation, all devices within a plant should use the same IP address and port.
 
-Follow the configuration flow:
+### Add Additional Devices
 
-1.  Go to Settings > Devices & Services.
-2.  Click "Add Integration".
-3.  Search for "Sigenergy".
-4.  Follow the configuration flow:
+1. Navigate to **Settings > Devices & Services**.  
+2. Select the **Sigenergy** integration and click **Add Device**.  
+3. Follow the prompts to add extra inverters, chargers, or a new plant.  
 
-    -   **Add a Plant and Inverter:** The first time you add the Sigenergy integration, you will add a "Plant" and the main or only "Inverter". You'll need to provide the host (IP address) and port (default: 502) of your Sigenergy system, and the slave ID (default: 1) for your Inverter. You can also set the integration to read-only mode.
-    -   **Adding Subsequent Devices:** To add more devices (Inverters, AC Chargers, DC Chargers), repeat steps 1-3, selecting the "Sigenergy" integration again for each device.
-        -   **Inverters:** Provide a host and slave ID for each additional inverter.
-        -   **AC Chargers:**  Provide a host and slave ID for each AC charger.
-        -   **DC Chargers:** DC Chargers are associated with a specific inverter. You'll select the inverter and the integration will use the inverter's host and slave ID for the DC charger.
-### Configuration Parameters
+## Entities & Controls
 
--   **`host`:** The IP address of your Sigenergy system (required for plant and optionally for individual devices).
--   **`port`:** The Modbus TCP port (default: 502, required for plant and optionally for individual devices).
--   **`inverter_slave_ids`:** A list of slave IDs for your inverters.
--   **`ac_charger_slave_ids`:** A list of slave IDs for your AC chargers.
--   **`dc_charger_slave_ids`:** A list of slave IDs for your DC chargers (these correspond to inverter slave IDs).
--   **`inverter_connections`:** A dictionary mapping inverter names to their connection details (host, port, slave ID).
--   **`ac_charger_connections`:** A dictionary mapping AC charger names to their connection details (host, port, slave ID).
--   **`read_only`:**  Set to `True` to prevent the integration from writing to Modbus registers (recommended for initial setup).
+**Plant Entities:** active/reactive power, PV power, SoC, grid flows, EMS mode  
+**Inverter Entities:** MPPT metrics, battery SoC/SoH, phase data  
+**AC Charger:** charging power, total energy, system state  
+**Controls:** EMS work modes are exposed via `select` entities, and optional `button`/`switch` controls are available.  
+> Controls are **read-only by default** unless  explicitly enabled in the integration configuration.
 
-## Entities
-
-The integration dynamically creates entities based on the configured devices (plant, inverters, AC chargers, and DC chargers) and the Modbus registers supported by those devices.
-
-**Common Plant Entities:**
-
--   Plant Active Power
--   Plant Reactive Power
--   Photovoltaic Power
--   Battery State of Charge (SoC)
--   Battery Power (charging/discharging)
--   Grid Active Power (import/export)
--   EMS Work Mode
--   Plant Running State
-
-**Common Inverter Entities:**
-
--   Active Power
--   Reactive Power
--   Battery Power
--   Battery SoC
--   Battery Temperature
--   PV Power
--   Grid Frequency
--   Phase Voltages
--   Phase Currents
--   Daily Charge/Discharge Energy
-
-**Common AC Charger Entities:**
-
--   System State
--   Charging Power
--   Total Energy Consumed
-
-**Common DC Charger Entities:** (These will typically be associated with the corresponding inverter entities)
-
-- DC Charger Power
-- DC Charger Status
-
-*Note: The specific entities available will depend on your Sigenergy device models and the Modbus registers they support. The integration uses register probing to automatically discover supported entities.*
-
-## Controls
-
-The integration provides control capabilities, allowing you to manage your Sigenergy system. Common control options include:
-
--   **Plant Power:** Start/stop the plant.
--   **EMS Work Mode:** Select the desired EMS operating mode (e.g., Max Self Consumption, AI Mode, TOU, Remote EMS).
-
-*Note: More advanced controls are available through Home Assistant's Modbus services. The available controls depend on your device model and configuration.*
+## Quickstart Automation Example
+```yaml
+alias: "Notify on Low Battery"
+trigger:
+  - platform: state
+    entity_id: sensor.plant_battery_soc
+    to: "<20"
+action:
+  - service: notify.mobile_app
+    data:
+      title: "Battery Low"
+      message: "SoC dropped below 20%"
+```
 
 ## Troubleshooting
-
-### Connection Issues
-
--   Ensure the IP address and port are correct.
--   Check that the Sigenergy system is powered on and connected to the network.
--   Verify that there are no firewalls blocking the connection.
--   Check the Home Assistant logs for detailed error messages.
-
-### Entity Issues
-
--   If entities are showing as unavailable, check the connection to the Sigenergy system.
--   If values seem incorrect, verify the Modbus slave IDs are configured correctly.
--   For missing entities, ensure that you have added the corresponding devices (inverters, chargers) during the configuration flow. The integration uses dynamic register probing, so it may take some time to discover all supported entities.
-
-## System Compatibility
-
-This integration has been tested with the following Sigenergy models:
-
--   SigenStorEC series
--   SigenHybrid series
--   SigenPV series
--   Sigen EV DC Charging Module
--   Sigen EV AC Charger
+- Ensure your installer tapped **SAVE** after enabling Modbus‑TCP on your device.
+- Verify IP and firewall settings.
+- Ensure again Modbus‑TCP is enabled on your ESS.
+- Check Home Assistant logs for `sigen` errors.
 
 ## Contributing
+Contributions welcome!  
+1. Fork the repo and create a branch  
+2. Add tests under `tests/components/sigen/`  
+3. Follow Home Assistant coding and config‑flow patterns  
+4. Submit a Pull Request
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Support & Links
+- Issues: https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/issues  
+- Discussions: https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/discussions  
+- HACS docs: https://hacs.xyz/
 
 ## License
-
-This integration is licensed under the MIT License.
+MIT License © [Andrei Ignat]
