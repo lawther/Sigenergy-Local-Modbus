@@ -72,7 +72,7 @@
       },
       "ac_charger_config": {
         "title": "Configure Sigenergy AC Charger",
-        "description": "Set up a Sigenergy AC Charger. Enter the unique host address and port for this AC Charger.",
+        "description": "Set up a Sigenergy AC Charger. Enter the host address and port for the Modbus Server (Main Inverter) and the deviceID for this AC Charger.",
         "data": {
           "host": "Host (IP address of this AC charger)",
           "port": "Port (default is 502)",
@@ -150,21 +150,18 @@
       },
       "plant_config": {
         "title": "Reconfigure Sigenergy Plant",
-        "description": "Update the connection details, scan intervals, or reset options for this Plant.",
+        "description": "Update the connection details and scan intervals for this Plant.\n\nHigh Priority Scan Interval is used for Power and Energy sensors.\nAlarm Scan Interval is used for Alarm sensors is usually set to same as Medium.\nScan intervals mut be a multiple of the High Scan Interval.",
         "data": {
           "host": "Host (IP address)",
           "port": "Port",
           "read_only": "Read-Only Mode",
-          "reset_values": "Reset accumulated sensor values (e.g., energy totals) on next restart",
           "scan_interval_high": "High Priority Scan Interval (seconds)",
           "scan_interval_alarm": "Alarm Scan Interval (seconds)",
           "scan_interval_medium": "Medium Priority Scan Interval (seconds)",
-          "scan_interval_low": "Low Priority Scan Interval (seconds)",
-          "keep_existing": "Keep Existing Sensors (and potentially rename new ones)"
+          "scan_interval_low": "Low Priority Scan Interval (seconds)"
         },
         "data_description": {
-          "read_only": "(Prevents Home Assistant from making changes to the Sigenergy system. Recommended for initial setup. Can be changed later in device settings.)",
-          "keep_existing": "If you have previous configurations for this device, adding it again might create duplicate or numbered sensors (e.g., `sensor_name_2`).\n\nRECOMMENDED PATH: Leave this unchecked and manually delete any old Sigenergy YAML configuration and related sensor entities in Home Assistant *before* submitting. This ensures new sensors use standard names.\n\nALTERNATIVE PATH: Check this box to keep existing sensors. No cleanup is needed beforehand, but new sensors with conflicting names will be automatically numbered. You can manage/rename sensors later in device settings."
+          "read_only": "(Prevents Home Assistant from making changes to the Sigenergy system. Recommended for initial setup. Can be changed later in device settings.)"
         }
       },
       "inverter_config": {
