@@ -1,6 +1,6 @@
 ## Project Context & Environment
 
-- **Integration Code:** The core Python code for this Sigenergy integration resides in `q:/HACS-Sigenergy-Local-Modbus/custom_components/sigen/`.
+- **Integration Code:** The core Python code for this Sigenergy integration resides in `q:/Sigenergy-Local-Modbus/custom_components/sigen/`.
 - **Home Assistant Instance:** The target Home Assistant instance is running at `http://192.168.1.47:8123/`.
 - **Log File:** The Home Assistant log file can be found at `q:/home-assistant.log`.
 - **Database:** The Home Assistant database is located at `Q:/home-assistant_v2.db`.
