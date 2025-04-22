@@ -48,7 +48,8 @@ Plant (IP:Port)
 2. If your Sigenergy device is discovered automatically on the network, it will appear under **Discovered**.  
     If not discovered, try unplugging and replugging the network cable of your Sigenergy system.  
     If discovery still fails, see the [Troubleshooting](#troubleshooting) section below.
-3. Click **ADD** and follow the prompts to add the device. It will find any inverters and chargers connected. 
+> Controls are **read-only by default**. To enable control features, you must explicitly activate them in the integration configuration **and** allow them in Home Assistant. This precaution helps prevent unintended changes or adverse effects.
+
 
 ### Manual Initial Setup
 1. Navigate to **Settings > Devices & Services > Add Integration**
@@ -57,15 +58,27 @@ Plant (IP:Port)
 4. Enter **Host IP**, **Port** (default 502), and first **Device ID**  
 5. Add additional Inverters/Chargers via the same Plant entry
 
-### Reconfiguration
-Go to **Settings > Devices & Services**, locate **Sigenergy**, and click **Configure** to modify host, device IDs, scan intervals, or remove devices.
+### Reconfiguration & Options
+1.  Navigate to **Settings > Devices & Services**.
+2.  Find your **Sigenergy** integration entry and click **Configure**.
+3.  From the configuration menu, you can:
+    *   Adjust **Plant** settings (e.g., read-only, refresh intervals).
+    *   Modify settings for individual **Inverters** or **Chargers**.
+> While it is technically possible to assign different IP addresses and ports to devices, it is not advised. For best results and reliable operation, all devices within a plant should use the same IP address and port.
+
+### Add Additional Devices
+
+1. Navigate to **Settings > Devices & Services**.  
+2. Select the **Sigenergy** integration and click **Add Device**.  
+3. Follow the prompts to add extra inverters, chargers, or a new plant.  
 
 ## Entities & Controls
+
 **Plant Entities:** active/reactive power, PV power, SoC, grid flows, EMS mode  
 **Inverter Entities:** MPPT metrics, battery SoC/SoH, phase data  
 **AC Charger:** charging power, total energy, system state  
-**DC Charger:** charging power, status  
-**Controls:** EMS work modes via `select`, optional `button`/`switch`
+**Controls:** EMS work modes are exposed via `select` entities, and optional `button`/`switch` controls are available.  
+> Controls are **read-only by default** unless  explicitly enabled in the integration configuration.
 
 ## Quickstart Automation Example
 ```yaml
