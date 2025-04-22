@@ -5,20 +5,23 @@
         "title": "Connect to Sigenergy Energy Storage System",
         "description": "Set up a Sigenergy Energy Storage System to monitor and control it through Home Assistant. \n\nMake sure the Sigenergy system is connected to the same network as Home Assistant and the Modbus option has been enabled by the installer."
       },
+      "dhcp_plant_config": {
+        "title": "Configure Sigenergy Plant",
+        "description": "A new Sigenergy device was discovered at {ip_address}. Select your configuration options:",
+        "data": {
+          "read_only": "Read-Only Mode",
+          "keep_existing": "Keep Existing Sensors (and potentially rename new ones)"
+        },
+        "data_description": {
+          "read_only": "(Prevents Home Assistant from making changes to the Sigenergy system. Recommended for initial setup. Can be changed later in device settings.)",
+          "keep_existing": "If you have previous configurations for this device, adding it again might create duplicate or numbered sensors (e.g., `sensor_name_2`).\n\nRECOMMENDED PATH: Leave this unchecked and manually delete any old Sigenergy YAML configuration and related sensor entities in Home Assistant *before* submitting. This ensures new sensors use standard names.\n\nALTERNATIVE PATH: Check this box to keep existing sensors. No cleanup is needed beforehand, but new sensors with conflicting names will be automatically numbered. You can manage/rename sensors later in device settings."
+        }
+      },
       "device_type": {
         "title": "Select Device Type",
         "description": "Choose the type of Sigenergy device you want to add.",
         "data": {
           "device_type": "Device Type"
-        }
-      },
-      "dhcp_select_plant": {
-        "title": "Discovered Device: Select Action",
-        "description": "A new Sigenergy device was discovered at {ip_address}. Choose how to add it.",
-        "data": {
-          "action_configure_new_plant": "Configure as New Plant",
-          "action_add_inverter": "Add as Inverter to Existing Plant",
-          "action_add_ac_charger": "Add as AC Charger to Existing Plant"
         }
       },
       "plant_config": {
@@ -30,13 +33,18 @@
           "inverter_slave_id": "Inverter Device ID (Default is 1)",
           "ac_charger_slave_ids": "AC Charger Device IDs (comma-separated when multiple. Default is empty for no AC charger)",
           "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)",
-          "read_only": "Read-Only Mode (prevents any changes being made to the Sigenergy system)",
           "scan_interval_high": "High Priority Scan Interval (seconds)",
           "scan_interval_medium": "Medium Priority Scan Interval (seconds)",
           "scan_interval_low": "Low Priority Scan Interval (seconds)",
           "scan_interval_alarm": "Alarm Scan Interval (seconds)",
           "migrate_yaml": "Migrate legacy YAML sensor values",
-          "migrate_yaml_description": "If enabled, initial sensor values will be imported from the legacy YAML configuration (if present)."
+          "migrate_yaml_description": "If enabled, initial sensor values will be imported from the legacy YAML configuration (if present).",
+          "read_only": "Read-Only Mode",
+          "keep_existing": "Keep Existing Sensors (and potentially rename new ones)"
+        },
+        "data_description": {
+          "read_only": "(Prevents Home Assistant from making changes to the Sigenergy system. Recommended for initial setup. Can be changed later in device settings.)",
+          "keep_existing": "If you have previous configurations for this device, adding it again might create duplicate or numbered sensors (e.g., `sensor_name_2`).\n\nRECOMMENDED PATH: Leave this unchecked and manually delete any old Sigenergy YAML configuration and related sensor entities in Home Assistant *before* submitting. This ensures new sensors use standard names.\n\nALTERNATIVE PATH: Check this box to keep existing sensors. No cleanup is needed beforehand, but new sensors with conflicting names will be automatically numbered. You can manage/rename sensors later in device settings."
         }
       },
       "select_plant": {
@@ -64,7 +72,7 @@
       },
       "ac_charger_config": {
         "title": "Configure Sigenergy AC Charger",
-        "description": "Set up a Sigenergy AC Charger. Enter the unique host address and port for this AC Charger.",
+        "description": "Set up a Sigenergy AC Charger. Enter the host address and port for the Modbus Server (Main Inverter) and the deviceID for this AC Charger.",
         "data": {
           "host": "Host (IP address of this AC charger)",
           "port": "Port (default is 502)",
@@ -100,7 +108,8 @@
       "cannot_be_lower_than_high": "Cannot be lower than the high interval.",
       "cannot_be_lower_than_medium": "Cannot be lower than the medium interval.",
       "invalid_host": "Invalid host address provided.",
-      "invalid_port": "Invalid port number. Must be between 1 and 65535."
+      "invalid_port": "Invalid port number. Must be between 1 and 65535.",
+      "old_config_found": "Please approve potential sensor renaming (check the box) or delete the old configuration before continuing."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured.",
@@ -129,18 +138,30 @@
           "selected_device": "Device"
         }
       },
+      "accumulated_energy_config": {
+        "title": "Accumulated Energy sensor values",
+        "description": "Reset the accumulated energy sensor values (e.g., energy totals) on SUBMIT. \n\nEnter values in kWh.",
+        "data": {
+          "sensor.sigen_plant_accumulated_pv_energy": "Plant Accumulated PV Energy",
+          "sensor.sigen_plant_accumulated_consumed_energy": "Plant Accumulated Consumed Energy",
+          "sensor.sigen_plant_accumulated_grid_import_energy": "Plant Accumulated Grid Import Energy",
+          "sensor.sigen_plant_accumulated_grid_export_energy": "Plant Accumulated Grid Export Energy"
+        }
+      },
       "plant_config": {
         "title": "Reconfigure Sigenergy Plant",
-        "description": "Update the connection details, scan intervals, or reset options for this Plant.",
+        "description": "Update the connection details and scan intervals for this Plant.\n\nHigh Priority Scan Interval is used for Power and Energy sensors.\nAlarm Scan Interval is used for Alarm sensors is usually set to same as Medium.\nScan intervals mut be a multiple of the High Scan Interval.",
         "data": {
           "host": "Host (IP address)",
           "port": "Port",
           "read_only": "Read-Only Mode",
-          "reset_values": "Reset accumulated sensor values (e.g., energy totals) on next restart",
           "scan_interval_high": "High Priority Scan Interval (seconds)",
           "scan_interval_alarm": "Alarm Scan Interval (seconds)",
           "scan_interval_medium": "Medium Priority Scan Interval (seconds)",
           "scan_interval_low": "Low Priority Scan Interval (seconds)"
+        },
+        "data_description": {
+          "read_only": "(Prevents Home Assistant from making changes to the Sigenergy system. Recommended for initial setup. Can be changed later in device settings.)"
         }
       },
       "inverter_config": {

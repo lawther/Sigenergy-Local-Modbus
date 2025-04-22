@@ -26,8 +26,9 @@ CONF_AC_CHARGER_CONNECTIONS = "ac_charger_connections"
 CONF_DC_CHARGER_CONNECTIONS = "dc_charger_connections"
 CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
-CONF_MIGRATE_YAML = "migrate_yaml"
+CONF_KEEP_EXISTING = "keep_existing"
 CONF_VALUES_TO_INIT = "values_to_initialize"
+STEP_ACCUMULATED_ENERGY_CONFIG = "accumulated_energy_config"
 
 # Default names
 DEFAULT_INVERTER_NAME = "Sigen Inverter"
@@ -39,6 +40,7 @@ DEFAULT_INVERTER_HAS_DCCHARGER = False
 STEP_USER = "user"
 STEP_DEVICE_TYPE = "device_type"
 STEP_PLANT_CONFIG = "plant_config"
+STEP_DHCP_PLANT_CONFIG = "dhcp_plant_config"
 STEP_INVERTER_CONFIG = "inverter_config"
 STEP_AC_CHARGER_CONFIG = "ac_charger_config"
 STEP_DC_CHARGER_CONFIG = "dc_charger_config"
@@ -97,4 +99,11 @@ LEGACY_SENSOR_MIGRATION_MAP = {
     "sensor.sigen_plant_accumulated_consumed_energy": "sensor.sigen_accumulated_energy_consumption",
     "sensor.sigen_plant_accumulated_grid_import_energy": "sensor.sigen_accumulated_grid_energy_import",
     "sensor.sigen_plant_accumulated_grid_export_energy": "sensor.sigen_accumulated_grid_energy_export",
+}
+
+RESETABLE_SENSORS =  {
+    "sensor.sigen_plant_accumulated_pv_energy": "Plant Accumulated PV Energy",
+    "sensor.sigen_plant_accumulated_consumed_energy": "Plant Accumulated Consumed Energy",
+    "sensor.sigen_plant_accumulated_grid_import_energy": "Plant Accumulated Grid Import Energy",
+    "sensor.sigen_plant_accumulated_grid_export_energy": "Plant Accumulated Grid Export Energy",
 }
