@@ -1,5 +1,5 @@
 # <img src="https://brands.home-assistant.io/sigen/dark_icon.png" alt="Sigenergy" width="50" style="vertical-align:Left;" />  Sigenergy ESS Integration for Home Assistant
-[![HACS](https://img.shields.io/badge/HACS-Default-blue)](https://hacs.xyz/) [![Release](https://img.shields.io/github/v/release/TypQxQ/HACS-Sigenergy-Local-Modbus)](https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/releases) [![License](https://img.shields.io/github/license/TypQxQ/HACS-Sigenergy-Local-Modbus)](LICENSE)
+[![HACS](https://img.shields.io/badge/HACS-Default-blue)](https://hacs.xyz/) [![Release](https://img.shields.io/github/v/release/TypQxQ/Sigenergy-Local-Modbus)](https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases) [![License](https://img.shields.io/github/license/TypQxQ/Sigenergy-Local-Modbus)](LICENSE)
 
 ## Overview
 The Sigenergy ESS Integration brings local Modbus‑TCP monitoring and control of your Sigenergy Energy Storage System (ESS) directly into Home Assistant. Gain real‑time insights, dynamic device management, and seamless UI‑based setup.
@@ -21,12 +21,12 @@ The Sigenergy ESS Integration brings local Modbus‑TCP monitoring and control o
 ### HACS (Recommended)
 1. Go to **HACS > Integrations** in Home Assistant  
 2. Click the three dots and select **Custom repositories**  
-3. Add repository `TypQxQ/HACS-Sigenergy-Local-Modbus` as **Integration**  
+3. Add repository `TypQxQ/Sigenergy-Local-Modbus` as **Integration**  
 4. Install **Sigenergy ESS Integration**  
 5. Restart Home Assistant
 
 ### Manual
-1. Download the latest `.zip` from the [Releases](https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/releases) page  
+1. Download the latest `.zip` from the [Releases](https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases) page  
 2. Extract and copy `custom_components/sigen` into your HA `custom_components/` folder  
 3. Restart Home Assistant
 
@@ -108,8 +108,8 @@ Contributions welcome!
 4. Submit a Pull Request
 
 ## Support & Links
-- Issues: https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/issues  
-- Discussions: https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/discussions  
+- Issues: https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues  
+- Discussions: https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions  
 - HACS docs: https://hacs.xyz/
 
 ## License
