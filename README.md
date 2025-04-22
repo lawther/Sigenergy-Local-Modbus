@@ -1,4 +1,4 @@
-# 📘 Sigenergy ESS Integration for Home Assistant
+# <img src="https://brands.home-assistant.io/sigen/dark_icon.png" alt="Sigenergy" width="50" style="vertical-align:Left;" />  Sigenergy ESS Integration for Home Assistant
 [![HACS](https://img.shields.io/badge/HACS-Default-blue)](https://hacs.xyz/) [![Release](https://img.shields.io/github/v/release/TypQxQ/HACS-Sigenergy-Local-Modbus)](https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/releases) [![License](https://img.shields.io/github/license/TypQxQ/HACS-Sigenergy-Local-Modbus)](LICENSE)
 
 ## Overview
@@ -14,8 +14,8 @@ The Sigenergy ESS Integration brings local Modbus‑TCP monitoring and control o
 ## Requirements
 - Home Assistant **2024.4.1** or newer  
 - Home Assistant Community Store (HACS)  
-- Sigenergy ESS with Modbus‑TCP enabled  
-- Network connectivity between HA and Sigenergy devices
+- Sigenergy ESS with Modbus‑TCP enabled by your installer. And prefferably confirmed with a screenshot of your DeviceID 
+- Assign a **static IP** to your Sigenergy device in your router to ensure it always receives the same IP address.
 
 ## Installation
 ### HACS (Recommended)
@@ -29,6 +29,43 @@ The Sigenergy ESS Integration brings local Modbus‑TCP monitoring and control o
 1. Download the latest `.zip` from the [Releases](https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/releases) page  
 2. Extract and copy `custom_components/sigen` into your HA `custom_components/` folder  
 3. Restart Home Assistant
+
+## Configuration & Usage
+### Plant Concept
+Central **Plant** entry groups devices by Host/IP and Port.  
+```
+Plant (IP:Port)
+   ├─ Inverter 1 (ID 1)
+   │    └─ DC Charger (via Inverter 1)
+   ├─ Inverter 2 (ID 2)
+   └─ AC Charger (ID 3)
+```
+
+
+### Initial Setup (Discovery)
+![Discovered Sigenergy System](docs/images/discovery_demo.png)
+1. Navigate to **Settings > Devices & Services**
+2. If your Sigenergy device is discovered automatically on the network, it will appear under **Discovered**.  
+    If not discovered, try unplugging and replugging the network cable of your Sigenergy system.  
+    If discovery still fails, see the [Troubleshooting](#troubleshooting) section below.
+3. Click **ADD** and follow the prompts to add the device. It will find any inverters and chargers connected. 
+
+### Manual Initial Setup
+1. Navigate to **Settings > Devices & Services > Add Integration**
+2. Search for **Sigenergy**  
+3. If discovered, click **Configure**; otherwise select manually  
+4. Enter **Host IP**, **Port** (default 502), and first **Device ID**  
+5. Add additional Inverters/Chargers via the same Plant entry
+
+### Reconfiguration
+Go to **Settings > Devices & Services**, locate **Sigenergy**, and click **Configure** to modify host, device IDs, scan intervals, or remove devices.
+
+## Entities & Controls
+**Plant Entities:** active/reactive power, PV power, SoC, grid flows, EMS mode  
+**Inverter Entities:** MPPT metrics, battery SoC/SoH, phase data  
+**AC Charger:** charging power, total energy, system state  
+**DC Charger:** charging power, status  
+**Controls:** EMS work modes via `select`, optional `button`/`switch`
 
 ## Quickstart Automation Example
 ```yaml
@@ -44,39 +81,11 @@ action:
       message: "SoC dropped below 20%"
 ```
 
-## Configuration & Usage
-### Plant Concept
-Central **Plant** entry groups devices by Host/IP and Port.  
-```mermaid
-graph TD
-  P[Plant (IP:Port)] --> I1[Inverter 1 (ID 1)]
-  P --> I2[Inverter 2 (ID 2)]
-  P --> AC1[AC Charger (ID 3)]
-  I1 --> DC1[DC Charger (via Inverter 1)]
-```
-
-### Initial Setup
-1. Navigate to **Settings > Devices & Services > Add Integration**  
-2. Search for **Sigenergy**  
-3. If discovered, click **Configure**; otherwise select manually  
-4. Enter **Host IP**, **Port** (default 502), and first **Slave ID**  
-5. Add additional Inverters/Chargers via the same Plant entry
-
-### Reconfiguration
-Go to **Settings > Devices & Services**, locate **Sigenergy**, and click **Configure** to modify host, slave IDs, scan intervals, or remove devices.
-
-## Entities & Controls
-**Plant Entities:** active/reactive power, PV power, SoC, grid flows, EMS mode  
-**Inverter Entities:** MPPT metrics, battery SoC/SoH, phase data  
-**AC Charger:** charging power, total energy, system state  
-**DC Charger:** charging power, status  
-**Controls:** EMS work modes via `select`, optional `button`/`switch`
-
 ## Troubleshooting
-- Verify IP, port, and firewall settings  
-- Ensure Modbus‑TCP is enabled on your ESS  
-- Check Home Assistant logs for `sigen` errors  
-- Confirm correct Slave IDs and allow probe time after adding devices
+- Ensure your installer tapped **SAVE** after enabling Modbus‑TCP on your device.
+- Verify IP and firewall settings.
+- Ensure again Modbus‑TCP is enabled on your ESS.
+- Check Home Assistant logs for `sigen` errors.
 
 ## Contributing
 Contributions welcome!  
@@ -91,4 +100,4 @@ Contributions welcome!
 - HACS docs: https://hacs.xyz/
 
 ## License
-MIT License © [Your Name]
+MIT License © [Andrei Ignat]
