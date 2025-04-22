@@ -1,14 +1,9 @@
 {
   "domain": "sigen",
   "name": "Sigenergy ESS",
-  "documentation": "https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus",
-  "issue_tracker": "https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/issues",
-  "dependencies": ["modbus", "integration"],
   "codeowners": ["@TypQxQ"],
-  "requirements": ["pymodbus>=3.0.0"],
-  "iot_class": "local_polling",
-  "version": "1.0.1",
   "config_flow": true,
+  "dependencies": ["modbus", "integration"],
   "dhcp": [
     {
       "macaddress": "0C47A99*",
@@ -19,7 +14,12 @@
       "hostname": "*"
     }
   ],
+  "documentation": "https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus",
   "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/TypQxQ/HACS-Sigenergy-Local-Modbus/issues",
+  "loggers": ["custom_components.sigen"],
   "quality_scale": "custom",
-  "loggers": ["custom_components.sigen"]
+  "requirements": ["pymodbus>=3.0.0"],
+  "version": "1.0.1"
 }
