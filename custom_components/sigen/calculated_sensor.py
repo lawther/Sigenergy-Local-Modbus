@@ -48,6 +48,7 @@ LOG_THIS_ENTITY = [
     # "sensor.sigen_plant_accumulated_grid_import_energy",
     # "sensor.sigen_plant_accumulated_pv_energy",
     # "sigen_plant_accumulated_battery_charge_energy",
+    "sigen_plant_accumulated_pv_energy"
 ]
 
 
@@ -615,34 +616,47 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         await super().async_added_to_hass()
         self.log_this_entity = self.entity_id in LOG_THIS_ENTITY
         restore_value = None
+        restored_from_config = False  # Flag to track if value came from config
 
         # Check if there is qued restore for this value either migration or manual reset.
         config_entry = self.hub.config_entry
         if config_entry:
+            # Use .get() with a default empty dict to avoid potential KeyError
             _resetting_sensors = config_entry.data.get(CONF_VALUES_TO_INIT, {})
-            if self.log_this_entity:
-                _LOGGER.debug("Will reset values: %s", _resetting_sensors)
 
             if self.entity_id in _resetting_sensors:
-                restore_value = _resetting_sensors[self.entity_id]
+                _LOGGER.debug("Sensor %s is in the list of restorable sensors", self.entity_id)
+                init_value = _resetting_sensors.get(self.entity_id) # Use .get() for safety
+                if init_value is not None and init_value not in (
+                    STATE_UNKNOWN,
+                    STATE_UNAVAILABLE,
+                    ""
+                ):
+                    # Convert to Decimal safely
+                    init_value_dec = safe_decimal(init_value)
+                    if init_value_dec is not None:
+                        restore_value = init_value_dec
+                        _LOGGER.debug("Saving initial value for %s: %s", self.entity_id, restore_value)
+                        restored_from_config = True # Mark that we restored from config
+                    else:
+                        _LOGGER.warning("Could not convert init_value '%s' to Decimal for %s", init_value, self.entity_id)
+                        restore_value = None # Ensure restore_value is None if conversion fails
+                        restored_from_config = False # Do not mark as restored if conversion failed
 
-                # Remove the entity from list of restorable
-                _resetting_sensors.pop(self.entity_id)
+                    # Remove the entity from list of restorable
+                    # Create a mutable copy before modifying
+                    mutable_resetting_sensors = dict(_resetting_sensors)
+                    mutable_resetting_sensors.pop(self.entity_id, None) # Use pop with default None
 
-                # Make new Configuration data from original
-                new_config_data = dict(config_entry.data)
-                new_config_data[CONF_VALUES_TO_INIT] = _resetting_sensors
+                    # Make new Configuration data from original
+                    new_config_data = dict(config_entry.data)
+                    new_config_data[CONF_VALUES_TO_INIT] = mutable_resetting_sensors
 
-                # Update the plant's configuration with the new data
-                self.hass.config_entries.async_update_entry(config_entry, data=new_config_data)
-                self.hass.config_entries._async_schedule_save()
+                    # Update the plant's configuration with the new data
+                    self.hass.config_entries.async_update_entry(config_entry, data=new_config_data)
 
-                _LOGGER.debug("Deleted the sensor %s resetable. New Dict: %s", self.entity_id,
-                                config_entry.data.get(CONF_VALUES_TO_INIT))
-        else:
-            _LOGGER.debug("No config entry")
-
-        if not restore_value:
+        # Only check last_state if we haven't restored from config yet
+        if not restored_from_config:
             # Restore previous state if available
             last_state = await self.async_get_last_state()
             if last_state and last_state.state not in (
@@ -652,21 +666,21 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             ):
                 restore_value = last_state.state
 
-        if restore_value:
+        if restore_value is not None: # Check if restore_value is not None before trying to use it
             try:
-                restored_state = safe_decimal(restore_value)
-                if restored_state:
-                    if self.log_this_entity:
-                        _LOGGER.debug(
-                            "[%s] async_added_to_hass - Restoring state to %s",
-                            self.entity_id,
-                            restored_state,
-                        )
+                # Ensure restore_value is converted to string before passing to safe_decimal
+                restored_state = safe_decimal(str(restore_value))
+                # Check if conversion was successful and resulted in a Decimal
+                if isinstance(restored_state, Decimal):
                     self._state = restored_state
                     self._last_valid_state = self._state
                     self._last_integration_time = dt_util.utcnow()
-            except (ValueError, TypeError, InvalidOperation):
-                _LOGGER.warning("Could not restore last state for %s", self.entity_id)
+                else:
+                    _LOGGER.warning("Could not convert restore value '%s' to Decimal for %s", restore_value, self.entity_id)
+            except (ValueError, TypeError, InvalidOperation) as e:
+                _LOGGER.warning("Could not restore state for %s from value '%s': %s", self.entity_id, restore_value, e)
+        else:
+            _LOGGER.debug("No restore value available for %s, state remains uninitialized.", self.entity_id)
 
         # Set up appropriate handlers based on max_sub_interval
         # Ensure source_entity_id is valid before proceeding

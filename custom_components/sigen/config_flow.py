@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Union
 import asyncio
 import re
@@ -47,12 +48,10 @@ from .const import (
     CONF_DC_CHARGER_CONNECTIONS,
     CONF_DEVICE_TYPE,
     CONF_PARENT_PLANT_ID,
-    # CONF_PARENT_DEVICE_ID,
     CONF_INVERTER_HAS_DCCHARGER,
     CONF_READ_ONLY,
     CONF_KEEP_EXISTING,
     CONF_REMOVE_DEVICE,
-    CONF_VALUES_TO_INIT,
     CONF_SCAN_INTERVAL_HIGH,
     CONF_SCAN_INTERVAL_MEDIUM,
     CONF_SCAN_INTERVAL_LOW,
@@ -75,7 +74,11 @@ from .const import (
     CONF_INVERTER_SLAVE_ID,
     CONF_PARENT_INVERTER_ID,
     STEP_SELECT_DEVICE,
+    STEP_ACCUMULATED_ENERGY_CONFIG,
+    RESETABLE_SENSORS,
+    CONF_VALUES_TO_INIT,
 )
+from .common import (safe_decimal, safe_float)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,22 +103,6 @@ STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
                 DEVICE_TYPE_DC_CHARGER: "DC Charger",
             }
         ),
-    }
-)
-
-STEP_INVERTER_CONFIG_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_HOST): str,
-        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_SLAVE_ID, default=DEFAULT_INVERTER_SLAVE_ID): int,
-    }
-)
-
-STEP_AC_CHARGER_CONFIG_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_HOST): str,
-        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Required(CONF_SLAVE_ID): int,
     }
 )
 
@@ -1066,16 +1053,8 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         self._plants = {}
         self._devices = {}
         self._inverters = {}
-        self._devices_loaded = False
         self._selected_device = None
         self._temp_config = {}
-        # Store discovered devices for configuration
-        # List of DeviceIDs. DC Charger IDs are also in DEVICE_TYPE_INVERTER list.
-        self._discovered_devices = {
-            DEVICE_TYPE_INVERTER: [],
-            DEVICE_TYPE_AC_CHARGER: [],
-            DEVICE_TYPE_DC_CHARGER: [],
-        }
 
     async def _async_load_devices(self) -> None:
         """Load all existing devices for reconfiguration selection."""
@@ -1124,36 +1103,19 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 display_name = f"{inv_name} DC Charger (Host: {inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
 
                 self._devices[device_key] = display_name
-
-        self._devices_loaded = True
+            
+            # Add special case for changing Accumulated values
+            self._devices["accumulated_energy"] = "Change Accumulated Energy Sensors"
 
         _LOGGER.debug("Loaded devices for selection: %s", self._devices)
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Initial handler for device reconfiguration options."""
-        device_type = self._data.get(CONF_DEVICE_TYPE)
-        _LOGGER.debug("Options flow init for device type: %s", device_type)
-
-        # If this is a plant, load devices and show device selection
-        if device_type == DEVICE_TYPE_PLANT and not self._devices_loaded:
-            await self._async_load_devices()
-            return await self.async_step_select_device()
-
-        # For non-plant devices or if no devices loaded, go to device-specific options
-        if device_type == DEVICE_TYPE_PLANT:
-            return await self.async_step_plant_config(user_input)
-        elif device_type == DEVICE_TYPE_INVERTER:
-            return await self.async_step_inverter_config(user_input)
-        elif device_type == DEVICE_TYPE_AC_CHARGER:
-            return await self.async_step_ac_charger_config(user_input)
-        elif device_type == DEVICE_TYPE_DC_CHARGER:
-            return await self.async_step_dc_charger_config(user_input)
-
-        # Fallback
-        return self.async_abort(reason="unknown_device_type")
+        return await self.async_step_select_device()
 
     async def async_step_select_device(self, user_input: dict[str, Any] | None = None):
         """Handle selection of which existing device to reconfigure."""
+        await self._async_load_devices()
         if not self._devices:
             _LOGGER.debug("No devices available for selection, going to plant config")
             return await self.async_step_plant_config()
@@ -1196,9 +1158,84 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_ac_charger_config()
         elif device_type == "dc":
             return await self.async_step_dc_charger_config()
+        elif device_type == "accumulated":
+            return await self.async_step_accumulated_energy_config()
 
         # Fallback
         return self.async_abort(reason=f"unknown_device_type: {device_type}")
+    
+    async def async_step_accumulated_energy_config(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle reconfiguration of accumulated energy sensors."""
+        errors = {}
+
+        def generate_accumulated_energy_schema(data_source: Dict):
+            # Define the schema for the accumulated energy sensor configuration
+            schema = {}
+            for sensor, sensor_name in RESETABLE_SENSORS.items():
+                current_value = self.hass.states.get(sensor)
+                if not current_value:
+                    _LOGGER.debug("Sensor %s not found in states", sensor)
+                    current_value = 0.0
+                else:
+                    val = safe_float(current_value.state)
+                    if val is None or val == "unknown":
+                        current_value = 0.0
+                    else:
+                        current_value = val * 1000  # Convert to kWh
+                try:
+                    _LOGGER.debug("Current value for %s: %s", sensor, current_value)
+                    schema[vol.Required(sensor, default=data_source.get(sensor, current_value))] = vol.All(
+                        vol.Coerce(float), vol.Range(min=0.0, max=100000000000.000)
+                    )
+                except Exception as e:
+                    _LOGGER.error("Error processing sensor %s: %s", sensor, e)
+            return vol.Schema(schema)
+        
+        if user_input is None:
+            return self.async_show_form(
+                step_id=STEP_ACCUMULATED_ENERGY_CONFIG,
+                data_schema=generate_accumulated_energy_schema(self._data),
+            )
+
+        # Validate the user input and update the configuration
+        errors = {}
+        for sensor in RESETABLE_SENSORS.keys():
+            if user_input.get(sensor) == "":
+                errors[sensor] = "required value"
+            elif not isinstance(user_input.get(sensor), float):
+                errors[sensor] = "must be a number"
+
+        # If there are errors, show the form again with errors
+        if errors:
+            return self.async_show_form(
+                step_id=STEP_ACCUMULATED_ENERGY_CONFIG,
+                data_schema=generate_accumulated_energy_schema(user_input),
+                errors=errors,
+            )
+
+        # If chose to reset values, save sensor values to reset.
+        values_to_initialize = {}
+        for sensor, value in user_input.items():
+            if sensor in RESETABLE_SENSORS:
+                values_to_initialize[sensor] = value * 1000000.0  # Convert to MW
+                _LOGGER.debug("Adding %s as init value for %s", value, sensor)
+
+        new_data = dict(self._data) # Start with existing data
+        # Save choice if to migrate data at first run after plant being added.
+        new_data[CONF_VALUES_TO_INIT] = values_to_initialize
+        _LOGGER.debug("Values to init as 0: %s", values_to_initialize)
+
+        # Update data if changed (optional check, keeping existing behavior for now)
+        self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+
+        # Save configuration to file
+        self.hass.config_entries._async_schedule_save()
+
+        # Reload the entry to ensure changes take effect
+        await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+        return self.async_create_entry(title="Sigenergy", data=new_data)
+
 
     async def async_step_plant_config(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle reconfiguration of an existing plant device."""

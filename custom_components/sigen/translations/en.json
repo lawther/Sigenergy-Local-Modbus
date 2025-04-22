@@ -138,6 +138,16 @@
           "selected_device": "Device"
         }
       },
+      "accumulated_energy_config": {
+        "title": "Accumulated Energy sensor values",
+        "description": "Reset the accumulated energy sensor values (e.g., energy totals) on save.",
+        "data": {
+          "sensor.sigen_plant_accumulated_pv_energy": "Plant Accumulated PV Energy",
+          "sensor.sigen_plant_accumulated_consumed_energy": "Plant Accumulated Consumed Energy",
+          "sensor.sigen_plant_accumulated_grid_import_energy": "Plant Accumulated Grid Import Energy",
+          "sensor.sigen_plant_accumulated_grid_export_energy": "Plant Accumulated Grid Export Energy"
+        }
+      },
       "plant_config": {
         "title": "Reconfigure Sigenergy Plant",
         "description": "Update the connection details, scan intervals, or reset options for this Plant.",
