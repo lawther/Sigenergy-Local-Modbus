@@ -383,7 +383,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         client = AsyncModbusTcpClient(host=host, port=port, timeout=timeout)
 
         try:
-            with _suppress_pymodbus_logging():
+            with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
                 if not await client.connect():
                     _LOGGER.debug("Modbus connection failed to %s:%s", host, port)
                     return False
@@ -582,7 +582,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             host = client.comm_params.host
             port = client.comm_params.port
 
-            with _suppress_pymodbus_logging():
+            with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
                 if not await client.connect():
                     err = ("Modbus connection failed to %s:%s" % (host, port))
                     _LOGGER.debug(err)
@@ -625,7 +625,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         client = AsyncModbusTcpClient(host=host, port=port, timeout=timeout)
 
         try:
-            with _suppress_pymodbus_logging():
+            with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
                 if not await client.connect():
                     _LOGGER.debug("Modbus connection failed to %s:%s", host, port)
                     return DEVICE_TYPE_UNKNOWN # Cannot determine type if connection fails

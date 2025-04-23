@@ -248,7 +248,7 @@ class SigenergyModbusHub:
     ) -> Tuple[str, bool, Optional[Exception]]:
         """Probe a single register and return its name, support status, and any exception."""
 
-        with _suppress_pymodbus_logging(really_suppress=True):
+        with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
             if register.register_type == RegisterType.READ_ONLY:
                 result = await client.read_input_registers(
                     address=register.address,
@@ -401,7 +401,7 @@ class SigenergyModbusHub:
             key = self._get_connection_key(device_info)
 
             async with self._locks[key]:
-                with _suppress_pymodbus_logging():
+                with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
                     result = await client.read_input_registers(
                         address=address, count=count, slave=slave_id
                     ) if register_type == RegisterType.READ_ONLY \
