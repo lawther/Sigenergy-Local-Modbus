@@ -565,14 +565,14 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                 }.get(value, f"Unknown: {value}")
             if self.entity_description.key == "ac_charger_system_state":
                 return {
-                    0: "System Init",
-                    1: "A1/A2",
-                    2: "B1",
-                    3: "B2",
-                    4: "C1",
-                    5: "C2",
-                    6: "F",
-                    7: "E",
+                    0: "Initializing",
+                    1: "Not Connected",
+                    2: "Reserving - Charger & EV Not Ready",
+                    3: "Preparing - Charger Ready, EV Not Ready",
+                    4: "EV Ready, Charger Not Ready",
+                    5: "Charging",
+                    6: "Fault",
+                    7: "Error",
                 }.get(value, f"Unknown: {value}")
             if self.entity_description.key == "inverter_output_type":
                  return {0: "Three Phase", 1: "Single Phase"}.get(value, f"Unknown: {value}")
