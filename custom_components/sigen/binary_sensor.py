@@ -63,7 +63,7 @@ PLANT_BINARY_SENSORS = [
         icon="mdi:battery-negative", # Standard HA icon
         source_key="plant_ess_power",
         value_fn=lambda data: (val := data.get("plant_ess_power")) \
-            is not None and Decimal(str(val)) < Decimal("0.01"),
+            is not None and Decimal(str(val)) < Decimal("-0.01"),
     ),
     SigenergyBinarySensorEntityDescription(
         key="plant_exporting_to_grid",
