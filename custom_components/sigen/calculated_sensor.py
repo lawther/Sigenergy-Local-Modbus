@@ -48,7 +48,8 @@ LOG_THIS_ENTITY = [
     # "sensor.sigen_plant_accumulated_grid_import_energy",
     # "sensor.sigen_plant_accumulated_pv_energy",
     # "sigen_plant_accumulated_battery_charge_energy",
-    "sigen_plant_accumulated_pv_energy"
+    "sensor.sigen_plant_accumulated_pv_energy",
+    # "sensor.sigen_plant_daily_pv_energy",
 ]
 
 
@@ -344,8 +345,12 @@ class SigenergyCalculations:
             # Sanity check
             if consumed_power < 0:
                 _LOGGER.warning(
-                    "[CS][Plant Consumed] Calculated power is negative: %s kW",
+                    "[CS][Plant Consumed] Calculated power is negative: %s kW = %s + %s - %s - %s",
                     consumed_power,
+                    pv_power,
+                    grid_import,
+                    grid_export,
+                    battery_power
                 )
                 # Keep the negative value as it might be valid in some scenarios
 
@@ -487,6 +492,10 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         source_entity_id: str = "",
         pv_string_idx: Optional[int] = None,
     ) -> None:
+        # Initialize state variables
+        self._state: Decimal | None = None
+        self._last_valid_state: Decimal | None = None
+
         """Initialize the integration sensor."""
         # Call SigenergyEntity's __init__ first
         super().__init__(
@@ -511,10 +520,6 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self._max_sub_interval = getattr(description, "max_sub_interval", None)
         self.log_this_entity = False
         self._last_coordinator_update = None
-
-        # Initialize state variables
-        self._state: Decimal | None = None
-        self._last_valid_state: Decimal | None = None
 
         # Time tracking variables
         self._max_sub_interval = (
@@ -579,14 +584,27 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 self.entity_id, area, area_scaled
             )
 
-        self._last_valid_state = self._state
+        # Only update last_valid_state if we have a valid calculation
+        if self._state is not None and isinstance(self._state, Decimal):
+            # We only want to save positive values
+            if self._state >= Decimal('0'):
+                self._last_valid_state = self._state
+                if self.log_this_entity:
+                    _LOGGER.debug(
+                        "[%s] _update_integral - Updated _last_valid_state: %s (state_class: %s)",
+                        self.entity_id,
+                        self._last_valid_state,
+                        self.state_class
+                    )
 
     def _setup_midnight_reset(self) -> None:
         """Schedule reset at midnight."""
         now = dt_util.now()
-        midnight = (now + timedelta(days=1)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        # Calculate last second of the current day (23:59:59)
+        midnight = now.replace(hour=23, minute=59, second=59, microsecond=0)
+        # If we're already past midnight, use tomorrow's date
+        if now.hour >= 23 and now.minute >= 59 and now.second >= 59:
+            midnight = (now + timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
 
         @callback
         def _handle_midnight(current_time):
@@ -636,7 +654,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                     init_value_dec = safe_decimal(init_value)
                     if init_value_dec is not None:
                         restore_value = init_value_dec
-                        _LOGGER.debug("Saving initial value for %s: %s", self.entity_id, restore_value)
+                        if self.log_this_entity:
+                            _LOGGER.info("Saving initial value for %s: %s", self.entity_id, restore_value)
                         restored_from_config = True # Mark that we restored from config
                     else:
                         _LOGGER.warning("Could not convert init_value '%s' to Decimal for %s", init_value, self.entity_id)
@@ -664,7 +683,21 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 STATE_UNKNOWN,
                 STATE_UNAVAILABLE,
             ):
-                restore_value = last_state.state
+                if self.unit_of_measurement == "MWh":
+                    restore_value = str(Decimal(last_state.state) * 1000)
+                else:
+                    restore_value = str(Decimal(last_state.state) * 1)
+                if self.log_this_entity:
+                    if self.unit_of_measurement == last_state.attributes["unit_of_measurement"]:
+                        _LOGGER.debug("Both are %s", self.unit_of_measurement)
+                    else:
+                        _LOGGER.debug("Self is %s and last is %s", self.unit_of_measurement, last_state.attributes["unit_of_measurement"])
+
+            else:
+                _LOGGER.debug(
+                    "No valid last state available for %s, using default value",
+                    self.entity_id,
+                )
 
         if restore_value is not None: # Check if restore_value is not None before trying to use it
             try:
@@ -677,8 +710,20 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                     self._last_integration_time = dt_util.utcnow()
                 else:
                     _LOGGER.warning("Could not convert restore value '%s' to Decimal for %s", restore_value, self.entity_id)
+                    # Try to use last_valid_state if available as fallback
+                    if self._last_valid_state is not None:
+                        self._state = self._last_valid_state
+                        _LOGGER.debug("Falling back to last valid state for %s: %s", self.entity_id, self._last_valid_state)
             except (ValueError, TypeError, InvalidOperation) as e:
                 _LOGGER.warning("Could not restore state for %s from value '%s': %s", self.entity_id, restore_value, e)
+                # Try to use last_valid_state if available as fallback 
+                if self._last_valid_state is not None:
+                    self._state = self._last_valid_state
+                    _LOGGER.debug("Falling back to last valid state for %s: %s", self.entity_id, self._last_valid_state)
+        elif self._last_valid_state is not None:
+            # If no restore value but we have a last valid state, use that
+            self._state = self._last_valid_state
+            _LOGGER.debug("Using last valid state for %s: %s", self.entity_id, self._last_valid_state)
         else:
             _LOGGER.debug("No restore value available for %s, state remains uninitialized.", self.entity_id)
 
@@ -778,6 +823,9 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self, old_state: State | None, new_state: State | None
     ) -> None:
         """Perform integration based on state change."""
+        if self.log_this_entity:
+            _LOGGER.debug("[_integrate_on_state_change] Starting for %s with old_state: %s, new_state: %s",
+                          self.entity_id, old_state, new_state)
         if new_state is None:
             return
 
@@ -805,7 +853,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             )
 
         # Update the integral
-        self._update_integral(area) # Logging is now inside _update_integral
+        self._update_integral(area)
 
         # Write state
         if self.log_this_entity:

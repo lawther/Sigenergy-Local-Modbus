@@ -1181,7 +1181,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                     if val is None or val == "unknown":
                         current_value = 0.0
                     else:
-                        current_value = val * 1000  # Convert to kWh
+                        current_value = val #* 1000  # Convert to kWh
                 try:
                     _LOGGER.debug("Current value for %s: %s", sensor, current_value)
                     schema[vol.Required(sensor, default=data_source.get(sensor, current_value))] = vol.All(
