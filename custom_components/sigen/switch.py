@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .common import *
+from .common import generate_sigen_entity, generate_device_id
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
@@ -22,7 +22,6 @@ from .const import (
     CONF_INVERTER_HAS_DCCHARGER,
 )
 from .coordinator import SigenergyDataUpdateCoordinator # Import coordinator
-from .modbus import SigenergyModbusError
 from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
@@ -116,12 +115,16 @@ DC_CHARGER_SWITCHES = [
         icon="mdi:ev-station",
         # consider changing is_on_fn to check for dc_charger_output_power > 0 if the below doesn't work
         # identifier here is dc_charger_id (but it's accessing inverter data?) - This seems wrong, needs review based on coordinator data structure
-        is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_start_stop") == 0, # TODO: Review this logic - should likely use dc_charger data
+
+        # is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_start_stop") == 0, # TODO: Review this logic - should likely use dc_charger data
+        is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_charging_current") > 0, # TODO: - dc_charger_charging_current takes 45-60 seconds to kick into gear. may be a better way
+
+
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "dc_charger_start_stop", 0), # TODO: Review this logic - Assuming DC charger controlled via inverter.
+
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "dc_charger_start_stop", 1), # TODO: Review this logic - Assuming DC charger controlled via inverter.
     ),
 ]
-
 
 
 async def async_setup_entry(
