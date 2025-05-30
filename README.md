@@ -1,29 +1,38 @@
 # <img src="https://brands.home-assistant.io/sigen/dark_icon.png" alt="Sigenergy" width="50" style="vertical-align:Left;" />  Sigenergy ESS Integration for Home Assistant
-[![HACS](https://img.shields.io/badge/HACS-Default-blue)](https://hacs.xyz/) [![Release](https://img.shields.io/github/v/release/TypQxQ/Sigenergy-Local-Modbus)](https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases) [![License](https://img.shields.io/github/license/TypQxQ/Sigenergy-Local-Modbus)](LICENSE)
+
+[![Stable][releases-shield]][releases] [![HACS Badge][hacs-badge]][hacs-link] ![Project Maintenance][maintenance-shield] ![Downloads][downloads] [![GitHub Activity][commits-shield]][commits] [![License][license-shield]](LICENSE.md)
+
+[commits-shield]: https://img.shields.io/github/commit-activity/y/TypQxQ/Sigenergy-Local-Modbus.svg
+[commits]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/commits/main
+[license-shield]: https://img.shields.io/github/license/TypQxQ/Sigenergy-Local-Modbus.svg
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
+[releases-shield]: https://img.shields.io/github/release/TypQxQ/Sigenergy-Local-Modbus.svg
+[releases]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases/latest
+[hacs-badge]: https://img.shields.io/badge/HACS-Default-41BDF5.svg
+[downloads]: https://img.shields.io/github/downloads/TypQxQ/Sigenergy-Local-Modbus/total
+[hacs-link]: https://hacs.xyz/
 
 ## Overview
-The Sigenergy ESS Integration brings local Modbus‑TCP monitoring and control of your Sigenergy Energy Storage System (ESS) directly into Home Assistant. Gain real‑time insights, dynamic device management, and seamless UI‑based setup.
+Monitor and control your Sigenergy Energy Storage System (ESS) from Home Assistant. 
 
 ## Features
-- **UI‑Driven Setup** with DHCP discovery  
+- **UI‑Driven Setup** with DHCP discovery of inverters and chargers
 - **Dynamic Device Management** (Plants, Inverters, AC/DC Chargers)  
-- **Auto‑Detect** supported registers via Modbus probing  
 - **Real‑Time Metrics** for power flows, energy statistics, SoC/SoH  
 - **Control Capabilities** for EMS work modes and more
+- **Configurable update interval** in three update frequencies for faster updates
 
 ## Requirements
-- Home Assistant **2024.4.1** or newer  
-- Home Assistant Community Store (HACS)  
-- Sigenergy ESS with Modbus‑TCP enabled by your installer. And prefferably confirmed with a screenshot of your DeviceID 
-- Assign a **static IP** to your Sigenergy device in your router to ensure it always receives the same IP address.
+- [Home Assistant](https://www.home-assistant.io/)
+- [Home Assistant Community Store (HACS)](https://hacs.xyz/)
+- [Sigenergy ESS](https://www.sigenergy.com/) with Modbus‑TCP enabled by your installer. And prefferably confirmed with a screenshot of your DeviceID. If using AC Charger, that will have the id `1` and the inverter has to be set to a higher ID, for example `2`.
+- Prefferably assign a **static IP** to your Sigenergy device in your router to ensure it always receives the same IP address.
 
 ## Installation
 ### HACS (Recommended)
 1. Go to **HACS > Integrations** in Home Assistant  
-2. Click the three dots and select **Custom repositories**  
-3. Add repository `TypQxQ/Sigenergy-Local-Modbus` as **Integration**  
-4. Install **Sigenergy ESS Integration**  
-5. Restart Home Assistant
+2. Search and install **Sigenergy ESS Integration**   
+3. Restart Home Assistant
 
 ### Manual
 1. Download the latest `.zip` from the [Releases](https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases) page  
@@ -32,13 +41,13 @@ The Sigenergy ESS Integration brings local Modbus‑TCP monitoring and control o
 
 ## Configuration & Usage
 ### Plant Concept
-Central **Plant** entry groups devices by Host/IP and Port.  
+Central **Plant** entry groups devices by Host/IP and Port where the Port is by default `502` and the IP is the one of the first Inverter.
 ```
 Plant (IP:Port)
-   ├─ Inverter 1 (ID 1)
-   │    └─ DC Charger (via Inverter 1)
-   ├─ Inverter 2 (ID 2)
-   └─ AC Charger (ID 3)
+   ├─ Inverter 1 (ID 2)
+   │    └─ DC Charger (via Inverter 2)
+   ├─ Inverter 2 (ID 3)
+   └─ AC Charger (ID 1) ** Is 1 by default and very hard to change ** 
 ```
 
 
