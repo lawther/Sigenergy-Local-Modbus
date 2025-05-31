@@ -117,12 +117,12 @@ DC_CHARGER_SWITCHES = [
         # identifier here is dc_charger_id (but it's accessing inverter data?) - This seems wrong, needs review based on coordinator data structure
 
         # is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_start_stop") == 0, # TODO: Review this logic - should likely use dc_charger data
-        is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_charging_current") > 0, # TODO: - dc_charger_charging_current takes 45-60 seconds to kick into gear. may be a better way
+        is_on_fn=lambda data, identifier: (_LOGGER.debug("DC charger identifier: %s", identifier), data["dc_chargers"].get(identifier, {}).get("dc_charger_start_stop", 0) == 0)[1],  # Log the identifier and return the original check result
 
 
-        turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "dc_charger_start_stop", 0), # TODO: Review this logic - Assuming DC charger controlled via inverter.
+        turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0), # TODO: Review this logic - Assuming DC charger controlled via inverter.
 
-        turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "dc_charger_start_stop", 1), # TODO: Review this logic - Assuming DC charger controlled via inverter.
+        turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1), # TODO: Review this logic - Assuming DC charger controlled via inverter.
     ),
 ]
 
