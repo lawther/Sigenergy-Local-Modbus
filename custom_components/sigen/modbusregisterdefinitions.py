@@ -136,6 +136,7 @@ class EMSWorkMode(IntEnum):
     AI_MODE = 1
     TOU = 2
     REMOTE_EMS = 7
+    TIME_BASED_CONTROL = 9
 
 # Remote EMS control modes (Appendix 6)
 class RemoteEMSControlMode(IntEnum):

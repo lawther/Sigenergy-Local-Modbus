@@ -1059,6 +1059,7 @@ class SigenergyCalculatedSensors:
                 EMSWorkMode.AI_MODE: "AI Mode",
                 EMSWorkMode.TOU: "Time of Use",
                 EMSWorkMode.REMOTE_EMS: "Remote EMS",
+                EMSWorkMode.TIME_BASED_CONTROL: "Time-Based Control",
             }.get(value, f"Unknown: ({value})"), # Fallback to original value
         ),
         SigenergySensorEntityDescription(
