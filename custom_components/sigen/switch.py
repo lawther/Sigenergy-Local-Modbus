@@ -117,16 +117,8 @@ DC_CHARGER_SWITCHES = [
         # identifier here is dc_charger_id (but it's accessing inverter data?) - This seems wrong, needs review based on coordinator data structure
 
         # is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_start_stop") == 0, # TODO: Review this logic - should likely use dc_charger data
-        #is_on_fn=lambda data, identifier: (_LOGGER.debug("DC charger identifier: %s", identifier), data["dc_chargers"].get(identifier, {}).get("dc_charger_start_stop", 0) == 0)[1],  # Log the identifier and return the original check result
-        
-        #is_on_fn=lambda data, identifier: (_LOGGER.debug("DC charger identifier: %s, dc_charger_output_power: %s", 
-        #                                    identifier, data["dc_chargers"].get(identifier, {}).get("dc_charger_output_power")),
-        #                                    (data["dc_chargers"].get(identifier, {}).get("dc_charger_output_power", 0) != 0.0))[1],  # # Log the identifier and return the original check result
-        
-        #### RBS - data["dc_chargers"] always returns 0.0 for "dc_charger_output_power" (not sure why). data["inverters"] returns the actual values.
-        is_on_fn=lambda data, identifier: (_LOGGER.debug("DC charger identifier: %s, dc_charger_output_power: %s", 
-                                            identifier, data["inverters"].get(identifier, {}).get("dc_charger_output_power")), 
-                                            data["inverters"].get(identifier, {}).get("dc_charger_output_power") != 0.0)[1],   # Log the identifier and return the original check result
+        is_on_fn=lambda data, identifier: (_LOGGER.debug("DC charger identifier: %s, dc_charger_output_power: %s", identifier, data["inverters"].get(identifier, {}).get("dc_charger_output_power")), data["inverters"].get(identifier, {}).get("dc_charger_output_power") != 0.0)[1],   # Log the identifier and return the original check result
+
 
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0), # TODO: Review this logic - Assuming DC charger controlled via inverter.
 
@@ -186,7 +178,6 @@ async def async_setup_entry(
         entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator,
                                           SigenergySwitch, AC_CHARGER_SWITCHES,
                                           DEVICE_TYPE_AC_CHARGER)
-    
     async_add_entities(entities)
     return
 
