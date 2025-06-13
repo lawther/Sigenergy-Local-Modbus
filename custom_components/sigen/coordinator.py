@@ -14,7 +14,7 @@ from homeassistant.util import dt as dt_util
 
 from .modbus import SigenergyModbusHub, SigenergyModbusError # Added SigenergyModbusError
 from .modbus import SigenergyModbusHub
-from .const import DEFAULT_SCAN_INTERVAL_HIGH, DEFAULT_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_ALARM
+from .const import CONF_INVERTER_HAS_DCCHARGER, DEFAULT_SCAN_INTERVAL_HIGH, DEFAULT_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_ALARM
 from .modbusregisterdefinitions import UpdateFrequencyType
 
 _LOGGER = logging.getLogger(__name__)
@@ -90,9 +90,15 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Fetch inverter data for each inverter
                 inverter_data = {}
+                dc_charger_data = {}
                 for inverter_name in self.hub.inverter_connections.keys():
                     # Fetch inverter data with the determined frequency
                     inverter_data[inverter_name] = await self.hub.async_read_inverter_data(inverter_name, update_frequency=current_frequency_type)
+                    # Fetch DC charger data if the inverter supports it
+                    if self.hub.inverter_connections[inverter_name].get(CONF_INVERTER_HAS_DCCHARGER, False):
+                        # dc_charger_data[inverter_name] = await self.hub.async_read_dc_charger_data(inverter_name, update_frequency=current_frequency_type)
+                        _LOGGER.debug("DC charger found for inverter %s", inverter_name)
+                        dc_charger_data[inverter_name] = await self.hub.async_read_dc_charger_data(inverter_name, update_frequency=current_frequency_type)
 
                 # Fetch AC charger data for each AC charger
                 ac_charger_data = {}
@@ -108,6 +114,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                         "plant": plant_data,
                         "inverters": inverter_data,
                         "ac_chargers": ac_charger_data,
+                        "dc_chargers": dc_charger_data,
                     }
                 else:
                     # Merge new data into the existing self.data structure
@@ -116,6 +123,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     # Ensure nested dictionaries exist before updating
                     if "inverters" not in self.data:
                         self.data["inverters"] = {}
+                    if "dc_chargers" not in self.data:
+                        self.data["dc_chargers"] = {}
                     for inverter_name, inv_data in inverter_data.items():
                         if inverter_name not in self.data["inverters"]:
                             self.data["inverters"][inverter_name] = {}
