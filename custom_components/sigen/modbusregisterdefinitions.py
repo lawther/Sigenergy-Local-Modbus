@@ -410,7 +410,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         description="Plant reactive power",
         update_frequency=UpdateFrequencyType.HIGH,
     ),
-    "plant_photovoltaic_power": ModbusRegisterDefinition(
+    "plant_sigen_photovoltaic_power": ModbusRegisterDefinition(
         address=30035,
         count=2,
         register_type=RegisterType.READ_ONLY,
@@ -420,7 +420,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         description="Photovoltaic power",
         update_frequency=UpdateFrequencyType.HIGH,
     ),
-    "plant_third-party_photovoltaic_power": ModbusRegisterDefinition(
+    "plant_third_party_photovoltaic_power": ModbusRegisterDefinition(
         address=30194,
         count=2,
         register_type=RegisterType.READ_ONLY,
