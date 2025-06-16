@@ -204,6 +204,15 @@ class StaticSensors:
             icon="mdi:solar-power",
         ),
         SigenergySensorEntityDescription(
+            key="plant_third-party_photovoltaic_power",
+            name="Third-Party PV Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
+            suggested_display_precision=3,
+            icon="mdi:solar-power",
+        ),
+        SigenergySensorEntityDescription(
             key="plant_ess_power",
             name="Battery Power",
             device_class=SensorDeviceClass.POWER,

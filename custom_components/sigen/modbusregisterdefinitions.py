@@ -420,6 +420,16 @@ PLANT_RUNNING_INFO_REGISTERS = {
         description="Photovoltaic power",
         update_frequency=UpdateFrequencyType.HIGH,
     ),
+    "plant_third-party_photovoltaic_power": ModbusRegisterDefinition(
+        address=30194,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="Photovoltaic power",
+        update_frequency=UpdateFrequencyType.HIGH,
+    ),
     "plant_ess_power": ModbusRegisterDefinition(
         address=30037,
         count=2,

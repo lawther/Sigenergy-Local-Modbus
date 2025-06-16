@@ -48,7 +48,7 @@ LOG_THIS_ENTITY = [
     # "sensor.sigen_plant_accumulated_grid_import_energy",
     # "sensor.sigen_plant_accumulated_pv_energy",
     # "sigen_plant_accumulated_battery_charge_energy",
-    "sensor.sigen_plant_accumulated_pv_energy",
+    # "sensor.sigen_plant_accumulated_pv_energy",
     # "sensor.sigen_plant_daily_pv_energy",
 ]
 
