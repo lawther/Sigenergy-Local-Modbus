@@ -48,7 +48,7 @@ LOG_THIS_ENTITY = [
     # "sensor.sigen_plant_accumulated_grid_import_energy",
     # "sensor.sigen_plant_accumulated_pv_energy",
     # "sigen_plant_accumulated_battery_charge_energy",
-    "sensor.sigen_plant_accumulated_pv_energy",
+    # "sensor.sigen_plant_accumulated_pv_energy",
     # "sensor.sigen_plant_daily_pv_energy",
 ]
 
@@ -124,6 +124,32 @@ class SigenergyCalculations:
         except (ValueError, TypeError, OSError) as ex:
             _LOGGER.warning("[CS][Timestamp] Conversion error for %s: %s", epoch, ex)
             return None
+
+    @staticmethod
+    def calculate_total_pv_power(
+        _,  # value is not used for this calculation
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None, # Not used here, but kept for consistency
+    ) -> Optional[float]:
+        """Calculate the total PV power from plant and party sources."""
+        if not coordinator_data or "plant" not in coordinator_data:
+            _LOGGER.debug("[CS][Total PV Power] Missing plant data in coordinator_data for total PV power calculation")
+            return None
+
+        plant_data = coordinator_data.get("plant", {})
+
+        plant_pv_power = safe_float(
+            plant_data.get("plant_photovoltaic_power"))
+        thirdparty_pv_power = safe_float(
+            plant_data.get("plant_third_party_photovoltaic_power"))
+
+        # If either value is None after safe_float, it means it was invalid or missing.
+        # We treat missing as 0 for summation, but if both are missing, return None.
+        if plant_pv_power is None and thirdparty_pv_power is None:
+            _LOGGER.debug("[CS][Total PV Power] Both plant_photovoltaic_power and thirdparty_pv_power are unavailable.")
+            return None
+
+        return (plant_pv_power or 0.0) + (thirdparty_pv_power or 0.0)
 
     @staticmethod
     def calculate_pv_power(
@@ -1061,6 +1087,18 @@ class SigenergyCalculatedSensors:
                 EMSWorkMode.REMOTE_EMS: "Remote EMS",
                 EMSWorkMode.TIME_BASED_CONTROL: "Time-Based Control",
             }.get(value, f"Unknown: ({value})"), # Fallback to original value
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_photovoltaic_power",
+            name="PV Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:solar-power",
+            value_fn=SigenergyCalculations.calculate_total_pv_power,
+            extra_fn_data=True,  # Pass coordinator data to value_fn
+            suggested_display_precision=3,
+            round_digits=6,
         ),
         SigenergySensorEntityDescription(
             key="plant_grid_import_power",
