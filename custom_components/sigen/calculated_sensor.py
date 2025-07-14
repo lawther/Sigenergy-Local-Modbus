@@ -139,7 +139,7 @@ class SigenergyCalculations:
         plant_data = coordinator_data.get("plant", {})
 
         plant_pv_power = safe_float(
-            plant_data.get("plant_photovoltaic_power"))
+            plant_data.get("plant_sigen_photovoltaic_power"))
         thirdparty_pv_power = safe_float(
             plant_data.get("plant_third_party_photovoltaic_power"))
 
@@ -149,7 +149,7 @@ class SigenergyCalculations:
             _LOGGER.debug("[CS][Total PV Power] Both plant_photovoltaic_power and thirdparty_pv_power are unavailable.")
             return None
 
-        return (plant_pv_power or 0.0) + (thirdparty_pv_power or 0.0)
+        return safe_float((plant_pv_power or 0.0) + (thirdparty_pv_power or 0.0))
 
     @staticmethod
     def calculate_pv_power(
@@ -327,10 +327,11 @@ class SigenergyCalculations:
         # Get the required values from coordinator data
         plant_data = coordinator_data["plant"]
 
-        # Get PV power
-        pv_power = plant_data.get("plant_photovoltaic_power")
+        # Use the correct calculation for total PV power
+        pv_power = SigenergyCalculations.calculate_total_pv_power(
+            None, coordinator_data=coordinator_data
+        )
 
-        # Get grid active power and calculate import/export
         grid_power = plant_data.get("plant_grid_sensor_active_power")
 
         # Get battery power
@@ -342,6 +343,11 @@ class SigenergyCalculations:
 
         # Validate input types
         if not isinstance(pv_power, (int, float)):
+            _LOGGER.warning(
+                "[CS][Plant Consumed] PV power is not a number: %s (type: %s)",
+                pv_power,
+                type(pv_power).__name__,
+            )
             return None
         if not isinstance(grid_power, (int, float)):
             _LOGGER.warning(

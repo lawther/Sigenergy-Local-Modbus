@@ -21,6 +21,7 @@ from .const import DOMAIN, DEVICE_TYPE_PLANT
 from .coordinator import SigenergyDataUpdateCoordinator
 from .sigen_entity import SigenergyEntity
 from .common import generate_sigen_entity
+from .calculated_sensor import SigenergyCalculations
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,9 +43,16 @@ PLANT_BINARY_SENSORS = [
         name="PV Generating",
         device_class=BinarySensorDeviceClass.POWER,
         icon="mdi:solar-power",
-        source_key="plant_photovoltaic_power",
-        value_fn=lambda data: (val := data.get("plant_photovoltaic_power")) \
-            is not None and Decimal(str(val)) > Decimal("0.01"),
+        source_key=None,  # No longer a direct key, calculated from multiple values
+        value_fn=lambda data: (
+            (
+                power := SigenergyCalculations.calculate_total_pv_power(
+                    None, coordinator_data={"plant": data}
+                )
+            )
+            is not None
+            and power > 0.01
+        ),
     ),
     SigenergyBinarySensorEntityDescription(
         key="plant_battery_charging",
@@ -161,11 +169,17 @@ class SigenergyBinarySensor(SigenergyEntity, BinarySensorEntity):
 
         plant_data = self.coordinator.data["plant"]
 
-        # Check if the source key exists in the plant data
-        if self.entity_description.source_key not in plant_data:
-            _LOGGER.debug("[%s] Source key '%s' not found in plant data",
-                           self.entity_id, self.entity_description.source_key)
-            return None # Source data missing
+        # If a source key is defined, check if it exists in the plant data
+        if (
+            self.entity_description.source_key is not None
+            and self.entity_description.source_key not in plant_data
+        ):
+            _LOGGER.debug(
+                "[%s] Source key '%s' not found in plant data",
+                self.entity_id,
+                self.entity_description.source_key,
+            )
+            return None  # Source data missing
 
         # Check if value_fn is defined
         if self.entity_description.value_fn is None:
