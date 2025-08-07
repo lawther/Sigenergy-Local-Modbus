@@ -25,7 +25,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .modbusregisterdefinitions import (
     RunningState,
     ALARM_CODES,
-    UpdateFrequencyType,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .calculated_sensor import (
@@ -555,6 +554,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     RunningState.RUNNING: "Running",
                     RunningState.FAULT: "Fault",
                     RunningState.SHUTDOWN: "Shutdown",
+                    RunningState.ENVIRONMENTAL_ABNORMALITY: "Environmental Abnormality",
                 }.get(value, f"Unknown: {value}")
             if self.entity_description.key == "inverter_running_state":
                 return {
@@ -562,6 +562,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     RunningState.RUNNING: "Running",
                     RunningState.FAULT: "Fault",
                     RunningState.SHUTDOWN: "Shutdown",
+                    RunningState.ENVIRONMENTAL_ABNORMALITY: "Environmental Abnormality",
                 }.get(value, f"Unknown: {value}")
             if self.entity_description.key == "ac_charger_system_state":
                 return {
@@ -769,17 +770,8 @@ class CoordinatorDiagnosticSensor(SigenergyEntity, SensorEntity):
         try:
             if key == "modbus_max_data_fetch_time":
                 value = coordinator.largest_update_interval
-            elif key == "modbus_latest_fetch_time_high":
-                value = coordinator._latest_fetch_times[UpdateFrequencyType.HIGH]
-            elif key == "modbus_latest_fetch_time_medium":
-                value = coordinator._latest_fetch_times[UpdateFrequencyType.MEDIUM]
-            elif key == "modbus_latest_fetch_time_low":
-                value = coordinator._latest_fetch_times[UpdateFrequencyType.LOW]
-            elif key == "modbus_latest_fetch_time_alarm":
-                value = coordinator._latest_fetch_times[UpdateFrequencyType.ALARM]
             else:
-                _LOGGER.warning("Unknown key for CoordinatorDiagnosticSensor: %s", key)
-                return None
+                value = coordinator.latest_fetch_time
 
             # Ensure the final value is a float or None
             if value is None:

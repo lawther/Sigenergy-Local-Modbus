@@ -44,11 +44,6 @@ _LOGGER = logging.getLogger(__name__)
 
 # Only log for these entities
 LOG_THIS_ENTITY = [
-    # "sensor.sigen_plant_accumulated_consumed_energy",
-    # "sensor.sigen_plant_accumulated_grid_import_energy",
-    # "sensor.sigen_plant_accumulated_pv_energy",
-    # "sigen_plant_accumulated_battery_charge_energy",
-    # "sensor.sigen_plant_accumulated_pv_energy",
     # "sensor.sigen_plant_daily_pv_energy",
 ]
 
@@ -327,6 +322,22 @@ class SigenergyCalculations:
         # Get the required values from coordinator data
         plant_data = coordinator_data["plant"]
 
+        total_ac_charger_power = 0.0
+        ac_chargers: dict[str, Any] = coordinator_data.get("ac_chargers", {})
+        # _LOGGER.debug("AC Chargers data: %s", ac_chargers)
+        for _, ac_charger_data in ac_chargers.items():
+            ac_power = safe_float(ac_charger_data.get("ac_charger_charging_power"))
+            if ac_power is not None:
+                total_ac_charger_power += ac_power
+
+        total_dc_charger_power = 0.0
+        dc_chargers: dict[str, Any] = coordinator_data.get("dc_chargers", {})
+        # _LOGGER.debug("DC Chargers data: %s", dc_chargers)
+        for _, dc_charger_data in dc_chargers.items():
+            dc_power = safe_float(dc_charger_data.get("dc_charger_output_power"))
+            if dc_power is not None:
+                total_dc_charger_power += dc_power
+
         # Use the correct calculation for total PV power
         pv_power = SigenergyCalculations.calculate_total_pv_power(
             None, coordinator_data=coordinator_data
@@ -372,25 +383,24 @@ class SigenergyCalculations:
         # Calculate plant consumed power
         # Note: battery_power is positive when charging, negative when discharging
         try:
-            consumed_power = pv_power + grid_import - grid_export - battery_power
+            consumed_power = pv_power + grid_import - grid_export - battery_power - total_ac_charger_power - total_dc_charger_power
 
             # Sanity check
             if consumed_power < 0:
-                _LOGGER.warning(
-                    "[CS][Plant Consumed] Calculated power is negative: %s kW = %s + %s - %s - %s",
+                _LOGGER.debug(
+                    "[CS][Plant Consumed] Calculated power is negative.\n" \
+                    "consumed_power = pv_power + grid_import - grid_export - battery_power - total_ac_charger_power - total_dc_charger_power:\n" \
+                    "%s kW = %s + %s - %s - %s - %s - %s",
                     consumed_power,
                     pv_power,
                     grid_import,
                     grid_export,
-                    battery_power
+                    battery_power,
+                    total_ac_charger_power,
+                    total_dc_charger_power
                 )
                 # Keep the negative value as it might be valid in some scenarios
 
-            if consumed_power > 50:  # Unlikely to have consumption over 50 kW
-                _LOGGER.warning(
-                    "[CS][Plant Consumed] Calculated power seems excessive: %s kW",
-                    consumed_power,
-                )
         except Exception as ex:  # pylint: disable=broad-exception-caught
             _LOGGER.error(
                 "[CS][Plant Consumed] Error during calculation: %s", ex, exc_info=True
@@ -496,6 +506,20 @@ class SigenergyCalculations:
             coordinator_data,
             "inverter_ess_daily_discharge_energy",
             "CS][Daily Batt Discharge"
+        )
+
+    @staticmethod
+    def calculate_plant_daily_pv_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Calculate the total daily PV energy across all inverters."""
+        # _LOGGER.debug("[CS][Daily PV] Calculating daily PV energy")
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_daily_pv_energy",
+            "CS][Daily PV"
         )
 
 
@@ -1090,8 +1114,9 @@ class SigenergyCalculatedSensors:
                 EMSWorkMode.MAX_SELF_CONSUMPTION: "Maximum Self Consumption",
                 EMSWorkMode.AI_MODE: "AI Mode",
                 EMSWorkMode.TOU: "Time of Use",
+                EMSWorkMode.FULL_FEED_IN_TO_GRID: "Full Feed-In to Grid",
                 EMSWorkMode.REMOTE_EMS: "Remote EMS",
-                EMSWorkMode.TIME_BASED_CONTROL: "Time-Based Control",
+                EMSWorkMode.CUSTOM: "Custom",
             }.get(value, f"Unknown: ({value})"), # Fallback to original value
         ),
         SigenergySensorEntityDescription(
@@ -1143,31 +1168,43 @@ class SigenergyCalculatedSensors:
             round_digits=6,
         ),
         SigenergySensorEntityDescription(
-            key="plant_accumulated_battery_charge_energy",
-            name="Accumulated Battery Charge Energy",
+            key="plant_daily_pv_energy",
+            name="Daily PV Energy",
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
-            icon="mdi:battery-positive",
-            value_fn=SigenergyCalculations.calculate_accumulated_battery_charge_energy,
-            extra_fn_data=True, # Pass coordinator data to value_fn
-            suggested_display_precision=3,
-            round_digits=6, # Match other energy sensors
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR # Suggest a different unit for display
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            value_fn=SigenergyCalculations.calculate_plant_daily_pv_energy,
+            extra_fn_data=True,  # Pass coordinator data to value_fn
+            max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
         ),
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_battery_discharge_energy",
-            name="Accumulated Battery Discharge Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
-            icon="mdi:battery-negative",
-            value_fn=SigenergyCalculations.calculate_accumulated_battery_discharge_energy,
-            extra_fn_data=True, # Pass coordinator data to value_fn
-            suggested_display_precision=3,
-            round_digits=6, # Match other energy sensors
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR # Suggest a different unit for display
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_battery_charge_energy",
+        #     name="Accumulated Battery Charge Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+        #     icon="mdi:battery-positive",
+        #     value_fn=SigenergyCalculations.calculate_accumulated_battery_charge_energy,
+        #     extra_fn_data=True, # Pass coordinator data to value_fn
+        #     suggested_display_precision=3,
+        #     round_digits=6, # Match other energy sensors
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR # Suggest a different unit for display
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_battery_discharge_energy",
+        #     name="Accumulated Battery Discharge Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+        #     icon="mdi:battery-negative",
+        #     value_fn=SigenergyCalculations.calculate_accumulated_battery_discharge_energy,
+        #     extra_fn_data=True, # Pass coordinator data to value_fn
+        #     suggested_display_precision=3,
+        #     round_digits=6, # Match other energy sensors
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR # Suggest a different unit for display
+        # ),
         SigenergySensorEntityDescription(
             key="plant_daily_battery_charge_energy",
             name="Daily Battery Charge Energy",
@@ -1227,57 +1264,57 @@ class SigenergyCalculatedSensors:
 
     # Add the plant integration sensors list
     PLANT_INTEGRATION_SENSORS = [
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_pv_energy",
-            name="Accumulated PV Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            source_key="plant_photovoltaic_power",  # Key of the source entity to use
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:solar-power",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_daily_pv_energy",
-            name="Daily PV Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:solar-power",
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_grid_export_energy",
-            name="Accumulated Grid Export Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            source_key="plant_grid_export_power",  # Key matches the calculated sensor
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:transmission-tower-export",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_grid_import_energy",
-            name="Accumulated Grid Import Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            source_key="plant_grid_import_power",  # Key matches the calculated sensor
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:transmission-tower-import",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_pv_energy",
+        #     name="Accumulated PV Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        #     source_key="plant_photovoltaic_power",  # Key of the source entity to use
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:solar-power",
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_daily_pv_energy",
+        #     name="Daily PV Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL_INCREASING,
+        #     source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:solar-power",
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_grid_export_energy",
+        #     name="Accumulated Grid Export Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        #     source_key="plant_grid_export_power",  # Key matches the calculated sensor
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:transmission-tower-export",
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_grid_import_energy",
+        #     name="Accumulated Grid Import Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        #     source_key="plant_grid_import_power",  # Key matches the calculated sensor
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:transmission-tower-import",
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        # ),
         SigenergySensorEntityDescription(
             key="plant_daily_grid_export_energy",
             name="Daily Grid Export Energy",
@@ -1302,60 +1339,60 @@ class SigenergyCalculatedSensors:
             max_sub_interval=timedelta(seconds=30),
             icon="mdi:transmission-tower-import",
         ),
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_consumed_energy",
-            name="Accumulated Consumed Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            source_key="plant_consumed_power",  # Key of the source entity to use
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:home-lightning-bolt",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_daily_consumed_energy",
-            name="Daily Consumed Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="plant_consumed_power",  # Key of the source entity to use
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:home-lightning-bolt",
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_consumed_energy",
+        #     name="Accumulated Consumed Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        #     source_key="plant_consumed_power",  # Key of the source entity to use
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:home-lightning-bolt",
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_daily_consumed_energy",
+        #     name="Daily Consumed Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL_INCREASING,
+        #     source_key="plant_consumed_power",  # Key of the source entity to use
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:home-lightning-bolt",
+        # ),
     ]
 
     # Add the inverter integration sensors list
     INVERTER_INTEGRATION_SENSORS = [
-        SigenergySensorEntityDescription(
-            key="inverter_accumulated_pv_energy",
-            name="Accumulated PV Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:solar-power",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
-        ),
-        SigenergySensorEntityDescription(
-            key="inverter_daily_pv_energy",
-            name="Daily PV Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:solar-power",
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="inverter_accumulated_pv_energy",
+        #     name="Accumulated PV Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        #     source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:solar-power",
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="inverter_daily_pv_energy",
+        #     name="Daily PV Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL_INCREASING,
+        #     source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:solar-power",
+        # ),
     ]
     # Integration sensors for individual PV strings (dynamically created)
     PV_INTEGRATION_SENSORS = [
