@@ -150,6 +150,8 @@ async def async_setup_entry(
     if entities_to_add:
         async_add_entities(entities_to_add)
         _LOGGER.debug("Added %d sensor entities", len(entities_to_add))
+        entity_unique_ids = [entity._attr_unique_id for entity in entities_to_add if hasattr(entity, '_attr_unique_id')]
+        _LOGGER.debug("Added sensor entity unique IDs: %s", ", ".join(entity_unique_ids))
     else:
         _LOGGER.debug("No sensor entities to add.")
 
@@ -190,7 +192,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
     def _decode_alarm_bits(self, value: int, alarm_mapping: dict) -> str:
         """Decode alarm bits into human-readable text."""
         if value is None or value == 0:
-            return "No Alarms"
+            return "No Problem"
             
         active_alarms = [
             desc for bit, desc in alarm_mapping.items() if value & (1 << bit)
@@ -211,7 +213,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
         if self._device_type == DEVICE_TYPE_AC_CHARGER:
             return data.get("ac_chargers", {}).get(self._device_name, {}).get(self.entity_description.key)
         if self._device_type == DEVICE_TYPE_DC_CHARGER:
-            return data.get("inverters", {}).get(self._device_name, {}).get(self.entity_description.key)
+            return data.get("dc_chargers", {}).get(self._device_name, {}).get(self.entity_description.key)
         return None
 
     @property
@@ -253,16 +255,21 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
 
         # Handle alarm codes
         if "alarm" in self.entity_description.key.lower():
-            alarm_map = ALARM_CODES.get(self.entity_description.key.replace("plant_general_", "pcs_").replace("inverter_", "pcs_"))
-            if alarm_map:
-                 return self._decode_alarm_bits(raw_value, alarm_map)
-            # Fallback for specific alarm keys not in the simplified map
+            # Handle PCS alarms (plant_general_alarm1/2 and inverter_alarm1/2)
+            if self.entity_description.key in ["plant_general_alarm1", "inverter_alarm1"]:
+                return self._decode_alarm_bits(raw_value, ALARM_CODES["PCS_ALARM_CODES"])
+            elif self.entity_description.key in ["plant_general_alarm2", "inverter_alarm2"]:
+                return self._decode_alarm_bits(raw_value, ALARM_CODES["PCS_ALARM_CODES2"])
+            # Handle ESS alarms
             elif self.entity_description.key in ["plant_general_alarm3", "inverter_alarm3", "inverter_ess_alarm"]:
                 return self._decode_alarm_bits(raw_value, ALARM_CODES["ESS_ALARM_CODES"])
+            # Handle Gateway alarms
             elif self.entity_description.key in ["plant_general_alarm4", "inverter_alarm4", "inverter_gateway_alarm"]:
                 return self._decode_alarm_bits(raw_value, ALARM_CODES["GATEWAY_ALARM_CODES"])
+            # Handle DC Charger alarms
             elif self.entity_description.key in ["plant_general_alarm5", "inverter_alarm5", "inverter_dc_charger_alarm"]:
                 return self._decode_alarm_bits(raw_value, ALARM_CODES["DC_CHARGER_ALARM_CODES"])
+            # Handle AC Charger alarms
             elif self.entity_description.key == "ac_charger_alarm1":
                 return self._decode_alarm_bits(raw_value, ALARM_CODES["AC_CHARGER_ALARM_CODES1"])
             elif self.entity_description.key == "ac_charger_alarm2":
