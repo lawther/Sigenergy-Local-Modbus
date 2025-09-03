@@ -12,9 +12,7 @@ from homeassistant.config_entries import ConfigEntry  # pylint: disable=no-name-
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from pymodbus.client import AsyncModbusTcpClient
-from pymodbus.constants import Endian
 from pymodbus.exceptions import ConnectionException, ModbusException
-from pymodbus.payload import BinaryPayloadBuilder
 from pymodbus.client.mixin import ModbusClientMixin
 from pymodbus import __version__ as pymodbus_version
 
@@ -43,14 +41,90 @@ from .modbusregisterdefinitions import (
     DC_CHARGER_RUNNING_INFO_REGISTERS,
     DC_CHARGER_PARAMETER_REGISTERS,
 )
-from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
-from .common import generate_device_id
-from .const import DOMAIN
-from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
-from .common import generate_device_id
-from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+# Pymodbus version compatibility handling
+def _get_pymodbus_version_info():
+    """Get pymodbus version information for compatibility handling."""
+    try:
+        # Parse version string like "3.6.8" or "3.10.0"
+        version_parts = pymodbus_version.split('.')
+        major = int(version_parts[0])
+        minor = int(version_parts[1])
+        return major, minor
+    except (ValueError, IndexError):
+        # Fallback to assuming older version if parsing fails
+        _LOGGER.warning("Could not parse pymodbus version '%s', assuming < 3.10", pymodbus_version)
+        return 3, 0
+
+# Check if we need to use 'device_id' instead of 'slave'
+_PYMODBUS_MAJOR, _PYMODBUS_MINOR = _get_pymodbus_version_info()
+_USE_DEVICE_ID = (_PYMODBUS_MAJOR > 3) or (_PYMODBUS_MAJOR == 3 and _PYMODBUS_MINOR >= 10)
+
+def _call_modbus_method_safe(client_method, *args, **kwargs):
+    """
+    Call a pymodbus client method with version-compatible parameter handling.
+
+    This function handles the parameter name change from 'slave' to 'device_id'
+    that occurred in pymodbus 3.10+.
+
+    Args:
+        client_method: The pymodbus client method to call
+        *args: Positional arguments
+        **kwargs: Keyword arguments, including 'slave' or 'device_id'
+
+    Returns:
+        The result of the client method call
+
+    Raises:
+        TypeError: If the method call fails due to parameter incompatibility
+        Other exceptions from the underlying method
+    """
+    if _USE_DEVICE_ID:
+        # For pymodbus >= 3.10, use 'device_id' parameter
+        if 'slave' in kwargs:
+            kwargs['device_id'] = kwargs.pop('slave')
+
+        try:
+            return client_method(*args, **kwargs)
+        except TypeError as e:
+            if 'device_id' in str(e):
+                # If device_id also fails, try falling back to positional args
+                _LOGGER.debug("device_id parameter failed, trying positional arguments")
+                # Remove device_id and try with positional args if possible
+                kwargs_copy = kwargs.copy()
+                if 'device_id' in kwargs_copy:
+                    device_id = kwargs_copy.pop('device_id')
+                    # Try calling with device_id as positional argument
+                    try:
+                        return client_method(*args, device_id, **kwargs_copy)
+                    except TypeError as inner_e:
+                        # If positional also fails, re-raise original error
+                        raise e from inner_e
+                else:
+                    raise e
+            else:
+                raise e
+    else:
+        # For pymodbus < 3.10, use 'slave' parameter
+        try:
+            return client_method(*args, **kwargs)
+        except TypeError as e:
+            if 'slave' in str(e):
+                # If slave fails, try falling back to positional args
+                _LOGGER.debug("slave parameter failed, trying positional arguments")
+                kwargs_copy = kwargs.copy()
+                if 'slave' in kwargs_copy:
+                    slave = kwargs_copy.pop('slave')
+                    try:
+                        return client_method(*args, slave, **kwargs_copy)
+                    except TypeError as inner_e:
+                        raise e from inner_e
+                else:
+                    raise e
+            else:
+                raise e
 
 @dataclass
 class ModbusConnectionConfig:
@@ -295,13 +369,15 @@ class SigenergyModbusHub:
 
         with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
             if register.register_type == RegisterType.READ_ONLY:
-                result = await client.read_input_registers(
+                result = await _call_modbus_method_safe(
+                    client.read_input_registers,
                     address=register.address,
                     count=register.count,
                     slave=slave_id
                 )
             elif register.register_type == RegisterType.HOLDING:
-                result = await client.read_holding_registers(
+                result = await _call_modbus_method_safe(
+                    client.read_holding_registers,
                     address=register.address,
                     count=register.count,
                     slave=slave_id
@@ -365,7 +441,6 @@ class SigenergyModbusHub:
             _LOGGER.debug("No registers need probing for %s.", device_info_log)
             # If no probing is needed, still generate intervals from already known registers
             # This handles the case where probing was already done in a previous run.
-            pass
         else:
             _LOGGER.debug("Probing %d registers concurrently for %s...", len(tasks), device_info_log)
 
@@ -503,10 +578,8 @@ class SigenergyModbusHub:
 
             async with self._locks[key]:
                 with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
-                    result = await client.read_input_registers(
-                        address=address, count=count, slave=slave_id
-                    ) if register_type == RegisterType.READ_ONLY \
-                        else await client.read_holding_registers(
+                    result = await _call_modbus_method_safe(
+                        client.read_input_registers if register_type == RegisterType.READ_ONLY else client.read_holding_registers,
                         address=address, count=count, slave=slave_id
                     )
 
@@ -592,13 +665,15 @@ class SigenergyModbusHub:
                             )
 
                             if approach["function"] == "write_registers":
-                                result = await client.write_registers(
+                                result = await _call_modbus_method_safe(
+                                    client.write_registers,
                                     address=approach["address"],
                                     values=approach["values"],
                                     slave=slave_id
                                 )
                             else:  # write_register
-                                result = await client.write_register(
+                                result = await _call_modbus_method_safe(
+                                    client.write_register,
                                     address=approach["address"],
                                     value=approach["value"],
                                     slave=slave_id
@@ -753,13 +828,9 @@ class SigenergyModbusHub:
     ) -> List[int]:
         """Encode value to register values based on data type."""
         # For simple U16 values like 0 or 1, just return the value directly
-        # This bypasses potential byte order issues with the BinaryPayloadBuilder
         if data_type == DataType.U16 and isinstance(value, int) and 0 <= value <= 255:
             _LOGGER.debug("Using direct value encoding for simple U16 value: %s", value)
             return [value]
-
-        # For other cases, use the BinaryPayloadBuilder
-        builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.BIG)
 
         # Apply gain for numeric values
         if isinstance(value, (int, float)) and gain != 1 and data_type != DataType.STRING:
@@ -768,21 +839,32 @@ class SigenergyModbusHub:
         _LOGGER.debug("Encoding value %s with data_type %s", value, data_type)
 
         if data_type == DataType.U16:
-            builder.add_16bit_uint(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.UINT16
+            )
         elif data_type == DataType.S16:
-            builder.add_16bit_int(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.INT16
+            )
         elif data_type == DataType.U32:
-            builder.add_32bit_uint(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.UINT32
+            )
         elif data_type == DataType.S32:
-            builder.add_32bit_int(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.INT32
+            )
         elif data_type == DataType.U64:
-            builder.add_64bit_uint(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.UINT64
+            )
         elif data_type == DataType.STRING:
-            builder.add_string(str(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                str(value), data_type=ModbusClientMixin.DATATYPE.STRING
+            )
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
 
-        registers = builder.to_registers()
         _LOGGER.debug("Encoded registers: %s", registers)
         return registers
 
